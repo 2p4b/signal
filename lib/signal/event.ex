@@ -15,7 +15,12 @@ defmodule Signal.Event do
 
             with {:ok, topic} <- Module.get_attribute(__MODULE__, :topic) do
                 defimpl Signal.Topic, for: __MODULE__ do
-                    @topic topic
+                    @topic (if is_binary(topic) do 
+                        topic
+                    else 
+                        Signal.Helper.module_to_string(topic) 
+                    end)
+
                     def topic(_event) do 
                         @topic
                     end
