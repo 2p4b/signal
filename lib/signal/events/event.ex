@@ -40,7 +40,7 @@ defmodule Signal.Events.Event do
     when is_struct(event) and is_number(reduction) do
         params = [
             uuid: UUID.uuid4(), 
-            topic: Event.topic(event), 
+            topic: Signal.Topic.topic(event), 
             stream: Stream.stream(event),
             source: source,
             payload: event,

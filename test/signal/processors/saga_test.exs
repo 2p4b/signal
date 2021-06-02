@@ -21,6 +21,7 @@ defmodule Signal.Processor.SagaTest do
     defmodule Deposited do
 
         use Signal.Event,
+            topic: "user.deposited",
             stream: {Account, :account}
 
         schema do
@@ -94,7 +95,7 @@ defmodule Signal.Processor.SagaTest do
 
         use Signal.Process.Manager,
             application: TestApp,
-            topics: [AccountOpened, Deposited]
+            topics: [AccountOpened, "user.deposited"]
 
         defstruct [:account, :amount, :pid]
             

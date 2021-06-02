@@ -5,12 +5,23 @@ defmodule Signal.Event do
             use Signal.Type
             @module __MODULE__
             @before_compile unquote(__MODULE__)
+            @topic Keyword.fetch(unquote(opts), :topic)
             @stream Keyword.get(unquote(opts), :stream)
         end
     end
 
     defmacro __before_compile__(_env) do
         quote generated: true, location: :keep do
+
+            with {:ok, topic} <- Module.get_attribute(__MODULE__, :topic) do
+                defimpl Signal.Topic, for: __MODULE__ do
+                    @topic topic
+                    def topic(_event) do 
+                        @topic
+                    end
+                end
+            end
+
             with {module, key} <- Module.get_attribute(__MODULE__, :stream) do
                 defimpl Signal.Stream, for: __MODULE__ do
                     @field key
@@ -20,6 +31,7 @@ defmodule Signal.Event do
                     end
                 end
             end
+
         end
     end
 
