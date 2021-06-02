@@ -76,7 +76,7 @@ defmodule Signal.Type do
 
             def new(attr) when is_list(attr) do
                 # Let elixir handle it!
-                struct!(__MODULE__, attr)
+                struct(__MODULE__, attr)
             end
 
             def from(strt, remap\\[]) when is_struct(strt) do
