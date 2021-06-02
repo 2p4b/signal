@@ -95,7 +95,7 @@ defmodule Signal.Handler do
     def handle_event(module, event, handler) do
         %Event{payload: payload, number: number} = event
         %Handler{app: app, name: name, state: state} = handler
-        args = [payload, %{number: number}, state]
+        args = [payload, Event.meta(event), state]
         response = Kernel.apply(module, :handle_event, args)
         Channel.acknowledge(app, name, number)
         handle_response(response, handler)

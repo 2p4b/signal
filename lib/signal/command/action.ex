@@ -31,8 +31,8 @@ defmodule Signal.Command.Action do
             states: task.states,
             indices: task.indices,
             consistent: task.consistent,
-            causation_id: task.uuid, 
-            correlation_id: UUID.uuid4()
+            causation_id: task.causation_id, 
+            correlation_id: task.correlation_id
         ])
     end
 
