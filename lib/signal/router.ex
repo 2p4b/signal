@@ -129,6 +129,8 @@ defmodule Signal.Router do
                 def dispatchable?(%@command_module{}), do: true
             end
 
+            def dispatchable?(_cmd), do: false
+
             def run(%{__struct__: type}, _opts) do
                 raise ArgumentError, message: """
 
@@ -146,7 +148,6 @@ defmodule Signal.Router do
                 """
             end
 
-            def dispatchable?(_cmd), do: false
         end
     end
 

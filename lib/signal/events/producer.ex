@@ -1,8 +1,6 @@
 defmodule Signal.Events.Producer do
     use GenServer
 
-    require Logger
-
     alias Signal.Result
     alias Signal.Events
     alias Signal.Events.Event
@@ -51,15 +49,12 @@ defmodule Signal.Events.Producer do
             |> Task.Supervisor.async_nolink(fn -> 
                 receive do
                     {:ok, version} ->
-                        Logger.info("Stream [#{stream}] advanced to: #{version}")
                         {:ok, version}
 
                     {:rollback, reason} ->
-                        Logger.info("Steam [#{stream}] rollback: #{reason}")
                         {:rollback, reason}
 
                     error ->
-                        Logger.info("Staging error #{error}")
                         error
                 end
             end)
@@ -70,19 +65,15 @@ defmodule Signal.Events.Producer do
 
         GenServer.reply(from, stage)
 
-        Logger.info("Stream [#{stream}] stagging events at #{state.cursor}")
         # Halt until the task is resolved
         case Task.yield(channel, :infinity) do
             {:ok, {:ok, ^version}} ->
-                Logger.info("Stream [#{stream}]  resumed at: #{version}")
                 {:noreply, %Producer{state | cursor: version}}
 
             {:ok, {:rollback, _}} ->
-                Logger.info("Stream [#{stream}]  rolled back to: #{state.cursor}")
                 {:noreply, calibrate(state)}
 
              _ ->
-                Logger.info("Stream [#{stream}] rolled back from #{version}")
                 {:noreply, calibrate(state)}
         end
     end
@@ -264,7 +255,6 @@ defmodule Signal.Events.Producer do
         Enum.each(staged, fn 
             %Staged{ version: version, stream: stream, stage: stage} ->  
                 Process.send(stage, payload, opts)
-                Logger.info("Rolling back [#{stream}] rolled back from #{version}")
             _ ->
                 nil
         end)

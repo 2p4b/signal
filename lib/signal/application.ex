@@ -146,12 +146,12 @@ defmodule Signal.Application do
                 end)
                 if router do
                     opts =
-                        case Keyword.get(opts, :app) do
-                            app when is_atom(app) ->
+                        case Keyword.fetch(opts, :app) do
+                            {:ok, app} when is_atom(app) and not(app in [nil, :true, :false]) ->
                                 app = {__MODULE__, app}
                                 Keyword.merge(opts, [app: app])
 
-                            nil ->
+                            :error ->
                                 app = {__MODULE__, __MODULE__}
                                 Keyword.merge(opts, [app: app])
 
