@@ -41,7 +41,7 @@ defmodule Signal.Events.Producer do
     def handle_call({:stage, action, events}, from, %Producer{}=state) 
     when is_list(events) do
 
-        %{stream: stream, app: app} = state
+        %Producer{app: app} = state
 
         channel = 
             app
@@ -253,7 +253,7 @@ defmodule Signal.Events.Producer do
         opts = [:nosuspend]
         payload = {:rollback, reason}
         Enum.each(staged, fn 
-            %Staged{ version: version, stream: stream, stage: stage} ->  
+            %Staged{stage: stage} ->  
                 Process.send(stage, payload, opts)
             _ ->
                 nil
