@@ -129,6 +129,23 @@ defmodule Signal.Router do
                 def dispatchable?(%@command_module{}), do: true
             end
 
+            def run(%{__struct__: type}, _opts) do
+                raise ArgumentError, message: """
+
+                    Unknown router command type #{inspect(type)}
+
+                    Enusure that the command is registerd
+                    on your router like:
+
+                    defmodule #{inspect(__MODULE__)} do
+                        use Signal.Router
+
+                        dispatch #{inspect(type)}, [..]
+
+                    end
+                """
+            end
+
             def dispatchable?(_cmd), do: false
         end
     end

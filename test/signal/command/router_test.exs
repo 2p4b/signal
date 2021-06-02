@@ -35,6 +35,12 @@ defmodule Signal.Command.RouterTest do
             end
         end
 
+        defmodule EmptyRouter do
+
+            use Signal.Router
+
+        end
+
         defmodule Router do
 
             use Signal.Router
