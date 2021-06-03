@@ -10,9 +10,23 @@ defmodule Signal.Events.ProducerTest do
             store: VoidStore
     end
 
+    defmodule Aggregate do
+        use Signal.Aggregate
+
+        schema do
+            field :id,      String.t,   default: ""
+            field :uuid,    String.t,   default: ""
+        end
+
+        def apply(%Aggregate{}=aggr, _meta, _event) do
+            aggr
+        end
+
+    end
+
     defmodule EventOne do
         use Signal.Event,
-            stream: {Signal.Sample.Aggregate, :uuid}
+            stream: {Aggregate, :uuid}
 
         schema do
             field :id,      String.t,   default: "event.id"
@@ -22,7 +36,7 @@ defmodule Signal.Events.ProducerTest do
 
     defmodule EventTwo do
         use Signal.Event,
-            stream: {Signal.Sample.Aggregate, :uuid}
+            stream: {Aggregate, :uuid}
 
         schema do
             field :id,      String.t,   default: "event.id"
@@ -32,7 +46,7 @@ defmodule Signal.Events.ProducerTest do
 
     defmodule EventThree do
         use Signal.Event,
-            stream: {Signal.Sample.Aggregate, :uuid}
+            stream: {Aggregate, :uuid}
 
         schema do
             field :id,      String.t,   default: "event.id"
@@ -43,7 +57,7 @@ defmodule Signal.Events.ProducerTest do
     defmodule Command do
 
         use Signal.Command, 
-            stream: {Signal.Sample.Aggregate, :uuid}
+            stream: {Aggregate, :uuid}
 
         schema do
             field :id,      String.t,   default: "command.id"
@@ -85,23 +99,23 @@ defmodule Signal.Events.ProducerTest do
             [%History{}=first, %History{}=second] = histories
 
             assert match?(%History{
-                stream: {Signal.Sample.Aggregate, "stream.one"},
+                stream: {Aggregate, "stream.one"},
                 version: 1,
             },  first)
 
             assert length(first.events) == 1
 
             #stream.two events count
-            assert Kernel.hd(first.events) |> Map.get(:stream) == {Signal.Sample.Aggregate, "stream.one"}
+            assert Kernel.hd(first.events) |> Map.get(:stream) == {Aggregate, "stream.one"}
 
             assert match?(%History{
-                stream: {Signal.Sample.Aggregate, "stream.two"},
+                stream: {Aggregate, "stream.two"},
                 version: 2,
             }, second)
 
             assert length(second.events) == 2
             #stream.two events count
-            assert Kernel.hd(second.events) |> Map.get(:stream) == {Signal.Sample.Aggregate, "stream.two"}
+            assert Kernel.hd(second.events) |> Map.get(:stream) == {Aggregate, "stream.two"}
         end
 
     end
