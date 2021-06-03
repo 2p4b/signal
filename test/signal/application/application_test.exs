@@ -16,8 +16,6 @@ defmodule Signal.ApplicationTest do
         @tag :application
         test "should have two child supervisors" do
             %{} = Supervisor.count_children(App)
-            #assert children.active == 11
-            #assert children.supervisors == 10
         end
 
     end
