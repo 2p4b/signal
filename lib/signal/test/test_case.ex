@@ -115,6 +115,10 @@ defmodule Signal.TestCase do
             # apply the given events to the aggregate state
             defp evolve(aggregate, event, from \\ 0)
 
+            defp evolve(aggregate, event, from) when is_atom(aggregate) do
+                evolve(struct(aggregate, []), event, from)
+            end
+
             defp evolve(aggregate, event, from) when is_struct(event) do
                 evolve(aggregate, [event], from)
             end
