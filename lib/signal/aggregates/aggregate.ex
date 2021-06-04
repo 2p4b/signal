@@ -119,9 +119,9 @@ defmodule Signal.Aggregates.Aggregate do
         %Aggregate{version: version, state: state} = aggregate
 
         case event do
-            %Event{reduction: reduction, payload: payload} when reduction == (version + 1) ->
+            %Event{reduction: reduction} when reduction == (version + 1) ->
 
-                case Reducer.apply(state, Event.meta(event), payload) do
+                case Reducer.apply(state, Event.meta(event), Event.payload(event)) do
                     {:snapshot, state} ->
                         %Aggregate{aggregate | 
                             state: state,

@@ -113,7 +113,9 @@ defmodule Signal.Events.BrokerTest do
 
             Broker.acknowledge(app, stream, 0)
 
-            assert_receive(%Event{ payload: ^deposited })
+            data = Signal.Codec.encode(deposited)
+
+            assert_receive(%Event{ data: ^data })
         end
 
     end

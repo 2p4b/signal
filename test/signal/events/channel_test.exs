@@ -108,7 +108,9 @@ defmodule Signal.Events.ChannelTest do
 
             Recorder.record(app, action, staged)
 
-            assert_receive(%Event{ payload: ^deposited })
+            data = Signal.Codec.encode(deposited)
+
+            assert_receive(%Event{ data: ^data })
         end
 
     end

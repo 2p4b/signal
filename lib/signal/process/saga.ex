@@ -82,11 +82,10 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_call({:stop, %Event{}=event}, from, %Saga{}=saga) do
-        %Event{payload: payload, number: number} = event
+    def handle_call({:stop, %Event{number: number}=event}, from, %Saga{}=saga) do
         %Saga{module: module, state: state} = saga
 
-        {:ok, state} = Kernel.apply(module, :stop, [payload, state])
+        {:ok, state} = Kernel.apply(module, :stop, [Event.payload(event), state])
 
         saga =
             %Saga{ saga | state: state} 
@@ -151,8 +150,8 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info(%Event{payload: payload, number: number}=event, %Saga{}=saga) do
-        case Kernel.apply(saga.module, :apply, [payload, saga.state]) do
+    def handle_info(%Event{number: number}=event, %Saga{}=saga) do
+        case Kernel.apply(saga.module, :apply, [Event.payload(event), saga.state]) do
             {:dispatch, command, state} ->
                 Process.send(self(), {:execute, command, Event.meta(event)}, []) 
                 {:noreply, %Saga{ saga | state: state}}

@@ -2,8 +2,8 @@ defmodule Signal.Events.Event do
     use Timex
     use Signal.Type
 
+    alias Signal.Codec
     alias Signal.Stream
-    alias Signal.Helper
     alias Signal.Events.Event
     alias Signal.Command.Action
 
@@ -12,6 +12,7 @@ defmodule Signal.Events.Event do
         use Signal.Type
 
         schema enforce: true do
+            field :type,            atom()
             field :uuid,            String.t()
             field :topic,           String.t()
             field :stream,          String.t()
@@ -28,7 +29,8 @@ defmodule Signal.Events.Event do
         field :uuid,            String.t()
         field :topic,           String.t()
         field :stream,          String.t()
-        field :payload,         term()
+        field :data,            map()
+        field :type,            atom()
         field :reduction,       integer()
         field :number,          integer(),  default: nil
         field :causation_id,    String.t()
@@ -38,12 +40,14 @@ defmodule Signal.Events.Event do
 
     def new(event, %Action{stream: source}=action, reduction) 
     when is_struct(event) and is_number(reduction) do
+        {type, data} = encode(event)
         params = [
             uuid: UUID.uuid4(), 
             topic: Signal.Topic.topic(event), 
             stream: Stream.stream(event),
+            data: data,
+            type: type,
             source: source,
-            payload: event,
             reduction: reduction,
             timestamp: Timex.now(),
             causation_id: action.causation_id,
@@ -52,10 +56,14 @@ defmodule Signal.Events.Event do
         struct(__MODULE__, params)
     end
 
-    def topic(%{__struct__: type}=event) when is_struct(event) do
-        Helper.module_to_string(type)
+    defp encode(%{__struct__: type}=payload) when is_struct(payload) do
+        {type, Codec.encode(payload)}
     end
-    
+
+    def payload(%Event{data: data, type: type}) do
+        Codec.load(struct(type, []), data)
+    end
+
     def index(%Event{number: nil}=event, number) when is_integer(number) do
         %Event{event | number: number}
     end

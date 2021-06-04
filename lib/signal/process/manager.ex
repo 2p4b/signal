@@ -189,7 +189,7 @@ defmodule Signal.Process.Manager do
 
     def handle_event(%Event{number: number}=event, %Manager{module: module, subscription: %{ack: index}}=state) do
         procs =
-            case Kernel.apply(module, :handle, [event.payload]) do
+            case Kernel.apply(module, :handle, [Event.payload(event)]) do
 
                 {stop, id} when stop in [:stop, :stop!] ->
                     proc = Enum.find(state.procs, &(Map.get(&1, :id) == id))
