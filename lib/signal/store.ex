@@ -14,6 +14,8 @@ defmodule Signal.Store do
 
     @callback get_state(app :: app, id :: String.t) :: {:ok, term()} | {:error, reason :: term()} | nil
 
+    @callback get_event(app :: app, number :: integer()) :: term() | {:error, reason :: term()} | nil
+
     @callback get_state(app :: app, id :: String.t, version :: integer()) :: {:ok, term()} | {:error, reason :: term()} | nil
 
     @callback set_state(app :: app, id :: String.t, state :: term()) :: {:ok, integer} | {:error, reason :: term()}

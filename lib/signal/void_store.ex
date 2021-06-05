@@ -28,6 +28,11 @@ defmodule Signal.VoidStore do
     end
 
     @impl true
+    def handle_call({:get_event, number}, _from, %Store{events: events}=store) do
+        {:reply, Enum.find(events, &(Map.get(&1, :number) == number)), store} 
+    end
+
+    @impl true
     def handle_call({:get_state, id, version}, _from, %Store{states: states}=store) 
     when is_binary(id) do
         state = 
@@ -199,6 +204,11 @@ defmodule Signal.VoidStore do
     @impl true
     def next(_app, position, opts \\ []) do
         GenServer.call(__MODULE__, {:next, position, opts}, 5000)
+    end
+
+    @impl true
+    def get_event(_app, number) do
+        GenServer.call(__MODULE__, {:get_event, number}, 5000)
     end
 
     @impl true

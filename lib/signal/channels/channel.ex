@@ -22,13 +22,14 @@ defmodule Signal.Channels.Channel do
         app = Keyword.get(opts, :app)
         name = Keyword.get(opts, :id)
         store = Keyword.get(opts, :store)
+        index = Signal.Events.Recorder.cursor(app)
         args = [
             ack: 0,
             syn: 0,
-            index: 0,
             app: app,
             name: name,
             store: store,
+            index: index,
             topics: [],
             subscriptions: [],
         ]
@@ -49,11 +50,18 @@ defmodule Signal.Channels.Channel do
     @impl true
     def handle_info(:pull, state) do
         state =
-            case pull_events(state) do
-                [event] ->
-                    push_event(event, state)
-                [] ->
+            case pull_event(state) do
+                nil -> 
                     state
+                {:error, _reason} ->
+                    sched_next()
+
+                %Event{topic: topic, number: number}=event ->
+                    if topic in state.topics do
+                        push_event(event, state)
+                    else
+                        handle_ack(number, state)
+                    end
             end
         {:noreply, state} 
     end
@@ -64,7 +72,11 @@ defmodule Signal.Channels.Channel do
             if topic in topics do
                 handle_event(event, state)
             else
-                state
+                if (state.ack + 1) == number do
+                    handle_ack(number, state)
+                else
+                    state
+                end
             end
         {:noreply, %Channel{state | index: number}}
     end
@@ -108,7 +120,7 @@ defmodule Signal.Channels.Channel do
 
         # Do not pull for event if channel
         # is waiting for an ack request
-        if state.syn == state.ack do
+        if state.syn == state.ack and state.index > state.ack do
             sched_next()
         end
         {:reply, sub, update_topics(channel)} 
@@ -210,8 +222,9 @@ defmodule Signal.Channels.Channel do
         end
     end
 
-    defp pull_events(%Channel{topics: topics, app: app, syn: syn, store: store}) do
-        store.list_events(app, topics, syn, 1)
+    defp pull_event(%Channel{}=channel) do
+        %Channel{app: app, ack: ack, store: store} = channel
+        store.get_event(app, ack + 1)
     end
 
     defp push_event(%Event{topic: topic, number: number}=event, %Channel{}=channel) do
@@ -227,10 +240,12 @@ defmodule Signal.Channels.Channel do
         %Channel{channel | syn: number}
     end
 
-    defp handle_ack(number, %Channel{syn: syn, app: app, store: store, name: name}=channel) 
-    when number == syn do
-        sched_next()
-        {:ok, ack} = store.set_index(app, name, number)
+    defp handle_ack(number, %Channel{index: index, ack: ack, store: store}=channel) 
+    when number > ack do
+        {:ok, ack} = store.set_index(channel.app, channel.name, number)
+        if number < index do
+            sched_next()
+        end
         %Channel{channel| ack: ack}
     end
 
