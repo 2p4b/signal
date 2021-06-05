@@ -64,7 +64,7 @@ defmodule Signal.Projector do
 
     def handle_event(module, %Event{number: number}=event, handler) do
         %Projector{app: app, name: name} = handler
-        args = [Event.payload(event), Event.meta(event)]
+        args = [Event.payload(event), Event.metadata(event)]
         response = Kernel.apply(module, :project, args)
         Channel.acknowledge(app, name, number)
         handle_response(response, handler)
