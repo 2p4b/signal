@@ -7,7 +7,7 @@ defmodule Signal.Events.Event do
     alias Signal.Events.Event
     alias Signal.Command.Action
 
-    defmodule Meta do
+    defmodule Metadata do
 
         use Signal.Type
 
@@ -68,8 +68,8 @@ defmodule Signal.Events.Event do
         %Event{event | number: number}
     end
 
-    def meta(%Event{}=event) do
-        Meta.from(event)
+    def metadata(%Event{}=event) do
+        Metadata.from(event)
     end
 
 end

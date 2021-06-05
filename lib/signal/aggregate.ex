@@ -16,7 +16,7 @@ defmodule Signal.Aggregate do
                     defimpl Signal.Stream.Reducer do
                         @pmodule module
                         def apply(agg, meta, event) do 
-                            Kernel.apply(@pmodule, :apply, [agg, meta, event])
+                            Kernel.apply(@pmodule, :apply, [event, meta, agg])
                         end
                     end
                 end

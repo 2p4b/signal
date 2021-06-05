@@ -5,8 +5,8 @@ defmodule Signal.Process.Saga do
     alias Signal.Result
     alias Signal.Process.Saga
     alias Signal.Events.Event
-    alias Signal.Events.Event.Meta
     alias Signal.Process.Supervisor
+    alias Signal.Events.Event.Metadata
 
     defstruct [:app, :state, :store, :id, :version, :module]
 
@@ -113,9 +113,9 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info({:execute, command, %Meta{}=meta}, %Saga{}=saga) do
+    def handle_info({:execute, command, %Metadata{}=meta}, %Saga{}=saga) do
         %Saga{state: state, module: module} = saga
-        %Meta{number: number, uuid: uuid, correlation_id: correlation_id} = meta
+        %Metadata{number: number, uuid: uuid, correlation_id: correlation_id} = meta
 
         snapshot = {identity(saga), number, Codec.encode(state)}
         opts = [
@@ -153,7 +153,7 @@ defmodule Signal.Process.Saga do
     def handle_info(%Event{number: number}=event, %Saga{}=saga) do
         case Kernel.apply(saga.module, :apply, [Event.payload(event), saga.state]) do
             {:dispatch, command, state} ->
-                Process.send(self(), {:execute, command, Event.meta(event)}, []) 
+                Process.send(self(), {:execute, command, Event.metadata(event)}, []) 
                 {:noreply, %Saga{ saga | state: state}}
 
             {:stop, state} ->
