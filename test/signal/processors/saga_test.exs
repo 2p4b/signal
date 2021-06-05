@@ -12,7 +12,7 @@ defmodule Signal.Processor.SagaTest do
             field :balance,     integer(),  default: 0
         end
 
-        def apply(%Account{}=act, _meta, _event) do
+        def apply(_event, _meta, %Account{}=act) do
             act
         end
 

@@ -137,7 +137,7 @@ defmodule Signal.TestCase do
                         end
 
                         version = index + 1
-                        meta =  struct(Signal.Events.Event.Meta, [number: version])
+                        meta =  struct(Signal.Events.Event.Metadata, [number: version])
                         {Signal.Stream.Reducer.apply(aggregate, meta, event), version}
                     end)
                 aggregate
