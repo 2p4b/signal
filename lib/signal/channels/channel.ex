@@ -22,14 +22,13 @@ defmodule Signal.Channels.Channel do
         app = Keyword.get(opts, :app)
         name = Keyword.get(opts, :id)
         store = Keyword.get(opts, :store)
-        index = Signal.Events.Recorder.cursor(app)
         args = [
             ack: 0,
             syn: 0,
             app: app,
             name: name,
             store: store,
-            index: index,
+            index: 0,
             topics: [],
             subscriptions: [],
         ]
@@ -38,13 +37,14 @@ defmodule Signal.Channels.Channel do
 
     @impl true
     def handle_info(:init, %Channel{name: name, app: app, store: store}=state) do
-        index = 
+        ack = 
             case store.get_index(app, name) do
                 nil -> 0
                 value -> value
             end
         Signal.Application.listen(app)
-        {:noreply, %Channel{state | syn: index, ack: index} }
+        index = Signal.Events.Recorder.cursor(app)
+        {:noreply, %Channel{state | index: index, syn: ack, ack: ack} }
     end
 
     @impl true
