@@ -25,6 +25,12 @@ defmodule Signal.TestCase do
                 events =
                     case handle(command) do
 
+                        {:ok, events} when is_list(events) ->
+                            events
+
+                        {:ok, event} when is_struct(event) ->
+                            [event]
+
                         events when is_list(events) ->
                             events
 
@@ -50,7 +56,14 @@ defmodule Signal.TestCase do
                         end
                     end)
                 else
-                    events
+                    message  = """
+                    #{inspect(events)}
+
+                    failed to handle command
+                    #{inspect(command)}
+                    """
+                    stream = Signal.Stream.stream(command)
+                    raise(Signal.Exception.StreamError, [stream: stream, message: message])
                 end
             end
 
