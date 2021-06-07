@@ -23,7 +23,7 @@ defmodule Signal.TestCase do
             defp assert_events(command, expected_events) 
             when is_struct(command) and is_list(expected_events) do
                 events =
-                    case handle(command) do
+                    case handle_command(command) do
 
                         {:ok, events} when is_list(events) ->
                             events
@@ -73,21 +73,21 @@ defmodule Signal.TestCase do
             end
 
             # handle a command
-            defp handle(command) when is_struct(command) do
-                handle(command, nil, %{})
+            defp handle_command(command) when is_struct(command) do
+                handle_command(command, nil, %{})
             end
 
-            defp handle(command, aggregate) 
+            defp handle_command(command, aggregate) 
             when is_struct(command) and is_struct(aggregate) do
-                handle(command, aggregate, %{})
+                handle_command(command, aggregate, %{})
             end
 
-            defp handle(command, params) 
+            defp handle_command(command, params) 
             when is_struct(command) and is_map(params) do
-                handle(command, nil, %{})
+                handle_command(command, nil, %{})
             end
 
-            defp handle(command, aggregate, params \\ %{})
+            defp handle_command(command, aggregate, params \\ %{})
             when is_struct(command) and (is_struct(aggregate) or is_nil(aggregate)) do
 
                 {aggregate_module, _sid} = Signal.Stream.stream(command)
