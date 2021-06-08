@@ -82,19 +82,42 @@ defmodule Signal.Channels.Channel do
     end
 
     @impl true
-    def handle_info({:ack, number}, %Channel{}=state) do
-        {:noreply, handle_ack(number, state)} 
+    def handle_info({:ack, pid, number}, %Channel{subscriptions: subscriptions}=state) do
+        index = 
+            subscriptions
+            |> Enum.find_index(fn %Subscription{consumer: {_ref, spid}} -> 
+                spid == pid
+            end)
+
+        subscription = Enum.at(subscriptions, index) |> Map.put(:ack, number)
+        subscriptions = List.replace_at(subscriptions, index, subscription)
+        {:noreply, handle_ack(number, %Channel{ state| subscriptions: subscriptions })} 
     end
 
     @impl true
     def handle_info({:DOWN, ref, :process, _obj, _reason}, %Channel{}=state) do
-        subscriptions = 
-            state.subscriptions
-            |> Enum.filter(fn %Subscription{consumer: {sref, _pid}} -> 
-                sref != ref 
+        %Channel{subscriptions: subscriptions} = state
+
+        sindex = 
+            subscriptions
+            |> Enum.find_index(fn %Subscription{consumer: {sref, _pid}} -> 
+                sref == ref 
             end)
 
-        {:noreply, %Channel{state | subscriptions: subscriptions}}
+        subscriptions = List.delete_at(subscriptions, sindex)
+
+        channel =
+            if Enum.empty?(subscriptions) do
+                exit(:normal)
+                state
+            else
+                successor = Enum.max(subscriptions, &Map.get(&1, :ack))
+                if successor.syn == successor.ack do
+                    sched_next()
+                end
+                update_topics(%Channel{state | subscriptions: subscriptions, ack: successor.ack})
+            end
+        {:noreply, channel}
     end
 
     @impl true
@@ -157,8 +180,10 @@ defmodule Signal.Channels.Channel do
 
         {sub, subs} = 
             if is_nil(subscription) do
+                ack = Keyword.get(opts, :start, state.syn)
                 sub = %Subscription{ 
-                    ack: Keyword.get(opts, :start, state.syn),
+                    ack: ack,
+                    syn: ack,
                     topics: Enum.uniq(topics), 
                     channel: state.name,
                     consumer: {Process.monitor(pid), pid},
@@ -228,16 +253,23 @@ defmodule Signal.Channels.Channel do
     end
 
     defp push_event(%Event{topic: topic, number: number}=event, %Channel{}=channel) do
-        sub =
+        index =
             channel.subscriptions
-            |> Enum.find(fn %Subscription{topics: topics} -> 
+            |> Enum.find_index(fn %Subscription{topics: topics} -> 
                 Enum.member?(topics, topic)
             end)
+
+        sub = Enum.at(channel.subscriptions, index)
 
         with %Subscription{consumer: {_ref, pid}} <- sub do
             Process.send(pid, event, [])
         end
-        %Channel{channel | syn: number}
+
+        subscriptions = 
+            channel.subscriptions
+            |> List.replace_at(index, %Subscription{sub | syn: number})
+
+        %Channel{channel | syn: number, subscriptions: subscriptions}
     end
 
     defp handle_ack(number, %Channel{index: index, ack: ack, store: store}=channel) 
@@ -260,7 +292,6 @@ defmodule Signal.Channels.Channel do
     end
 
     def subscribe(app, handle, topics, opts) when is_binary(handle) do
-
         opts = 
             case Keyword.fetch(opts, :start) do
 
@@ -290,7 +321,7 @@ defmodule Signal.Channels.Channel do
         app
         |> Signal.Channels.Supervisor.prepare_channel(handle)
         |> GenServer.whereis()
-        |> Process.send({:ack, number}, [])
+        |> Process.send({:ack, self(), number}, [])
     end
 
     def syncronize(app, handle, position) do
