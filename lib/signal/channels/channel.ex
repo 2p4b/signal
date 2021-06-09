@@ -108,7 +108,8 @@ defmodule Signal.Channels.Channel do
 
         channel =
             if Enum.empty?(subscriptions) do
-                exit(:normal)
+                %Channel{app: app, name: name} = state
+                Signal.Channels.Supervisor.stop_child(app, name)
                 state
             else
                 successor = Enum.max(subscriptions, &Map.get(&1, :ack))

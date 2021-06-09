@@ -51,15 +51,27 @@ defmodule Signal.Projector do
     end
 
 
-    def init(module, opts) do
+    def init(_module, opts) do
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
         application = Keyword.get(opts, :application)
         app_name = Keyword.get(opts, :app, application)
         app = {application, app_name}
-        %Subscription{} = Channel.subscribe(app, name, topics)
+        %Subscription{} = subscribe(app, name, topics)
         params = [name: name, app: app]
         {:ok, struct(__MODULE__, params)} 
+    end
+
+    def subscribe(app, name, topics) do
+        Enum.find_value(1..5, fn _x -> 
+            case Channel.subscribe(app, name, topics) do
+                %Subscription{} = subscription ->
+                    subscription
+                _ ->
+                    Process.sleep(50)
+                    false
+            end
+        end)
     end
 
     def handle_event(module, %Event{number: number}=event, handler) do

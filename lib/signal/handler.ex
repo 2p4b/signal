@@ -80,7 +80,7 @@ defmodule Signal.Handler do
         application = Keyword.get(opts, :application)
         app_name = Keyword.get(opts, :app, application)
         app = {application, app_name}
-        subscription = Channel.subscribe(app, name, topics)
+        subscription = subscribe(app, name, topics)
         init_params = [app: app_name, name: name]
 
         case Kernel.apply(module, :init, [subscription, init_params]) do
@@ -91,6 +91,19 @@ defmodule Signal.Handler do
                 error
         end
     end
+
+    def subscribe(app, name, topics) do
+        Enum.find_value(1..5, fn _x -> 
+            case Channel.subscribe(app, name, topics) do
+                %Signal.Subscription{} = subscription ->
+                    subscription
+                _ ->
+                    Process.sleep(50)
+                    false
+            end
+        end)
+    end
+
 
     def handle_event(module, event, handler) do
         %Event{number: number} = event

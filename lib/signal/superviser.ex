@@ -27,6 +27,19 @@ defmodule Signal.Superviser do
                     app
                     |> Signal.Application.registry(@registry)
                 end
+
+                def stop_child(app, id, reason \\ :kill)
+
+                def stop_child(app, id, reason) when is_binary(id) do
+                    case Registry.lookup(registry(app), id) do
+                        [{pid, _name}] ->
+                            Registry.unregister(registry(app), id)
+                            DynamicSupervisor.terminate_child(name(app), pid)
+
+                        [] -> {:error, :not_found}
+                    end
+                end
+
             end
 
         end
