@@ -3,7 +3,7 @@ defmodule Signal.Processor.SagaTest do
 
     alias Signal.VoidStore
 
-    defmodule Account do
+    defmodule Accounts do
 
         use Signal.Aggregate
 
@@ -12,7 +12,7 @@ defmodule Signal.Processor.SagaTest do
             field :balance,     integer(),  default: 0
         end
 
-        def apply(_event, _meta, %Account{}=act) do
+        def apply(_event, _meta, %Accounts{}=act) do
             act
         end
 
@@ -22,7 +22,7 @@ defmodule Signal.Processor.SagaTest do
 
         use Signal.Event,
             topic: "user.deposited",
-            stream: {Account, :account}
+            stream: {Accounts, :account}
 
         schema do
             field :account,     String.t,   default: "123"
@@ -33,7 +33,7 @@ defmodule Signal.Processor.SagaTest do
 
     defmodule AccountOpened do
         use Signal.Event,
-            stream: {Account, :account}
+            stream: {Accounts, :account}
 
         schema do
             field :pid,         term()
@@ -45,14 +45,14 @@ defmodule Signal.Processor.SagaTest do
     defmodule Deposite do
 
         use Signal.Command,
-            stream: {Account, :account}
+            stream: {Accounts, :account}
 
         schema do
             field :account,     String.t,   default: "123"
             field :amount,      integer(),  default: 0
         end
 
-        def handle(%Deposite{}=deposite, _params, %Account{}) do
+        def handle(%Deposite{}=deposite, _params, %Accounts{}) do
             Deposited.from(deposite)
         end
     end
@@ -60,14 +60,14 @@ defmodule Signal.Processor.SagaTest do
     defmodule OpenAccount do
 
         use Signal.Command,
-            stream: {Account, :account}
+            stream: {Accounts, :account}
 
         schema do
             field :pid,         term()
             field :account,     String.t,   default: "123"
         end
 
-        def handle(%OpenAccount{}=cmd, _params, %Account{}) do
+        def handle(%OpenAccount{}=cmd, _params, %Accounts{}) do
             AccountOpened.from(cmd)
         end
     end
@@ -84,7 +84,7 @@ defmodule Signal.Processor.SagaTest do
 
     defmodule TestApp do
 
-        use Signal.Application, 
+        use Signal.Application,
             store: VoidStore
 
         router Router
@@ -98,7 +98,7 @@ defmodule Signal.Processor.SagaTest do
             topics: [AccountOpened, "user.deposited"]
 
         defstruct [:account, :amount, :pid]
-            
+
         def init(id) do
             struct(__MODULE__, [account: id, amount: 0])
         end
@@ -178,8 +178,3 @@ defmodule Signal.Processor.SagaTest do
     end
 
 end
-
-
-
-
-

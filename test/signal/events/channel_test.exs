@@ -9,11 +9,11 @@ defmodule Signal.Events.ChannelTest do
 
     defmodule TestApp do
 
-        use Signal.Application, 
+        use Signal.Application,
             store: VoidStore
     end
 
-    defmodule Account do
+    defmodule Accounts do
 
         use Signal.Type
 
@@ -27,7 +27,7 @@ defmodule Signal.Events.ChannelTest do
     defmodule Deposited do
 
         use Signal.Event,
-            stream: {Account, :account}
+            stream: {Accounts, :account}
 
         schema do
             field :account,     String.t,   default: "123"
@@ -39,14 +39,14 @@ defmodule Signal.Events.ChannelTest do
     defmodule Deposite do
 
         use Signal.Command,
-            stream: {Account, :account}
+            stream: {Accounts, :account}
 
         schema do
             field :account,     String.t,   default: "123"
             field :amount,      integer(),  default: 0
         end
 
-        def handle(%Deposite{}=deposite, _param, %Account{number: "123", balance: 0}) do
+        def handle(%Deposite{}=deposite, _param, %Accounts{number: "123", balance: 0}) do
             Deposited.from(deposite)
         end
     end
@@ -68,12 +68,12 @@ defmodule Signal.Events.ChannelTest do
             name = "Test.Channel"
             topic = "Test.Topic"
 
-            subscription = 
+            subscription =
                 {TestApp, :channel}
                 |> Signal.Channels.Channel.subscribe(name, topic)
 
             assert match?(%Signal.Subscription{
-                channel: ^name, 
+                channel: ^name,
                 topics: [ ^topic ]
             }, subscription)
 
@@ -84,25 +84,25 @@ defmodule Signal.Events.ChannelTest do
             app = {TestApp, :channel}
             reduction = 1
 
-            deposited = Deposited.new([amount: 5000]) 
+            deposited = Deposited.new([amount: 5000])
 
             topic = Signal.Helper.module_to_string(Deposited)
 
             %Signal.Subscription{} = Channel.subscribe(app, "Test.Channel", topic)
 
-            action = 
+            action =
                 [amount: 5000]
                 |> Deposite.new()
                 |> Signal.Execution.Task.new([app: app])
                 |> Signal.Command.Action.from()
 
-            event = Signal.Events.Event.new(deposited, action, reduction) 
+            event = Signal.Events.Event.new(deposited, action, reduction)
 
             staged =
                 %Staged{
-                    events: [event], 
-                    version: 1, 
-                    stream: Signal.Stream.stream(deposited), 
+                    events: [event],
+                    version: 1,
+                    stream: Signal.Stream.stream(deposited),
                     stage: self()
                 }
 
@@ -116,5 +116,3 @@ defmodule Signal.Events.ChannelTest do
     end
 
 end
-
-

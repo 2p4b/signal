@@ -9,7 +9,7 @@ defmodule Signal.Events.AggregateTest do
             store: VoidStore
     end
 
-    defmodule Account do
+    defmodule Accounts do
         use Signal.Aggregate
 
         schema do
@@ -21,7 +21,7 @@ defmodule Signal.Events.AggregateTest do
 
     defmodule Deposite do
         use Signal.Command,
-            stream: {Account, :account}
+            stream: {Accounts, :account}
 
         schema do
             field :account,     String.t,   default: "123"
@@ -31,7 +31,7 @@ defmodule Signal.Events.AggregateTest do
 
     defmodule Deposited do
         use Signal.Event,
-            stream: {Account, :account}
+            stream: {Accounts, :account}
 
         schema do
             field :account,     String.t,   default: "123"
@@ -40,10 +40,10 @@ defmodule Signal.Events.AggregateTest do
     end
 
 
-    defimpl Signal.Stream.Reducer, for: Account do
+    defimpl Signal.Stream.Reducer, for: Accounts do
 
-        def apply(%Account{balance: balance}=account, _meta, %Deposited{amount: amount}) do
-            %Account{ account | balance: balance + amount }
+        def apply(%Accounts{balance: balance}=account, _meta, %Deposited{amount: amount}) do
+            %Accounts{ account | balance: balance + amount }
         end
 
     end
@@ -57,7 +57,7 @@ defmodule Signal.Events.AggregateTest do
     setup do
         {:ok, _pid} = start_supervised(TestApp)
         stream = Signal.Stream.stream(Deposited.new())
-        {:via, _, _} = 
+        {:via, _, _} =
             {TestApp, TestApp}
             |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
         :ok
@@ -68,14 +68,14 @@ defmodule Signal.Events.AggregateTest do
         @tag :aggregate
         test "should initialialize state" do
             stream = Signal.Stream.stream(Deposited.new())
-            aggregate = 
+            aggregate =
                 {TestApp, TestApp}
                 |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
                 |> Signal.Aggregates.Aggregate.state()
 
-            assert match?(%Account{number: "123"}, aggregate)
+            assert match?(%Accounts{number: "123"}, aggregate)
 
-            deposited = Deposited.new([amount: 1]) 
+            deposited = Deposited.new([amount: 1])
 
             stream = Signal.Stream.stream(deposited)
 
@@ -84,12 +84,12 @@ defmodule Signal.Events.AggregateTest do
                 |> Signal.Execution.Task.new([app: TestApp])
                 |> Signal.Command.Action.from()
 
-            event1 =  
-                Event.new(deposited, action, 1) 
+            event1 =
+                Event.new(deposited, action, 1)
                 |> Event.index(1)
 
-            event2 =  
-                Event.new(deposited, action, 2) 
+            event2 =
+                Event.new(deposited, action, 2)
                 |> Event.index(20)
 
             {TestApp, TestApp}
@@ -105,27 +105,27 @@ defmodule Signal.Events.AggregateTest do
                 |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
                 |> Signal.Aggregates.Aggregate.state()
 
-            assert match?(%Account{number: "123", balance: 2}, account)
+            assert match?(%Accounts{number: "123", balance: 2}, account)
 
-            deposited = Deposited.new([amount: 3]) 
+            deposited = Deposited.new([amount: 3])
 
             stream = Signal.Stream.stream(deposited)
 
-            action = 
+            action =
                 Deposite.new([amount: 3])
                 |> Signal.Execution.Task.new([app: TestApp])
                 |> Signal.Command.Action.from()
 
-            event =  
-                Event.new(deposited, action, 3) 
+            event =
+                Event.new(deposited, action, 3)
                 |> Event.index(1)
 
-            aggregate = 
+            aggregate =
                 {TestApp, TestApp}
                 |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
 
-            task = 
-                Task.async(fn -> 
+            task =
+                Task.async(fn ->
                     Signal.Aggregates.Aggregate.await(aggregate, 3)
                 end)
 
@@ -133,10 +133,8 @@ defmodule Signal.Events.AggregateTest do
 
             account = Task.await(task, :infinity)
 
-            assert match?(%Account{number: "123"}, account)
+            assert match?(%Accounts{number: "123"}, account)
         end
     end
 
 end
-
-

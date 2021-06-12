@@ -163,8 +163,12 @@ defmodule Signal.Aggregates.Aggregate do
         aggregate_id(stream)
     end
 
-    defp aggregate_id({_type, id}) do
-        "aggregate:" <> id
+    defp aggregate_id({type, id}) when is_atom(type) do
+        Signal.Helper.module_to_string(type) <> ":" <> id
+    end
+
+    defp aggregate_id({type, id}) when is_binary(type) do
+        type <> ":" <> id
     end
 
     defp snapshot(%Aggregate{app: app, version: version, store: store}=aggregate) do

@@ -10,11 +10,11 @@ defmodule Signal.Events.BrokerTest do
 
     defmodule TestApp do
 
-        use Signal.Application, 
+        use Signal.Application,
             store: VoidStore
     end
 
-    defmodule Account do
+    defmodule Accounts do
 
         use Signal.Type
 
@@ -28,7 +28,7 @@ defmodule Signal.Events.BrokerTest do
     defmodule Deposited do
 
         use Signal.Event,
-            stream: {Account, :account}
+            stream: {Accounts, :account}
 
         schema do
             field :account,     String.t,   default: "123"
@@ -40,14 +40,14 @@ defmodule Signal.Events.BrokerTest do
     defmodule Deposite do
 
         use Signal.Command,
-            stream: {Account, :account}
+            stream: {Accounts, :account}
 
         schema do
             field :account,     String.t,   default: "123"
             field :amount,      integer(),  default: 0
         end
 
-        def handle(%Deposite{}=deposite, _param, %Account{number: "123", balance: 0}) do
+        def handle(%Deposite{}=deposite, _param, %Accounts{number: "123", balance: 0}) do
             Deposited.from(deposite)
         end
     end
@@ -88,23 +88,23 @@ defmodule Signal.Events.BrokerTest do
         test "should recieve events from stream" do
 
             app = {TestApp, TestApp}
-            deposited = Deposited.new([amount: 5000]) 
+            deposited = Deposited.new([amount: 5000])
 
             stream = Signal.Stream.stream(deposited)
 
-            action = 
+            action =
                 [amount: 5000]
                 |> Deposite.new()
                 |> Signal.Execution.Task.new([app: app])
                 |> Signal.Command.Action.from()
 
-            event = Signal.Events.Event.new(deposited, action, 1) 
+            event = Signal.Events.Event.new(deposited, action, 1)
 
             staged = %Staged{
                 stage: self(),
-                stream: stream, 
-                events: [event], 
-                version: 1, 
+                stream: stream,
+                events: [event],
+                version: 1,
             }
 
             Recorder.record(app, action, staged)
@@ -121,6 +121,3 @@ defmodule Signal.Events.BrokerTest do
     end
 
 end
-
-
-
