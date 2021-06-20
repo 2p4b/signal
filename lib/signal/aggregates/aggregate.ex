@@ -159,15 +159,15 @@ defmodule Signal.Aggregates.Aggregate do
         GenServer.call(aggregate, {:await, stage}, timeout)
     end
 
-    defp aggregate_id(%Aggregate{stream: stream}) do
+    def aggregate_id(%Aggregate{stream: stream}) do
         aggregate_id(stream)
     end
 
-    defp aggregate_id({type, id}) when is_atom(type) do
+    def aggregate_id({type, id}) when is_atom(type) do
         Signal.Helper.module_to_string(type) <> ":" <> id
     end
 
-    defp aggregate_id({type, id}) when is_binary(type) do
+    def aggregate_id({type, id}) when is_binary(type) do
         type <> ":" <> id
     end
 

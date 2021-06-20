@@ -205,8 +205,8 @@ defmodule Signal.Events.Producer do
         stream_id(stream)
     end
 
-    def stream_id({_type, id}) do
-        "stream:" <> id
+    def stream_id({type, id}) do
+        Signal.Helper.module_to_string(type) <> ":" <> id
     end
 
     defp calibrate(%Producer{app: app, store: store}=prod) do
@@ -226,6 +226,8 @@ defmodule Signal.Events.Producer do
 
     defp handle_command(command, params, aggregate) when is_struct(command) do
         case Signal.Command.Handler.handle(command, params, aggregate) do
+            nil ->
+                []
             {:ok, event} when is_struct(event) ->
                 [event]
 
