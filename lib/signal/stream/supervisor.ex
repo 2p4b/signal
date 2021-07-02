@@ -38,7 +38,7 @@ defmodule Signal.Stream.Supervisor do
         end
     end
 
-    defp broker_args(app, {_, _, {_, type, _app}}=name) when is_tuple(name) do
+    defp broker_args(app, {_, _, {_, type, _app}}=name) do
         [name: name, app: app, store: Signal.Application.store(app), type: Helper.string_to_module(type)]
     end
 

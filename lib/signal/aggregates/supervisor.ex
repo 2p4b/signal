@@ -31,7 +31,7 @@ defmodule Signal.Aggregates.Supervisor do
         end
     end
 
-    defp child_args(app, stream, via_name) when is_tuple(via_name) do
+    defp child_args(app, stream, via_name) do
         {aggregate, _aid} = stream
         {app_module, _app_name} = app
         [

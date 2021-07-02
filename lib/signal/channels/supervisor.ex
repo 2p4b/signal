@@ -30,7 +30,7 @@ defmodule Signal.Channels.Supervisor do
         end
     end
 
-    defp channel_args(app, {_, _, {_, id, _}}=name) when is_tuple(name) do
+    defp channel_args(app, {_, _, {_, id, _}}=name) do
         {app_module, _app_name} = app
         [ name: name, id: id, app: app, store: app_module.store() ]
     end

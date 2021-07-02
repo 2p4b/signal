@@ -32,7 +32,7 @@ defmodule Signal.Events.Supervisor do
         end
     end
 
-    defp producer_args(app, stream, via_name) when is_tuple(via_name)  do
+    defp producer_args(app, stream, via_name) do
         {app_module, _name} = app
         [
             app: app,

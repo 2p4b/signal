@@ -30,7 +30,7 @@ defmodule Signal.Execution.Supervisor do
         end
     end
 
-    defp queue_args({app_module, _app_name}=app, name, opts) when is_tuple(name) and is_list(opts) do
+    defp queue_args({app_module, _app_name}=app, name, opts) when is_list(opts) do
         {_, _, {_registry, id, type}} = name
 
         [ app: app, id: id, name: name, type: type ]
