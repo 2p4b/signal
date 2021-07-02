@@ -87,7 +87,7 @@ defmodule Signal.Process.Saga do
 
         case Kernel.apply(module, :stop, [Event.payload(event), state]) do
             {:continue, state} ->
-                {:reply, :continue, saga}
+                {:reply, :continue, %Saga{saga | state: state}}
 
             resp ->
 

@@ -34,7 +34,7 @@ defmodule Signal.Process.Supervisor do
         end
     end
 
-    defp child_args(app, via_name) when is_tuple(via_name) do
+    defp child_args(app, via_name) do
         {_, _, {_registry, id, module}} = via_name
         [
             id: id,
