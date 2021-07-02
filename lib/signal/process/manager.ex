@@ -197,9 +197,14 @@ defmodule Signal.Process.Manager do
                         state.procs
                     else
                         {pid, ref} = proc.saga
-                        Process.demonitor(ref)
-                        GenServer.call(pid, {:stop, event})
-                        Enum.filter(state.procs, &(Map.get(&1, :id) != id))
+                        case GenServer.call(pid, {:stop, event}) do
+                            :continue -> 
+                                state.procs
+
+                            _ ->
+                                Process.demonitor(ref)
+                                Enum.filter(state.procs, &(Map.get(&1, :id) != id))
+                        end
                     end
 
                 {start, id} when start in [:start, :start!] ->
