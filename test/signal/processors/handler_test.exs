@@ -126,6 +126,7 @@ defmodule Signal.Processor.HandlerTest do
 
             Recorder.record(app, action, staged2)
             assert_receive(%Deposited{ amount: 4000 })
+            Process.sleep(100)
         end
 
     end
