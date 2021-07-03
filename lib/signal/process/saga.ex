@@ -24,12 +24,6 @@ defmodule Signal.Process.Saga do
         {:ok, struct(__MODULE__, opts)}
     end
 
-    def init(app, {module, id}, number, ensure \\ false) do
-        method = if ensure do :init! else :init end
-        Supervisor.prepare_saga(app, {module, id})    
-        |> GenServer.call({method, number}, 5000)
-    end
-
     def start(app, {module, id}) do
         Supervisor.prepare_saga(app, {module, id})    
     end
@@ -66,42 +60,59 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_call({:init, position}, _from, %Saga{id: id, module: module}=saga) do
+    def handle_call({:start, position}, _from, %Saga{id: id, module: module}=saga) do
         state = Kernel.apply(module, :init, [id])
         saga = %Saga{saga | version: position - 1, state: state}
         {:reply, {:ok, state}, saga}
     end
 
     @impl true
-    def handle_call({:init!, position}, from, %Saga{id: id, version: version}=saga) do
+    def handle_call({:start!, position}, from, %Saga{id: id, version: version}=saga) do
         if version == 0 do
-            handle_call({:init, position}, from, saga)
+            handle_call({:start, position}, from, saga)
         else
             {:stop, {:process_already_started, id}, saga}
         end
     end
 
     @impl true
-    def handle_call({:stop, %Event{number: number}=event}, from, %Saga{}=saga) do
+    def handle_info({:halt, %Event{number: number}=event}, %Saga{}=saga) do
+
+        %Saga{module: module, state: state} = saga
+
+        case Kernel.apply(module, :halt, [Event.payload(event), state]) do
+            {:continue, state} ->
+                saga = 
+                    %Saga{ saga | state: state} 
+                    |> acknowledge(number, :continue) 
+                {:noreply, saga}
+
+            {:stop, state} ->
+                saga = 
+                    %Saga{ saga | state: state} 
+                    |> acknowledge(number, :stop) 
+                    |> checkpoint()
+
+                handle_info({:stop, event}, saga)
+                {:noreply, saga}
+        end
+    end
+
+    @impl true
+    def handle_info({:stop, %Event{}=event}, %Saga{}=saga) do
+
         %Saga{module: module, state: state} = saga
 
         case Kernel.apply(module, :stop, [Event.payload(event), state]) do
-            {:continue, state} ->
-                {:reply, :continue, %Saga{saga | state: state}}
+            {:ok, state} ->
+                %Saga{ saga | state: state} 
+                |> checkpoint()
 
-            resp ->
-
-                with {:ok, state} <- resp do
-                    %Saga{ saga | state: state} 
-                    |> acknowledge(number) 
-                    |> checkpoint()
-
-                end
-
-                GenServer.reply(from, :ok) 
-                exit(:normal)
-                {:noreply, saga}
+            _ -> 
+                nil
         end
+        exit(:normal)
+        {:noreply, saga}
     end
 
     @impl true
@@ -163,13 +174,6 @@ defmodule Signal.Process.Saga do
                 Process.send(self(), {:execute, command, Event.metadata(event)}, []) 
                 {:noreply, %Saga{ saga | state: state}}
 
-            {:stop, state} ->
-                saga = 
-                    %Saga{ saga | state: state}
-                    |> acknowledge(number)
-                    |> checkpoint()
-                exit(:normal)
-                {:stop, :stoping, saga}
 
             {:ok, state} ->
                 saga = 
@@ -189,6 +193,15 @@ defmodule Signal.Process.Saga do
         module
         |> GenServer.whereis()
         |> Process.send({:ack, id, number}, [])
+
+        %Saga{saga | version: number}
+    end
+
+    defp acknowledge(%Saga{id: id, module: module}=saga, number, status) do
+        module
+        |> GenServer.whereis()
+        |> Process.send({:ack, id, number, status}, [])
+
         %Saga{saga | version: number}
     end
 
