@@ -20,6 +20,7 @@ defmodule Signal.Process.Manager do
 
             use GenServer
             alias Signal.Helper
+            alias Signal.Events.Event
             alias Signal.Process.Manager
             @before_compile unquote(__MODULE__)
 
@@ -84,7 +85,7 @@ defmodule Signal.Process.Manager do
             end
 
             @impl true
-            def handle_info(event, state) do
+            def handle_info(%Event{}=event, state) do
                 Manager.handle_event(event, state)
             end
 
