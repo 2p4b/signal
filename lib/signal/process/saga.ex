@@ -8,7 +8,10 @@ defmodule Signal.Process.Saga do
     alias Signal.Process.Supervisor
     alias Signal.Events.Event.Metadata
 
-    defstruct [:app, :state, :store, :id, :version, :module]
+    defstruct [
+        :app, :state, :store, :id, :ack, :module, 
+        version: 0, status: :running
+    ]
 
     @doc """
     Starts a new process.
@@ -33,10 +36,10 @@ defmodule Signal.Process.Saga do
         |> GenServer.call(:position, 5000)
     end
 
-    def resume(app, {module, id}, ensure \\ false) do
+    def resume(app, {module, id}, ack, ensure \\ false) do
         method = if ensure do :resume! else :resume end
         Supervisor.prepare_saga(app, {module, id})    
-        |> GenServer.call(method, 5000)
+        |> GenServer.call({method, ack}, 5000)
     end
 
     @impl true
@@ -44,25 +47,11 @@ defmodule Signal.Process.Saga do
         {:reply, version, saga}
     end
 
-    @impl true
-    def handle_call(:resume, _from, %Saga{version: version}=saga) do
-        acknowledge(saga, version)
-        {:reply, {:ok, version}, saga}
-    end
-
-    @impl true
-    def handle_call(:resume!, from, %Saga{id: id, version: version}=saga) do
-        if version > 0 do
-            handle_call(:resume, from, saga)
-        else
-            {:stop, {:process_not_started, id}, saga}
-        end
-    end
 
     @impl true
     def handle_call({:start, position}, _from, %Saga{id: id, module: module}=saga) do
         state = Kernel.apply(module, :init, [id])
-        saga = %Saga{saga | version: position - 1, state: state}
+        saga = %Saga{saga | version: position, ack: position, state: state}
         {:reply, {:ok, state}, saga}
     end
 
@@ -76,31 +65,24 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info({:halt, %Event{number: number}=event}, %Saga{}=saga) do
+    def handle_call({:resume, ack}, _from, %Saga{version: version}=saga) do
+        acknowledge(saga, version)
+        {:reply, {:ok, version}, saga}
+    end
 
-        %Saga{module: module, state: state} = saga
-
-        case Kernel.apply(module, :halt, [Event.payload(event), state]) do
-            {:continue, state} ->
-                saga = 
-                    %Saga{ saga | state: state} 
-                    |> acknowledge(number, :continue) 
-                {:noreply, saga}
-
-            {:stop, state} ->
-                saga = 
-                    %Saga{ saga | state: state} 
-                    |> acknowledge(number, :stop) 
-                    |> checkpoint()
-
-                handle_info({:stop, event}, saga)
-                {:noreply, saga}
+    @impl true
+    def handle_call({:resume!, ack}, from, %Saga{id: id, version: version}=saga) do
+        if version > 0 do
+            handle_call({:resume, ack}, from, saga)
+        else
+            {:stop, {:process_not_started, id}, saga}
         end
     end
 
     @impl true
     def handle_info({:stop, %Event{}=event}, %Saga{}=saga) do
 
+        IO.inspect(event.number, label: "[saga] recv stop") 
         %Saga{module: module, state: state} = saga
 
         case Kernel.apply(module, :stop, [Event.payload(event), state]) do
@@ -168,6 +150,30 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
+    def handle_info({:halt, %Event{number: number}=event}, %Saga{}=saga) do
+        IO.inspect(number, label: "[saga] recv halt") 
+        %Saga{module: module, state: state} = saga
+
+        case Kernel.apply(module, :halt, [Event.payload(event), state]) do
+            {:continue, state} ->
+                saga = 
+                    %Saga{ saga | state: state} 
+                    |> acknowledge(number, :continue) 
+                {:noreply, saga}
+
+            {:stop, state} ->
+                saga = 
+                    %Saga{ saga | state: state} 
+                    |> acknowledge(number, :stop) 
+                    |> checkpoint()
+
+                handle_info({:stop, event}, saga)
+
+                {:noreply, saga}
+        end
+    end
+
+    @impl true
     def handle_info(%Event{number: number}=event, %Saga{}=saga) do
         case Kernel.apply(saga.module, :apply, [Event.payload(event), saga.state]) do
             {:dispatch, command, state} ->
@@ -189,18 +195,17 @@ defmodule Signal.Process.Saga do
         Kernel.apply(app_module, :dispatch, [command, opts])
     end
 
-    defp acknowledge(%Saga{id: id, module: module}=saga, number) do
+    defp acknowledge(%Saga{id: id, module: module}=saga, number, status \\ nil) do
+        ack = 
+            if is_nil(status) do
+                {:ack, id, number}
+            else
+                {:ack, id, number, status}
+            end
+
         module
         |> GenServer.whereis()
-        |> Process.send({:ack, id, number}, [])
-
-        %Saga{saga | version: number}
-    end
-
-    defp acknowledge(%Saga{id: id, module: module}=saga, number, status) do
-        module
-        |> GenServer.whereis()
-        |> Process.send({:ack, id, number, status}, [])
+        |> Process.send(ack, [])
 
         %Saga{saga | version: number}
     end

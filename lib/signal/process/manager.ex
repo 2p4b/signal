@@ -1,14 +1,4 @@
 defmodule Signal.Process.Manager do
-
-    defmodule Proc do
-        defstruct [:id, :saga, :ack, :syn, load: 0, status: :running]
-
-        def new(id, pid, index \\ 0) do
-            saga = {pid, Process.monitor(pid)}
-            struct(__MODULE__, [id: id, saga: saga, ack: index, syn: index])
-        end
-    end
-
     
     defmacro __using__(opts) do
         app = Keyword.get(opts, :application)
@@ -71,11 +61,13 @@ defmodule Signal.Process.Manager do
 
             @impl true
             def handle_info({:ack, id, number, ack}, state) do
+                IO.inspect(number, label: "[man] #{inspect(ack)} ack")
                 Manager.handle_ack({id, number, ack}, state)
             end
 
             @impl true
             def handle_info({:ack, id, number}, state) do
+                IO.inspect(number, label: "[man] ack")
                 Manager.handle_ack({id, number}, state)
             end
 
@@ -103,7 +95,15 @@ defmodule Signal.Process.Manager do
 
     defstruct [:name, :store, :procs, :app, :topics, :subscription, :module]
 
-    @max_load 20
+
+    defmodule Proc do
+        defstruct [:id, :saga, :ack, :syn, load: 0, status: :running]
+
+        def new(id, pid, index \\ 0) do
+            saga = {pid, Process.monitor(pid)}
+            struct(__MODULE__, [id: id, saga: saga, ack: index, syn: index])
+        end
+    end
 
     alias Signal.Subscription
     alias Signal.Process.Saga
@@ -137,13 +137,13 @@ defmodule Signal.Process.Manager do
                 _ -> 
                     {[], []}
             end
-        Process.send(self(), :resume_processes, [])
+        #Process.send(self(), :resume_processes, [])
         sub = Channel.subscribe(app, name, topics, opts)
         {:noreply, %Manager{state| procs: procs, subscription: sub}}
     end
 
     def handle_resume_processes(%Manager{procs: procs}=state) do
-        procs = for proc <- procs, do: handle_pressure(state, proc)
+        procs = for proc <- procs, do: pull_event(state, proc)
         {:noreply, %Manager{state | procs: procs} }
     end
 
@@ -160,20 +160,18 @@ defmodule Signal.Process.Manager do
         if is_nil(pin) do
             {:noreply, state}
         else
-            %Proc{id: id, status: status} = Enum.at(procs, pin)
+            %Proc{id: id, status: status, ack: ack} = Enum.at(procs, pin)
 
             Process.demonitor(ref)
 
             pid = start_process(state, id) 
 
-            {:ok, ack} = signal_resume(state, id, true)
+            {:ok, ack} = signal_resume(state, id, ack, true)
 
             proc = 
                 Proc.new(id, pid, ack)
                 |> Map.put(:load, 0)
                 |> Map.put(:status, status)
-
-            proc = handle_pressure(state, proc)
 
             procs =  List.replace_at(procs, pin, proc)
 
@@ -189,9 +187,11 @@ defmodule Signal.Process.Manager do
         else
             proc = Enum.at(procs, pin)
 
-            proc = %Proc{proc | ack: number, load: proc.load - 1}
+            load = if proc.load == 0, do: 0, else: proc.load - 1
 
-            proc = handle_pressure(state, proc)
+            proc = %Proc{proc | ack: number, load: load}
+
+            proc = pull_event(state, proc)
 
             procs =  List.replace_at(procs, pin, proc)
 
@@ -199,7 +199,7 @@ defmodule Signal.Process.Manager do
         end
     end
 
-    def handle_ack({id, _number, :stop}, %Manager{procs: procs}=state) do
+    def handle_ack({id, number, :stop}, %Manager{procs: procs}=state) do
         pin =
             Enum.find_index(procs, fn 
                 %Proc{id: ^id, status: :halted} -> 
@@ -212,7 +212,15 @@ defmodule Signal.Process.Manager do
         if is_nil(pin) do
             {:noreply, state}
         else
-            %Proc{ saga: {_pid, ref} } = Enum.at(procs, pin)
+            proc = Enum.at(procs, pin)
+
+            proc = %Proc{proc | ack: number, status: :stopped}
+
+            procs =  List.replace_at(procs, pin, proc)
+
+            state = update_processes(state, procs)
+
+            %Proc{ saga: {_pid, ref} } = proc
 
             Process.demonitor(ref)
 
@@ -241,7 +249,7 @@ defmodule Signal.Process.Manager do
 
             # Check if process has falled behind on event
             # and process has low load
-            proc = handle_pressure(state, proc)
+            proc = pull_event(state, proc)
 
             procs =  List.replace_at(procs, pin, proc)
 
@@ -258,7 +266,7 @@ defmodule Signal.Process.Manager do
         {:reply, found, state}
     end
 
-    def handle_event(%Event{}=event, %Manager{}=state) do
+    def handle_event(%Event{number: number}=event, %Manager{}=state) do
 
         %{module: module, subscription: %{ack: index}}= state
 
@@ -273,7 +281,7 @@ defmodule Signal.Process.Manager do
                     else
                         proc = Enum.at(state.procs, pin)
 
-                        proc = %Proc{ proc | status: {:halt, event.number} }
+                        proc = %Proc{ proc | status: {:halt, number} }
 
                         List.replace_at(state.procs, pin, proc)
                     end
@@ -295,9 +303,11 @@ defmodule Signal.Process.Manager do
                     proc = Enum.find(state.procs, &(Map.get(&1, :id) == id))
 
                     if is_nil(proc) do
+                        force = resume == :resume!
                         pid = start_process(state, id) 
-                        {:ok, ack} = signal_resume(state, id, resume == :resume!)
-                        state.procs ++ [Proc.new(id, pid, ack)]
+                        {:ok, ack} = signal_resume(state, id, index, force)
+                        proc = Proc.new(id, pid, ack)
+                        state.procs ++  List.wrap(proc)
                     else
                         state.procs
                     end
@@ -306,14 +316,12 @@ defmodule Signal.Process.Manager do
                     state.procs
             end
             |> Enum.map(fn 
-                %Proc{load: load}=proc when load >= @max_load ->
-                    proc
 
-                %Proc{syn: ^index, status: :running}=proc -> 
+                %Proc{syn: ^index, ack: ^index, load: 0, status: :running}=proc -> 
                     push_event(event, proc)
 
-                %Proc{syn: ^index, status: {:halt, _}}=proc -> 
-                    push_event(event, proc)
+                %Proc{syn: ^index, ack: ^index, status: {:halt, ^number}}=proc -> 
+                    if proc.load == 0, do: push_event(event, proc), else: proc
 
                 proc -> 
                     proc 
@@ -330,10 +338,6 @@ defmodule Signal.Process.Manager do
         %Manager{state | subscription: %Subscription{sub | ack: number}}
     end
 
-    defp signal_resume(%Manager{app: app, module: module}, id, ensure) do
-        Saga.resume(app, {module, id}, ensure)
-    end
-
     defp update_processes(%Manager{name: name, store: store, app: app}=state, procs) do
         args = [app, name, dump_processes(procs)]
         {:ok, _procs} = Kernel.apply(store, :set_state, args)
@@ -347,14 +351,17 @@ defmodule Signal.Process.Manager do
 
             {:halt, ^number} ->
                 Process.send(pid, {:halt, event}, [])
+                IO.inspect(number, label: "[man] expect stop ack")
                 %Proc{ proc | syn: number, load: load + 1, status: :halted}
 
             {:halt, brk} when  brk <  number ->
                 Process.send(pid, event, [])
+                IO.inspect(number, label: "[man] expect ack")
                 %Proc{ proc | syn: number, load: load + 1 }
 
             :running ->
                 Process.send(pid, event, [])
+                IO.inspect(number, label: "[man] expect ack")
                 %Proc{ proc | syn: number, load: load + 1 }
         end
     end
@@ -362,6 +369,10 @@ defmodule Signal.Process.Manager do
     defp start_process(%Manager{app: app, module: module}, id) do
         Saga.start(app, {module, id})
         |> GenServer.whereis()
+    end
+
+    defp signal_resume(%Manager{app: app, module: module}, id, ack, ensure) do
+        Saga.resume(app, {module, id}, ack, ensure)
     end
 
     defp signal_init(%Proc{ack: ack, saga: {pid, _ref}}, init) do
@@ -376,19 +387,18 @@ defmodule Signal.Process.Manager do
 
     defp load_processes(state, payload) when is_list(payload) do
         Enum.map(payload, fn [id, ack, status] -> 
-            [id, ack, status]
             pid = start_process(state, id) 
-            {:ok, ack} = signal_resume(state, id, true)
+            {:ok, ack} = signal_resume(state, id, ack, true)
             Proc.new(id, pid, ack) 
             |> Map.put(:status, status)
         end)
     end
 
-    defp handle_pressure(%Manager{}=state, %Proc{syn: syn, load: load}=proc) do
+    defp pull_event(%Manager{}=state, %Proc{syn: syn, load: load, ack: ack}=proc) do
         %Manager{store: store, topics: topics, app: app, subscription: sub } = state
 
-        if (syn < sub.ack) and (load < div(@max_load, 2)) do
-            args = [app, topics, syn, @max_load - load]
+        if syn == ack and syn < sub.ack and load == 0 do
+            args = [app, topics, syn, 1]
             events = Kernel.apply(store, :list_events, args)
             Enum.reduce(events, proc, fn event, proc -> 
                 push_event(event, proc)                    
