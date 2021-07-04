@@ -108,7 +108,7 @@ defmodule Signal.Processor.SagaTest do
         end
 
         def handle(%Deposited{account: id, amount: 4000}) do
-            {:resume, id}
+            {:continue, id}
         end
 
         def handle(%Deposited{amount: 5000, account: id}) do
