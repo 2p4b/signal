@@ -3,11 +3,13 @@ defmodule Signal.Events.Producer do
 
     alias Signal.Result
     alias Signal.Events
+    alias Signal.Event.Multi
     alias Signal.Events.Event
     alias Signal.Events.Staged
     alias Signal.Events.Record
     alias Signal.Command.Action
     alias Signal.Stream.History
+    alias Signal.Command.Handler
     alias Signal.Events.Recorder
     alias Signal.Events.Producer
 
@@ -228,6 +230,10 @@ defmodule Signal.Events.Producer do
         case Signal.Command.Handler.handle(command, params, aggregate) do
             nil ->
                 []
+
+            %Multi{events: events} ->
+                events
+
             {:ok, event} when is_struct(event) ->
                 [event]
 
