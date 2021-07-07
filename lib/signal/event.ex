@@ -17,10 +17,10 @@ defmodule Signal.Event do
             events =
                 case Kernel.apply(module, fun, args) do
                     event when is_list(event) ->
-                        events + event
+                        events ++ event
 
                     event when is_struct(event) ->
-                        events + List.wrap(event)
+                        events ++ List.wrap(event)
 
                     nil ->
                         events
