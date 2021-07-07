@@ -1,6 +1,6 @@
 defmodule Signal.Exception do
 
-    defmodule InvalidSteam do
+    defmodule InvalidStreamError do
         defexception [:stream, :message]
 
         @impl true

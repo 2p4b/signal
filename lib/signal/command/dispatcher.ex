@@ -4,6 +4,7 @@ defmodule Signal.Command.Dispatcher do
     alias Signal.Events.Event
     alias Signal.Stream.History
     alias Signal.Command.Action
+    alias Signal.Events.Record
     alias Signal.Events.Producer
     alias Signal.Execution.Queue
     alias Signal.Execution.Task, as: SigTask
@@ -42,12 +43,17 @@ defmodule Signal.Command.Dispatcher do
         end
     end
 
-    defp finalize({:ok, histories}, %SigTask{app: app, result: result, assigns: assigns, await: await}) do
+    defp finalize({:ok, record}, %SigTask{}=sig_task) do
+
+        %Record{index: index, histories: histories} = record
+
+        %SigTask{app: app, result: result, assigns: assigns, await: await} = sig_task
 
         events = Enum.reduce(histories, [], fn %History{events: events}, acc -> 
             acc ++ Enum.map(events, &Event.payload(&1))
         end)
-        opts = [result: result, assigns: assigns, events: events]
+
+        opts = [result: result, assigns: assigns, events: events, index: index]
 
         if await do
             aggregates = 

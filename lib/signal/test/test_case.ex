@@ -37,10 +37,13 @@ defmodule Signal.TestCase do
                         event when is_struct(event) ->
                             [event]
 
+                        %Signal.Event.Multi{}=multi ->
+                            Signal.Event.Multi.emit(multi)
+
                         error ->
                             error
-
                     end
+
                 if is_list(events) do
                     expected_events
                     |> Enum.with_index()

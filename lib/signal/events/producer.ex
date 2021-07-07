@@ -8,7 +8,6 @@ defmodule Signal.Events.Producer do
     alias Signal.Events.Staged
     alias Signal.Events.Record
     alias Signal.Command.Action
-    alias Signal.Stream.History
     alias Signal.Command.Handler
     alias Signal.Events.Recorder
     alias Signal.Events.Producer
@@ -81,105 +80,88 @@ defmodule Signal.Events.Producer do
     end
 
     @impl true
-    def handle_call({:process, %Action{}=action}, _from, %Producer{}=state) do
+    def handle_call({:process, %Action{}=action}, _from, %Producer{}=producer) do
 
-        %{stream: stream, app: app} = state
+        %{stream: stream, app: app, cursor: cursor} = producer
+
+        %Action{command: command, params: params} = action
+
+        aggregate = aggregate_state(producer, action.consistent)
+
+        event_streams = 
+            command
+            |> handle_command(params, aggregate)
+            |> group_events_by_stream()
+
+        if is_map(event_streams) do
+            case stage_event_streams(producer, action, event_streams) do
+                {:ok, staged} ->
+                    case Recorder.record(app, action, staged) do
+                        %Record{}=record ->
+
+                            confirm_staged(staged)
+
+                            cursor = Record.stream_version(record, stream, cursor)
+
+                            state = %Producer{producer| cursor: cursor}
+
+                            {:reply, {:ok, record}, state}
+
+                        error ->
+                            rollback_staged(staged, error)
+                            {:reply, error, producer}
+                    end
+
+                {:error, reason} ->
+                    {:reply, {:error, reason}, producer}
+            end
+        else
+            {:reply, event_streams, producer}
+        end
+    end
+
+    def stage_event_streams(%Producer{}=producer, action, stream_events) 
+    when is_map(stream_events) do
+        %Producer{app: app, stream: stream} = producer
 
         task_supervisor = Signal.Application.supervisor(app, Task)
 
-        aggregate = aggregate_state(state, action.consistent)
-
-        events = handle_command(action.command, action.params, aggregate)
-
-        cond do
-            is_list(events) ->
-
-                staged =
-                    events
-                    |> Enum.group_by(fn event -> 
-                        case Signal.Stream.stream(event) do
-                            {type, id} when is_atom(type) ->
-                                {type, id}
-                            _ ->
-                                nil
-                        end
-                    end)
-                    |> Enum.map(fn
-                        {^stream, events} ->
-                            Task.Supervisor.async_nolink(task_supervisor, fn -> 
-                                stage_events(state, action, events, self())
-                            end)
-
-
-                        {stream, events} ->
-                            # Process event steams in parallel
-                            Task.Supervisor.async_nolink(task_supervisor, fn -> 
-                                app
-                                |> Signal.Events.Supervisor.prepare_producer(stream)
-                                |> stage_events(action, events)
-                            end)
-
-                    end)
-                    |> Task.yield_many(:infinity)
-                    |> Enum.map(fn {_task, res} -> 
-                        case res do
-                            {:ok, resp} -> 
-                                resp
-
-                            {:exit, reason} -> 
-                                {:error, reason}
-                        end
+        stream_stages =
+            stream_events
+            |> Enum.map(fn
+                {^stream, events} ->
+                    Task.Supervisor.async_nolink(task_supervisor, fn -> 
+                        stage_events(producer, action, events, self())
                     end)
 
-                failed = Enum.find(staged, &Result.error?/1)
 
-                {reply, state} =
+                {stream, events} ->
+                    # Process event steams in parallel
+                    Task.Supervisor.async_nolink(task_supervisor, fn -> 
+                        app
+                        |> Signal.Events.Supervisor.prepare_producer(stream)
+                        |> stage_events(action, events)
+                    end)
 
-                    if failed do
-                        reason = elem(failed, 1)
-                        rollback_staged(staged, reason)
-                        {failed, state}
+            end)
+            |> Task.yield_many(:infinity)
+            |> Enum.map(fn {_task, res} -> 
+                case res do
+                    {:ok, resp} -> 
+                        resp
 
-                    else
-                        case Recorder.record(app, action, staged) do
-                            %Record{histories: histories} ->
+                    {:exit, reason} -> 
+                        {:error, reason}
+                end
+            end)
 
-                                confirm_staged(staged)
+        case Enum.find(stream_stages, :ok, &Result.error?/1) do
+            :ok ->
+                {:ok, stream_stages}
 
-                                cursor = 
-                                    histories
-                                    |> Enum.find(&(Map.get(&1, :stream) == stream)) 
-                                    |> (fn 
-                                        %History{stream: ^stream, version: cursor} -> 
-                                            cursor 
-                                        nil -> 
-                                            state.cursor
-                                    end).()
-
-                                reply = Result.ok(histories)
-
-                                state = %Producer{state | cursor: cursor}
-
-                                {reply, state}
-
-                            error ->
-                                reason =
-                                    case error do
-                                        {:error, reason} -> 
-                                            reason
-                                        _ -> nil
-                                    end
-
-                                rollback_staged(staged, reason)
-
-                                {error, state}
-                        end
-                    end
-
-                {:reply, reply, state}
-
-            true  ->
-                {:reply, events, state}
+            {:error, reason} ->
+                rollback_staged(stream_stages, reason)
+                {:error, reason}
         end
     end
 
@@ -227,7 +209,7 @@ defmodule Signal.Events.Producer do
     end
 
     defp handle_command(command, params, aggregate) when is_struct(command) do
-        case Signal.Command.Handler.handle(command, params, aggregate) do
+        case Handler.handle(command, params, aggregate) do
             nil ->
                 []
 
@@ -251,18 +233,58 @@ defmodule Signal.Events.Producer do
         end
     end
 
+    # Pass through function
+    defp group_events_by_stream(events) when is_list(events) do
+        try do
+            Enum.group_by(events, &event_stream!/1)
+        rescue
+            error -> {:error, {:reraise, error}}
+        catch
+            error -> {:error, {:rethrow, error}}
+        end
+    end
+
+    defp group_events_by_stream(unknown) do
+        unknown
+    end
+
+    defp event_stream!(event) do
+        stream = Signal.Stream.stream(event)
+        case stream do
+            {module, id} when is_atom(module) and is_binary(id) ->
+                constructable!(stream)
+
+            stream ->
+                raise(Signal.Exception.InvalidStreamError, [stream: stream])
+        end
+    end
+
+    defp constructable!({module, _id}=stream) do
+        try do
+            struct(module, [])
+            stream
+        rescue
+            _error -> 
+                raise(Signal.Exception.InvalidStreamError, [stream: stream])
+        end
+    end
+
     defp confirm_staged(staged) do
         Enum.each(staged, fn %Staged{version: version, stage: stage}->  
             Process.send(stage, {:ok, version}, [])
         end)
     end
 
-    defp rollback_staged(staged, reason) when is_list(staged) do
-        opts = [:nosuspend]
-        payload = {:rollback, reason}
+    defp rollback_staged(staged, error) when is_list(staged) do
+        reason =
+            case error do
+                {:error, reason} -> 
+                    reason
+                _ -> nil
+            end
         Enum.each(staged, fn 
             %Staged{stage: stage} ->  
-                Process.send(stage, payload, opts)
+                Process.send(stage, {:rollback, reason}, [:nosuspend])
             _ ->
                 nil
         end)

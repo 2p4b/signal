@@ -81,7 +81,7 @@ defmodule Signal.Command.DispatchTest do
 
         @tag :dispatcher
         test "should execute task" do
-            {:ok, histories} =
+            {:ok, %{histories: histories}} =
                 Deposite.new([amount: 5000])
                 |> Signal.Execution.Task.new([
                     timeout: :infinity,
