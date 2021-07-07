@@ -1,6 +1,6 @@
 defmodule Signal.Result do
 
-    defstruct [:assigns, :result, aggregates: []]
+    defstruct [:assigns, :result, aggregates: [], events: []]
 
     def ok(arg) do
         {:ok, arg}
