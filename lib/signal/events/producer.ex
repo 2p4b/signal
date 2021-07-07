@@ -1,9 +1,9 @@
 defmodule Signal.Events.Producer do
     use GenServer
 
+    alias Signal.Multi
     alias Signal.Result
     alias Signal.Events
-    alias Signal.Event.Multi
     alias Signal.Events.Event
     alias Signal.Events.Staged
     alias Signal.Events.Record

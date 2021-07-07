@@ -37,8 +37,8 @@ defmodule Signal.TestCase do
                         event when is_struct(event) ->
                             [event]
 
-                        %Signal.Event.Multi{}=multi ->
-                            Signal.Event.Multi.emit(multi)
+                        %Signal.Multi{}=multi ->
+                            Signal.Multi.emit(multi)
 
                         error ->
                             error
