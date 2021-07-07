@@ -2,17 +2,17 @@ defmodule Signal.Multi do
 
     alias Signal.Multi
 
-    defstruct [:args, :events]
+    defstruct [:command, :events]
 
-    def new(command, params, aggregate) when is_struct(command) do
-        args = [command, params, aggregate]
-        struct(Multi, [args: args, events: []]) 
+    def new(command) when is_struct(command) do
+        struct(Multi, [command: command, events: []]) 
     end
 
-    def execute(%Multi{args: args, events: events}, fun) when is_atom(fun) do
-        [%{__struct__: module}, _, _] =  args
+    def execute(%Multi{command: command, events: events}, fun, args \\ []) 
+    when is_atom(fun) when is_list(args) do
+        %{__struct__: module} =  command
         events =
-            case Kernel.apply(module, fun, args) do
+            case Kernel.apply(module, fun, List.wrap(command) ++ args) do
                 event when is_list(event) ->
                     events ++ event
 
@@ -26,7 +26,7 @@ defmodule Signal.Multi do
                     raise(Signal.Exception.InvalidEventError, [event: event])
 
             end
-        %Multi{events: events, args: args}
+        %Multi{events: events, command: command}
     end
 
     def emit(%Multi{events: events}) do
