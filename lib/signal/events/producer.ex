@@ -238,9 +238,11 @@ defmodule Signal.Events.Producer do
         try do
             Enum.group_by(events, &event_stream!/1)
         rescue
-            error -> {:error, {:reraise, error}}
+            raised -> 
+                {:error, :raised, {raised, __STACKTRACE__}}
         catch
-            error -> {:error, {:rethrow, error}}
+            thrown -> 
+                {:error, :threw, {thrown, __STACKTRACE__}}
         end
     end
 

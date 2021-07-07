@@ -23,10 +23,18 @@ defmodule Signal.Command  do
                 end
             end
 
-            if Module.defines?(__MODULE__, {:handle, 3}, :def) do
+            handler_impled = Module.defines?(__MODULE__, {:handle, 3}, :def)
+
+            executor_impled= Module.defines?(__MODULE__, {:execute, 2}, :def)
+
+            if handler_impled and executor_impled  do
                 with module <- @module do
                     defimpl Signal.Command.Handler do
                         @pmodule module
+                        def execute(cmd, params) do 
+                            Kernel.apply(@pmodule, :execute, [cmd, params])
+                        end
+
                         def handle(cmd, meta, aggr) do 
                             Kernel.apply(@pmodule, :handle, [cmd, meta, aggr])
                         end
@@ -34,12 +42,16 @@ defmodule Signal.Command  do
                 end
             end
 
-            if Module.defines?(__MODULE__, {:execute, 2}, :def) do
+            if handler_impled and not(executor_impled) do
                 with module <- @module do
-                    defimpl Signal.Command.Executor do
+                    defimpl Signal.Command.Handler do
                         @pmodule module
-                        def execute(cmd, params) do 
-                            Kernel.apply(@pmodule, :execute, [cmd, params])
+                        def execute(_cmd, params) do 
+                            {:ok, params}
+                        end
+
+                        def handle(cmd, meta, aggr) do 
+                            Kernel.apply(@pmodule, :handle, [cmd, meta, aggr])
                         end
                     end
                 end

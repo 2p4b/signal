@@ -25,8 +25,11 @@ defmodule Signal.Command.Dispatcher do
             {:ok, result} ->
                 {:ok, result}
 
-            error ->
-                error
+            {:error, reason} ->
+                {:error, reason}
+
+            crash when is_tuple(crash) ->
+                handle_crash(crash)
         end
     end
 
@@ -37,6 +40,9 @@ defmodule Signal.Command.Dispatcher do
 
             {:error, reason} ->
                 {:error, reason}
+
+            crash when is_tuple(crash) ->
+                handle_crash(crash)
 
             result ->
                 {:ok, result}
@@ -94,6 +100,15 @@ defmodule Signal.Command.Dispatcher do
 
     def timeout(duration) do
         duration
+    end
+
+    def handle_crash({:error, :raised, {raised, stacktrace}}) do
+        reraise(raised, stacktrace)
+    end
+
+    def handle_crash({:error, :thrown, {thrown, stacktrace}}) do
+        IO.inspect(stacktrace)
+        throw(thrown)
     end
 
 end

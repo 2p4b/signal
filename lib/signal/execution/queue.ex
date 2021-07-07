@@ -2,7 +2,7 @@ defmodule Signal.Execution.Queue do
     use GenServer
 
     alias Signal.Execution.Queue
-    alias Signal.Command.Executor
+    alias Signal.Command.Handler
 
     defstruct [:application, :id, type: :default, timeout: :infinity]
 
@@ -46,7 +46,13 @@ defmodule Signal.Execution.Queue do
     end
 
     def execute(command, params, _opts \\ []) do
-        Executor.execute(command, params)
+        try do
+            Handler.execute(command, params)
+        rescue
+            raised -> {:error, {:reraise, raised}}
+        catch
+            thrown -> {:error, {:rethrow, thrown}}
+        end
     end
 
 end

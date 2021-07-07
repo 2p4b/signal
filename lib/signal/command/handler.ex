@@ -1,5 +1,9 @@
 defprotocol Signal.Command.Handler do
 
+    @spec execute(t, r::map) :: {atom(), term}
+    @fallback_to_any true
+    def execute(command, params)
+
     @fallback_to_any true
     @spec handle(t :: term(), params :: term(), aggregate :: term()) :: list() | term()
     def handle(command, params, agggregate)
@@ -7,6 +11,10 @@ defprotocol Signal.Command.Handler do
 end
 
 defimpl Signal.Command.Handler, for: Any do
+
+    def execute(command, params) when is_struct(command) do
+        {:ok, params}
+    end
 
     def handle(%{__struct__: type}, _params, %{__struct__: atype}) do
 

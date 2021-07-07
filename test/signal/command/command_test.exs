@@ -3,7 +3,6 @@ defmodule Signal.Command.CommandTest do
 
     alias Signal.Stream
     alias Signal.Command.Handler
-    alias Signal.Command.Executor
 
     defmodule TestAggregate do
         defstruct [:uuid]
@@ -64,7 +63,7 @@ defmodule Signal.Command.CommandTest do
         test "executes command" do
             assigns = %{}
             command = Command.new()
-            res = Executor.execute(command, assigns)
+            res = Handler.execute(command, assigns)
             assert :ok == res |> elem(0)
             assert command.uuid == res |> elem(1)
         end
