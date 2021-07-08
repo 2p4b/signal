@@ -209,27 +209,35 @@ defmodule Signal.Events.Producer do
     end
 
     defp handle_command(command, params, aggregate) when is_struct(command) do
-        case Handler.handle(command, params, aggregate) do
-            nil ->
-                []
+        try do
+            case Handler.handle(command, params, aggregate) do
+                nil ->
+                    []
 
-            %Multi{events: events} ->
-                events
+                %Multi{events: events} ->
+                    events
 
-            {:ok, event} when is_struct(event) ->
-                [event]
+                {:ok, event} when is_struct(event) ->
+                    [event]
 
-            {:ok, event} when is_list(event) ->
-                event
+                {:ok, event} when is_list(event) ->
+                    event
 
-            event when is_struct(event) ->
-                [event]
+                event when is_struct(event) ->
+                    [event]
 
-            event when is_list(event) -> 
-                event
+                event when is_list(event) -> 
+                    event
 
-            {:error, reason} ->
-                Result.error(reason)
+                {:error, reason} ->
+                    Result.error(reason)
+            end
+        rescue
+            raised -> 
+                {:error, :raised, {raised, __STACKTRACE__}}
+        catch
+            thrown -> 
+                {:error, :threw, {thrown, __STACKTRACE__}}
         end
     end
 

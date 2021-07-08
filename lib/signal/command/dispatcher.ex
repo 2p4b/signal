@@ -106,7 +106,7 @@ defmodule Signal.Command.Dispatcher do
         reraise(raised, stacktrace)
     end
 
-    def handle_crash({:error, :thrown, {thrown, stacktrace}}) do
+    def handle_crash({:error, :threw, {thrown, stacktrace}}) do
         IO.inspect(stacktrace)
         throw(thrown)
     end
