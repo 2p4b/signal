@@ -72,7 +72,7 @@ defmodule Signal.TestCase do
 
             # execute one or more command
             defp execute(command, params \\ %{}) do
-                Signal.Command.Executor.execute(command, params)
+                Signal.Command.Handler.execute(command, params)
             end
 
             # handle a command
