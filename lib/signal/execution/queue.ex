@@ -20,11 +20,11 @@ defmodule Signal.Execution.Queue do
     end
 
     @impl true
-    def handle_call({:execute, command, params, opts}, _from, %Queue{}=state) do
-        {:reply, execute(command, params, opts), state}
+    def handle_call({:execute, command, assigns, opts}, _from, %Queue{}=state) do
+        {:reply, execute(command, assigns, opts), state}
     end
 
-    def handle(application, command, params, opts \\ []) do
+    def handle(application, command, assigns, opts \\ []) do
 
         queue = Signal.Queue.queue(command)
 
@@ -32,10 +32,10 @@ defmodule Signal.Execution.Queue do
             {type, id} when is_atom(type) and is_binary(id) ->
                 application
                 |> Signal.Execution.Supervisor.prepare_queue(id, type)
-                |> GenServer.call({:execute, command, params, opts})
+                |> GenServer.call({:execute, command, assigns, opts})
 
             nil ->
-                execute(command, params, opts)
+                execute(command, assigns, opts)
 
             {:error, error} -> 
                 {:error, error}
@@ -45,9 +45,9 @@ defmodule Signal.Execution.Queue do
         end
     end
 
-    def execute(command, params, _opts \\ []) do
+    def execute(command, assigns, _opts \\ []) do
         try do
-            Handler.execute(command, params)
+            Handler.execute(command, assigns)
         rescue
             raised -> {:error, {:reraise, raised}}
         catch

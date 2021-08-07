@@ -84,13 +84,13 @@ defmodule Signal.Events.Producer do
 
         %{stream: stream, app: app, cursor: cursor} = producer
 
-        %Action{command: command, params: params} = action
+        %Action{command: command, result: result} = action
 
         aggregate = aggregate_state(producer, action.consistent)
 
         event_streams = 
             command
-            |> handle_command(params, aggregate)
+            |> handle_command(result, aggregate)
             |> group_events_by_stream()
 
         if is_map(event_streams) do
@@ -208,9 +208,9 @@ defmodule Signal.Events.Producer do
         |> Signal.Aggregates.Aggregate.state()
     end
 
-    defp handle_command(command, params, aggregate) when is_struct(command) do
+    defp handle_command(command, result, aggregate) when is_struct(command) do
         try do
-            case Handler.handle(command, params, aggregate) do
+            case Handler.handle(command, result, aggregate) do
                 nil ->
                     []
 
