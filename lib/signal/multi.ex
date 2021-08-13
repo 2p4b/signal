@@ -8,7 +8,7 @@ defmodule Signal.Multi do
         struct(Multi, [command: command, events: []]) 
     end
 
-    def execute(%Multi{command: command, events: events}, fun, args \\ []) 
+    def apply(%Multi{command: command, events: events}, fun, args \\ []) 
     when is_atom(fun) when is_list(args) do
         %{__struct__: module} =  command
         events =

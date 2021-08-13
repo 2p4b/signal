@@ -5,6 +5,7 @@ defmodule Signal.Channels.Channel do
     alias Signal.Events.Event
     alias Signal.Subscription
     alias Signal.Channels.Channel
+    require Logger
 
     defstruct [:name, :index, :app, :syn, :ack, :subscriptions, :topics, :store]
 
@@ -147,7 +148,21 @@ defmodule Signal.Channels.Channel do
         if state.syn == state.ack and state.index > state.ack do
             sched_next()
         end
-        {:reply, sub, update_topics(channel)} 
+
+        channel = update_topics(channel)
+
+        info = """
+        [SUBSCRIBED] #{state.name}
+            cid: #{inspect(self())}
+            pid: #{inspect(pid)}  
+            syn: #{inspect(sub.syn)}
+            ack: #{inspect(sub.ack)}
+            topics: #{inspect(sub.topics)}
+            listening: #{inspect(channel.topics)}
+        """
+        Logger.info(info)
+
+        {:reply, sub, channel} 
     end
 
     @impl true
@@ -227,7 +242,10 @@ defmodule Signal.Channels.Channel do
                     {ref, pid} = subscription.consumer
                     Process.demonitor(ref)
                     filter = &(Map.get(&1, :consumer) |> elem(1) != pid)
-                    sub = %Subscription{subscription | topics: topics, consumer: {nil, pid} }
+                    sub = %Subscription{subscription | 
+                        topics: topics, 
+                        consumer: {nil, pid} 
+                    }
                     {sub, Enum.filter(subs, filter)}
                 else 
                     unique_pid = &(Map.get(&1, :consumer) |> elem(1))

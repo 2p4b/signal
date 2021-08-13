@@ -8,7 +8,7 @@ defmodule Signal.VoidStore do
 
     @behaviour Signal.Store
 
-    defstruct [cursor: 0, events: [], states: %{}, indices: %{}]
+    defstruct [cursor: 0, events: [], states: %{}, indices: %{}, subscriptions: []]
 
     @doc """
     Starts in memory store.
@@ -25,6 +25,28 @@ defmodule Signal.VoidStore do
     @impl true
     def handle_call({:state, prop}, _from, %Store{}=store) do
         {:reply, Map.get(store, prop), store} 
+    end
+
+    @impl true
+    def handle_call({:subscribe, opts}, {pid, _ref}=from, %Store{}=store) do
+        subscription = create_subscription(pid, opts)
+        GenServer.reply(from, {:ok, subscription})
+        subscriptions = List.wrap(subscription) ++ store.subscriptions
+        Enum.filter(store.events, fn event -> 
+            event.number > index
+        end)
+        |> Enum.each(fn event -> 
+            Process.send(pid, event, []) 
+        end)
+        {:noreply, %Store{store | subscriptions: subscriptions}} 
+    end
+
+    @impl true
+    def handle_call(:unsubscribe, {pid, _ref}, %Store{}=store) do
+        subscriptions = Enum.filter(store.subscriptions, fn %{pid: spid} -> 
+            spid != pid 
+        end)
+        {:reply, :ok, %Store{store | subscriptions: subscriptions}} 
     end
 
     @impl true
@@ -152,6 +174,11 @@ defmodule Signal.VoidStore do
             end)
             |> Enum.sort(fn (%Event{number: a}, %Event{number: b}) -> a <= b end)
 
+        Enum.each(events, fn event -> 
+            Enum.each(store.subscriptions, fn %{pid: pid} -> 
+                Process.send(pid, event, []) 
+            end)
+        end)
 
         events = store.events ++ events
 
@@ -212,9 +239,31 @@ defmodule Signal.VoidStore do
     end
 
     @impl true
+    def subscribe(_app, opts \\ []) do
+        GenServer.call(__MODULE__, {:subscribe, opts}, 5000)
+    end
+
+    @impl true
+    def unsubscribe(_app) do
+        GenServer.call(__MODULE__, :unsubscribe, 5000)
+    end
+
+    @impl true
     def list_events(_app, topics, position, count) 
     when is_integer(position) and is_integer(count) do
         GenServer.call(__MODULE__, {:list_events, topics, position, count}, 5000)
+    end
+
+    def create_subscription(pid, opts \\ []) do
+        from = Keyword.get(opts, :from, 0)
+        stream = Keyword.get(opts, :stream, nil)
+        topics = Keyword.get(opts, :topics, [])
+        %{
+            pid: pid,
+            from: from,
+            stream: stream,
+            topics: topics,
+        }
     end
 
 end

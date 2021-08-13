@@ -4,6 +4,10 @@ defmodule Signal.Store do
 
     @callback cursor(app :: app) :: integer()
 
+    @callback subscribe(app :: app, index :: integer()) :: {:ok, integer()} | {:error, reason :: term()}
+
+    @callback unsubscribe(app :: app) :: :ok | {:error, reason :: term()}
+
     @callback record(app :: app, log :: term()) :: {:ok, integer()} | {:error, reason :: term()}
 
     @callback next(app :: app, cursor :: integer(), opts :: list()) :: term() | nil
