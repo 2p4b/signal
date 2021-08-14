@@ -33,10 +33,10 @@ defmodule Signal.VoidStore do
         GenServer.reply(from, {:ok, subscription})
         subscriptions = List.wrap(subscription) ++ store.subscriptions
         Enum.filter(store.events, fn event -> 
-            event.number > index
+            event.number > subscription.from
         end)
         |> Enum.each(fn event -> 
-            Process.send(pid, event, []) 
+            push_event(subscription, event)
         end)
         {:noreply, %Store{store | subscriptions: subscriptions}} 
     end
@@ -175,8 +175,8 @@ defmodule Signal.VoidStore do
             |> Enum.sort(fn (%Event{number: a}, %Event{number: b}) -> a <= b end)
 
         Enum.each(events, fn event -> 
-            Enum.each(store.subscriptions, fn %{pid: pid} -> 
-                Process.send(pid, event, []) 
+            Enum.each(store.subscriptions, fn sub -> 
+                push_event(sub, event)
             end)
         end)
 
@@ -254,7 +254,52 @@ defmodule Signal.VoidStore do
         GenServer.call(__MODULE__, {:list_events, topics, position, count}, 5000)
     end
 
-    def create_subscription(pid, opts \\ []) do
+    defp push_event(%{from: position}, %{number: number})
+    when position > number do
+        nil
+    end
+
+    defp push_event(%{stream: s_stream}=sub, %{stream: e_stream, number: no}=event) do
+        %{topic: topic} = event
+        %{topics: topics} = sub
+        {e_stream_type, _stream_id} = e_stream
+
+        valid_stream =
+            cond do
+                # All streams
+                is_nil(s_stream) ->
+                    true
+
+                # Same stream type 
+                is_atom(s_stream) ->
+                    s_stream == e_stream_type
+
+                # Same stream 
+                is_tuple(s_stream) ->
+                    e_stream == s_stream
+
+                true ->
+                    false
+            end
+
+        valid_topic =
+            if length(topics) == 0 do
+                true
+            else
+                if topic in topics do
+                    true
+                else
+                    false
+                end
+            end
+
+        if valid_stream and valid_topic do
+            Process.send(sub.pid, event, []) 
+        end
+    end
+
+
+    defp create_subscription(pid, opts \\ []) do
         from = Keyword.get(opts, :from, 0)
         stream = Keyword.get(opts, :stream, nil)
         topics = Keyword.get(opts, :topics, [])
