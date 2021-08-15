@@ -250,7 +250,7 @@ defmodule Signal.VoidStore do
 
     def stream_position(stream) do
         GenServer.call(__MODULE__, {:state, :events}, 5000)
-        |> Map.filter(&(Map.get(&1, :stream) == stream))
+        |> Enum.filter(&(Map.get(&1, :stream) == stream))
         |> length()
     end
 
