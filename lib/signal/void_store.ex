@@ -248,6 +248,12 @@ defmodule Signal.VoidStore do
         GenServer.call(__MODULE__, :unsubscribe, 5000)
     end
 
+    def stream_position(stream) do
+        GenServer.call(__MODULE__, {:state, :events}, 5000)
+        |> Map.filter(&(Map.get(&1, :stream) == stream))
+        |> length()
+    end
+
     @impl true
     def list_events(_app, topics, position, count) 
     when is_integer(position) and is_integer(count) do
