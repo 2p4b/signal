@@ -238,20 +238,36 @@ defmodule Signal.VoidStore do
         GenServer.call(__MODULE__, {:get_event, number}, 5000)
     end
 
-    @impl true
-    def subscribe(_app, opts \\ []) do
-        GenServer.call(__MODULE__, {:subscribe, opts}, 5000)
+    def subscribe() do
+        subscribe(__MODULE__)
+    end
+
+    def subscribe(name) when is_atom(name) do
+        subscribe([], __MODULE__)
     end
 
     @impl true
-    def unsubscribe(_app) do
-        GenServer.call(__MODULE__, :unsubscribe, 5000)
+    def subscribe(opts, name \\ __MODULE__) when is_list(opts) and is_atom(name) do
+        GenServer.call(name, {:subscribe, opts}, 5000)
     end
 
-    def stream_position(stream) do
-        GenServer.call(__MODULE__, {:state, :events}, 5000)
-        |> Enum.filter(&(Map.get(&1, :stream) == stream))
-        |> length()
+    @impl true
+    def unsubscribe(name \\ __MODULE__) when is_atom(name) do
+        GenServer.call(name, :unsubscribe, 5000)
+    end
+
+    def stream_position(stream, name \\ __MODULE__) 
+    when is_atom(name) and is_tuple(stream) do
+        last_event =
+            GenServer.call(name, {:state, :events}, 5000)
+            |> Enum.filter(&(Map.get(&1, :stream) == stream))
+            |> Enum.max_by(&(Map.get(&1, :number)))
+
+        if last_event do
+            last_event.reduction
+        else
+            0
+        end
     end
 
     @impl true
