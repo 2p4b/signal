@@ -256,6 +256,7 @@ defmodule Signal.VoidStore do
         GenServer.call(name, :unsubscribe, 5000)
     end
 
+    @impl true
     def stream_position(stream, name \\ __MODULE__) 
     when is_atom(name) and is_tuple(stream) do
         last_event =
