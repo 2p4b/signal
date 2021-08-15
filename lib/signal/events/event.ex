@@ -16,7 +16,7 @@ defmodule Signal.Events.Event do
             field :uuid,            String.t()
             field :topic,           String.t()
             field :stream,          String.t()
-            field :reduction,       integer()
+            field :position,        integer()
             field :number,          integer()
             field :causation_id,    String.t()
             field :correlation_id,  String.t()
@@ -31,15 +31,15 @@ defmodule Signal.Events.Event do
         field :stream,          String.t()
         field :data,            map()
         field :type,            atom()
-        field :reduction,       integer()
+        field :position,        integer()
         field :number,          integer(),  default: nil
         field :causation_id,    String.t()
         field :correlation_id,  String.t()
         field :timestamp,       term()
     end
 
-    def new(event, %Action{stream: source}=action, reduction) 
-    when is_struct(event) and is_number(reduction) do
+    def new(event, %Action{stream: source}=action, position) 
+    when is_struct(event) and is_number(position) do
         {type, data} = encode(event)
         params = [
             uuid: UUID.uuid4(), 
@@ -48,7 +48,7 @@ defmodule Signal.Events.Event do
             data: data,
             type: type,
             source: source,
-            reduction: reduction,
+            position: position,
             timestamp: Timex.now(),
             causation_id: action.causation_id,
             correlation_id: action.correlation_id,
