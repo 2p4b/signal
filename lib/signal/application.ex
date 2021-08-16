@@ -49,6 +49,18 @@ defmodule Signal.Application do
 
             def store(), do: @store
 
+            defdelegate subscribe(), as: @store
+
+            defdelegate subscribe(name), as: @store 
+
+            defdelegate subscribe(opts, name), as: @store
+
+            defdelegate unsubscribe(), as: @store
+
+            defdelegate unsubscribe(name), as: @store
+
+            defdelegate stream_position(stream), as: @store
+
             defp supervisor_args(type, name) do
                 [name: Signal.Application.supervisor({__MODULE__, name}, type)]
             end
