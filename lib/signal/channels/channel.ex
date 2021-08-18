@@ -151,16 +151,16 @@ defmodule Signal.Channels.Channel do
 
         channel = update_topics(channel)
 
-        info = """
-        [SUBSCRIBED] #{state.name}
-            cid: #{inspect(self())}
-            pid: #{inspect(pid)}  
-            syn: #{inspect(sub.syn)}
-            ack: #{inspect(sub.ack)}
-            topics: #{inspect(sub.topics)}
-            listening: #{inspect(channel.topics)}
-        """
-        Logger.info(info)
+        #info = """
+        #[SUBSCRIBED] #{state.name}
+        #    cid: #{inspect(self())}
+        #    pid: #{inspect(pid)}  
+        #    syn: #{inspect(sub.syn)}
+        #    ack: #{inspect(sub.ack)}
+        #    topics: #{inspect(sub.topics)}
+        #    listening: #{inspect(channel.topics)}
+        #"""
+        #Logger.info(info)
 
         {:reply, sub, channel} 
     end

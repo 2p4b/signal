@@ -12,7 +12,7 @@ defmodule Signal.Events.Producer do
     alias Signal.Events.Recorder
     alias Signal.Events.Producer
 
-    defstruct [:app, :store, :stream, cursor: 0]
+    defstruct [:app, :stream, position: 0]
 
     @doc """
     Starts a new execution queue.
@@ -34,7 +34,7 @@ defmodule Signal.Events.Producer do
     end
 
     @impl true
-    def handle_call(:cursor, _from, %Producer{cursor: cursor}=state) do
+    def handle_call(:cursor, _from, %Producer{ position: cursor}=state) do
         {:reply, cursor, state}
     end
 
@@ -69,7 +69,7 @@ defmodule Signal.Events.Producer do
         # Halt until the task is resolved
         case Task.yield(channel, :infinity) do
             {:ok, {:ok, ^version}} ->
-                {:noreply, %Producer{state | cursor: version}}
+                {:noreply, %Producer{state | position: version}}
 
             {:ok, {:rollback, _}} ->
                 {:noreply, calibrate(state)}
@@ -82,7 +82,7 @@ defmodule Signal.Events.Producer do
     @impl true
     def handle_call({:process, %Action{}=action}, _from, %Producer{}=producer) do
 
-        %{stream: stream, app: app, cursor: cursor} = producer
+        %{stream: stream, app: app, position: cursor} = producer
 
         %Action{command: command, result: result} = action
 
@@ -103,7 +103,7 @@ defmodule Signal.Events.Producer do
 
                             cursor = Record.stream_version(record, stream, cursor)
 
-                            state = %Producer{producer| cursor: cursor}
+                            state = %Producer{producer| position: cursor}
 
                             {:reply, {:ok, record}, state}
 
@@ -169,7 +169,7 @@ defmodule Signal.Events.Producer do
         GenServer.call(producer, {:stage, action, events})
     end
 
-    def stage_events(%Producer{cursor: index, stream: stream}, action, events, stage) 
+    def stage_events(%Producer{ position: index, stream: stream}, action, events, stage) 
     when is_list(events) and is_tuple(stream) and is_integer(index) and is_pid(stage) do
         {events, version} = 
             Enum.map_reduce(events, index, fn event, acc -> 
@@ -193,14 +193,10 @@ defmodule Signal.Events.Producer do
         Signal.Helper.module_to_string(type) <> ":" <> id
     end
 
-    defp calibrate(%Producer{app: app, store: store}=prod) do
-        case Kernel.apply(store, :get_index, [app, stream_id(prod)]) do
-            nil ->
-                %Producer{prod | cursor: 0}
-
-            value when is_integer(value) and value >= 0 ->
-                %Producer{prod | cursor: value}
-        end
+    defp calibrate(%Producer{app: app, stream: stream}=prod) do
+        {application, _name} = app
+        position = application.stream_position(stream)
+        %Producer{prod | position: position}
     end
 
     defp aggregate_state(%Producer{ app: app, stream: stream}, _consistency) do

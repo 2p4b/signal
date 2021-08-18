@@ -28,17 +28,31 @@ defmodule Signal.VoidStore do
     end
 
     @impl true
+    def handle_call(:subscription, {pid, _ref}, %Store{subscriptions: subs}=store) do
+        subscription = Enum.find(subs, &(Map.get(&1, :pid) == pid))
+        {:reply, subscription, store} 
+    end
+
+    @impl true
     def handle_call({:subscribe, opts}, {pid, _ref}=from, %Store{}=store) do
-        subscription = create_subscription(pid, opts)
-        GenServer.reply(from, {:ok, subscription})
-        subscriptions = List.wrap(subscription) ++ store.subscriptions
-        Enum.filter(store.events, fn event -> 
-            event.number > subscription.from
-        end)
-        |> Enum.each(fn event -> 
-            push_event(subscription, event)
-        end)
-        {:noreply, %Store{store | subscriptions: subscriptions}} 
+        %Store{subscriptions: subscriptions, events: events} = store
+        subscription = Enum.find(subscriptions, &(Map.get(&1, :pid) == pid))
+        if is_nil(subscription) do
+            subscription = create_subscription(store, pid, opts)
+            GenServer.reply(from, {:ok, subscription})
+            position = subscription.from
+            subscriptions =
+                Enum.filter(events, &(Map.get(&1, :number) > position))
+                |> Enum.reduce(subscription, fn event, sub -> 
+                    push_event(sub, event)
+                end)
+                |> List.wrap()
+                |> Enum.concat(subscriptions)
+
+            {:noreply, %Store{store | subscriptions: subscriptions}} 
+        else
+            {:noreply, subscription, store}
+        end
     end
 
     @impl true
@@ -174,17 +188,41 @@ defmodule Signal.VoidStore do
             end)
             |> Enum.sort(fn (%Event{number: a}, %Event{number: b}) -> a <= b end)
 
-        Enum.each(events, fn event -> 
-            Enum.each(store.subscriptions, fn sub -> 
-                push_event(sub, event)
+        subs =
+            Enum.reduce(events, store.subscriptions, fn event, subs -> 
+                Enum.map(subs, &(push_event(&1, event)))
             end)
-        end)
 
         events = store.events ++ events
 
-        store = %Store{store | cursor: cursor, events: events}
+        store = %Store{store | 
+            cursor: cursor, 
+            events: events, 
+            subscriptions: subs
+        }
 
         {:reply, {:ok, cursor}, store}
+    end
+
+    def handle_info({:ack, {pid, number}}, %Store{}=store) do
+        store = handle_ack(store, pid, number)
+        {:noreply, store}
+    end
+
+    def handle_info({:next, pid}, %Store{}=store) do
+        %Store{subscriptions: subs} = store
+        index = Enum.find_index(subs, &(Map.get(&1, :pid) == pid))
+        if is_nil(index) do
+            {:noreply, store}
+        else
+            subs =
+                store
+                |> Map.get(:subscriptions)
+                |> List.update_at(index, fn sub -> 
+                    push_next(store, sub)
+                end)
+            {:noreply, %Store{store | subscriptions: subs}}
+        end
     end
 
     @impl true
@@ -238,37 +276,46 @@ defmodule Signal.VoidStore do
         GenServer.call(__MODULE__, {:get_event, number}, 5000)
     end
 
+    @impl true
     def subscribe() do
-        subscribe(__MODULE__)
-    end
-
-    def subscribe(name) when is_atom(name) do
-        subscribe([], __MODULE__)
+        subscribe([])
     end
 
     @impl true
-    def subscribe(opts, name \\ __MODULE__) when is_list(opts) and is_atom(name) do
-        GenServer.call(name, {:subscribe, opts}, 5000)
+    def subscribe(opts) when is_list(opts) do
+        subscribe(nil, [])
     end
 
     @impl true
-    def unsubscribe(name \\ __MODULE__) when is_atom(name) do
-        GenServer.call(name, :unsubscribe, 5000)
+    def subscribe(handle, opts \\ [])
+
+    def subscribe(handle, opts) when is_list(opts) and is_atom(handle) do
+        subscribe(Atom.to_string(handle), opts)
+    end
+
+    def subscribe(handle, opts) when is_list(opts) and is_binary(handle) do
+        opts = [handle: handle] ++ opts
+        GenServer.call(__MODULE__, {:subscribe, opts}, 5000)
+    end
+
+    @impl true
+    def unsubscribe() do
+        GenServer.call(__MODULE__, :unsubscribe, 5000)
+    end
+
+    @impl true
+    def subscription() do
+        GenServer.call(__MODULE__, :subscription, 5000)
     end
 
     @impl true
     def stream_position(stream, name \\ __MODULE__) 
     when is_atom(name) and is_tuple(stream) do
-        last_event =
+        %{position: position} =
             GenServer.call(name, {:state, :events}, 5000)
             |> Enum.filter(&(Map.get(&1, :stream) == stream))
-            |> Enum.max_by(&(Map.get(&1, :number)))
-
-        if last_event do
-            last_event.reduction
-        else
-            0
-        end
+            |> Enum.max_by(&(Map.get(&1, :number)), fn -> %{position: 0} end)
+        position
     end
 
     @impl true
@@ -277,14 +324,14 @@ defmodule Signal.VoidStore do
         GenServer.call(__MODULE__, {:list_events, topics, position, count}, 5000)
     end
 
-    defp push_event(%{from: position}, %{number: number})
+    defp push_event(%{from: position}=sub, %{number: number})
     when position > number do
-        nil
+        sub
     end
 
-    defp push_event(%{stream: s_stream}=sub, %{stream: e_stream, number: no}=event) do
-        %{topic: topic} = event
+    defp push_event(%{stream: s_stream}=sub, %{stream: e_stream}=event) do
         %{topics: topics} = sub
+        %{topic: topic, number: number} = event
         {e_stream_type, _stream_id} = e_stream
 
         valid_stream =
@@ -318,20 +365,48 @@ defmodule Signal.VoidStore do
 
         if valid_stream and valid_topic do
             Process.send(sub.pid, event, []) 
+            Map.put(sub, :syn, number)
+        else
+            sub
         end
     end
 
 
-    defp create_subscription(pid, opts \\ []) do
-        from = Keyword.get(opts, :from, 0)
-        stream = Keyword.get(opts, :stream, nil)
+    defp create_subscription(%Store{cursor: cursor}, pid, opts) do
+        from = Keyword.get(opts, :from, cursor)
         topics = Keyword.get(opts, :topics, [])
+        stream = Keyword.get(opts, :stream, nil)
+        handle = Keyword.get(opts, :handle, nil)
         %{
             pid: pid,
+            ack: from,
+            syn: from,
             from: from,
+            handle: handle,
             stream: stream,
             topics: topics,
         }
+    end
+
+    defp handle_ack(%Store{}=store, pid, number) do
+        %Store{subscriptions: subscriptions, cursor: cursor} = store
+        index = Enum.find_index(subscriptions, &(Map.get(&1, :pid) == pid))
+        if is_nil(index) do
+            store
+        else
+            subscriptions = List.update_at(subscriptions, index, fn subscription -> 
+                if cursor > subscription.ack do
+                    Process.send(self(), {:next, subscription.pid}, [])
+                end
+                Map.put(subscription, :ack, number)
+            end)
+            %Store{store| subscriptions: subscriptions}
+        end
+    end
+
+    defp push_next(%Store{events: events}=store, %{ack: ack}=sub) do
+        event = Enum.find(events, &(Map.put(&1, :number) > ack))
+        push_event(sub, event)
     end
 
 end
