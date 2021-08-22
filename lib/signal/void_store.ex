@@ -1,14 +1,14 @@
 defmodule Signal.VoidStore do
 
     use GenServer
-    alias Signal.Log
-    alias Signal.Events.Event
+    alias Signal.Snapshot
+    alias Signal.Stream.Event
     alias Signal.Stream.History
     alias Signal.VoidStore, as: Store
 
     @behaviour Signal.Store
 
-    defstruct [cursor: 0, events: [], states: %{}, indices: %{}, subscriptions: []]
+    defstruct [cursor: 0, events: [], snapshots: %{}, states: %{}, streams: %{}, indices: %{}, subscriptions: []]
 
     @doc """
     Starts in memory store.
@@ -165,48 +165,25 @@ defmodule Signal.VoidStore do
     end
 
     @impl true
-    def handle_call({:record, %Log{cursor: cursor}=log}, from, %Store{}=store) do
-
-        store =
-            log.states
-            |> Enum.reduce(store, fn {id, version, value}, store -> 
-                handle_call({:set_state, id, version, value}, from, store) 
-                |> elem(2)
-            end)
-
-        store =
-            log.indices
-            |> Enum.reduce(store, fn {id, index}, store -> 
-                handle_call({:set_index, id, index}, from, store) 
-                |> elem(2)
-            end)
-
-        events =
-            log.streams
-            |> Enum.reduce([], fn %History{events: events},  acc -> 
-                events ++ acc
-            end)
-            |> Enum.sort(fn (%Event{number: a}, %Event{number: b}) -> a <= b end)
-
-        subs =
-            Enum.reduce(events, store.subscriptions, fn event, subs -> 
-                Enum.map(subs, &(push_event(&1, event)))
-            end)
-
-        events = store.events ++ events
-
-        store = %Store{store | 
-            cursor: cursor, 
-            events: events, 
-            subscriptions: subs
-        }
-
-        {:reply, {:ok, cursor}, store}
+    def handle_call({:publish, staged}, from, %Store{cursor: prev}=store) do
+        store = Enum.reduce(staged, store, &(handle_record(&1, &2)))
+        %{events: events} = store
+        events = Enum.slice(events, prev + 1, length(events))
+        {:reply, {:ok, events}, store}
     end
 
-    def handle_info({:ack, {pid, number}}, %Store{}=store) do
-        store = handle_ack(store, pid, number)
-        {:noreply, store}
+    @impl true
+    def handle_call({:record, %Snapshot{}=snapshot}, _from, %Store{}=store) do
+        id = {snapshot.type, snapshot.id}
+        store = 
+            Map.update!(store, :snapshots, fn -> snapshots 
+                snaps = 
+                    Map.get(snapshots, id, %{})
+                    |> Map.put(snapshots.version, snapshots)
+
+                Map.put(snapshots, id, snaps)
+            end)
+        {:reply, :ok, store}
     end
 
     def handle_info({:next, pid}, %Store{}=store) do
@@ -225,6 +202,11 @@ defmodule Signal.VoidStore do
         end
     end
 
+    def handle_cast({:ack, pid, number}, %Store{}=store) do
+        store = handle_ack(store, pid, number)
+        {:noreply, store}
+    end
+
     @impl true
     def cursor(_app) do
         GenServer.call(__MODULE__, {:state, :cursor}, 5000)
@@ -233,6 +215,17 @@ defmodule Signal.VoidStore do
     @impl true
     def record(_app, log) do
         GenServer.call(__MODULE__, {:record, log}, 5000)
+    end
+
+    def publish(staged, opts \\ []) do
+        case GenServer.call(__MODULE__, {:publish, staged}, 5000) do
+            {:ok, event} ->
+                IO.inspect(event)
+
+                :ok
+            error ->
+                error
+        end
     end
 
     @impl true
@@ -289,6 +282,10 @@ defmodule Signal.VoidStore do
     @impl true
     def subscribe(handle, opts \\ [])
 
+    def subscribe(nil, opts) when is_list(opts) do
+        GenServer.call(__MODULE__, {:subscribe, opts}, 5000)
+    end
+
     def subscribe(handle, opts) when is_list(opts) and is_atom(handle) do
         subscribe(Atom.to_string(handle), opts)
     end
@@ -299,13 +296,17 @@ defmodule Signal.VoidStore do
     end
 
     @impl true
-    def unsubscribe() do
+    def unsubscribe(_opts \\ []) do
         GenServer.call(__MODULE__, :unsubscribe, 5000)
     end
 
     @impl true
-    def subscription() do
+    def subscription(_opts \\ []) do
         GenServer.call(__MODULE__, :subscription, 5000)
+    end
+
+    def acknowledge(number, _opts \\ []) do
+        GenServer.cast(__MODULE__, {:ack, self(), number})
     end
 
     @impl true
@@ -322,6 +323,11 @@ defmodule Signal.VoidStore do
     def list_events(_app, topics, position, count) 
     when is_integer(position) and is_integer(count) do
         GenServer.call(__MODULE__, {:list_events, topics, position, count}, 5000)
+    end
+
+    defp push_event(%{handle: handle, syn: syn, ack: ack}=sub, _event)
+    when (not is_nil(handle)) and (syn > ack) do
+        sub
     end
 
     defp push_event(%{from: position}=sub, %{number: number})
@@ -405,8 +411,46 @@ defmodule Signal.VoidStore do
     end
 
     defp push_next(%Store{events: events}=store, %{ack: ack}=sub) do
-        event = Enum.find(events, &(Map.put(&1, :number) > ack))
+        event = Enum.find(events, &(Map.get(&1, :number) > ack))
         push_event(sub, event)
+    end
+
+    defp handle_record(%Store{}=store, staged) do
+        %{streams: streams, cursor: cursor} = store
+        %{stream: stream, events: events, version: version} = staged
+
+        store_stream = Map.get(streams, stream, %{
+            id: UUID.uuid4(),
+            position: 0,
+        })
+
+        %{position: position} = store_stream
+
+        initial = {[], position, cursor}
+
+        {events, position, cursor} = 
+            Enum.reduce(events, initial, fn event, {events, position, number} -> 
+                number = number
+                position = position + 1
+                event = %Event{
+                    uuid: UUID.uuid4(), 
+                    stream: stream,
+                    number: number,
+                    position: position,
+                    data: event.data,
+                    type: event.type,
+                    topic: event.topic, 
+                    timestamp: event.timestamp,
+                    causation_id: event.causation_id,
+                    correlation_id: event.correlation_id,
+                }
+                {events + List.wrap(event), position}
+            end)
+
+        events = store.events ++ events
+
+        streams = Map.put(streams, stream, Map.put(store_stream, :position, position))
+        Store{store | streams: streams, cursor: cursor, events: events}
     end
 
 end

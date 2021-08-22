@@ -12,7 +12,9 @@ defmodule Signal.Store do
 
     @callback subscribe(name::binary(), opts::list()) :: {:ok, any} | {:error, reason::term()}
 
-    @callback unsubscribe(app::app) :: :ok | {:error, reason::term()}
+    @callback unsubscribe(opts::list()) :: :ok | {:error, reason::term()}
+
+    @callback subscription(opts::list()) :: term() | {:error, reason::term()}
 
     @callback stream_position(stream::stream)  :: integer()
 

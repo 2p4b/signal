@@ -4,7 +4,7 @@ defmodule Signal.Process.Saga do
     alias Signal.Codec
     alias Signal.Result
     alias Signal.Process.Saga
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Process.Supervisor
     alias Signal.Events.Event.Metadata
 

@@ -10,7 +10,7 @@ defmodule Signal.Process.Manager do
 
             use GenServer
             alias Signal.Helper
-            alias Signal.Events.Event
+            alias Signal.Stream.Event
             alias Signal.Process.Router
             @before_compile unquote(__MODULE__)
 

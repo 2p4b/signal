@@ -2,7 +2,7 @@ defmodule Signal.Channels.Channel do
 
     use GenServer
     alias Signal.Helper
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Subscription
     alias Signal.Channels.Channel
     require Logger

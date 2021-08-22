@@ -1,7 +1,7 @@
 defmodule Signal.Stream.Broker do
 
     use GenServer
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Stream.Broker
     alias Signal.Stream.Consumer
 

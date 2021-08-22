@@ -14,7 +14,7 @@ defmodule Signal.Process.Router do
 
     alias Signal.Subscription
     alias Signal.Process.Saga
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Process.Router
     alias Signal.Channels.Channel
 

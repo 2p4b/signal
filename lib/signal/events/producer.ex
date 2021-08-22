@@ -7,6 +7,7 @@ defmodule Signal.Events.Producer do
     alias Signal.Events.Event
     alias Signal.Events.Staged
     alias Signal.Events.Record
+    alias Signal.Stream.History
     alias Signal.Command.Action
     alias Signal.Command.Handler
     alias Signal.Events.Recorder
@@ -82,9 +83,11 @@ defmodule Signal.Events.Producer do
     @impl true
     def handle_call({:process, %Action{}=action}, _from, %Producer{}=producer) do
 
-        %{stream: stream, app: app, position: cursor} = producer
+        %{stream: stream, app: app, position: position} = producer
 
         %Action{command: command, result: result} = action
+
+        {app_module, _tenant} =  app
 
         aggregate = aggregate_state(producer, action.consistent)
 
@@ -96,16 +99,26 @@ defmodule Signal.Events.Producer do
         if is_map(event_streams) do
             case stage_event_streams(producer, action, event_streams) do
                 {:ok, staged} ->
-                    case Recorder.record(app, action, staged) do
-                        %Record{}=record ->
-
+                    case app_module.publish(staged) do
+                        :ok ->
                             confirm_staged(staged)
 
-                            cursor = Record.stream_version(record, stream, cursor)
+                            position = Enum.find_value(staged, position, fn 
+                                %{stream: ^stream, version: version} ->
+                                    version
+                                _ -> false
+                            end)
 
-                            state = %Producer{producer| position: cursor}
+                            histories = Enum.map(staged, fn -> 
+                                struct(History, Map.from_struct(staged))
+                                |> Map.update(:events, [], fn events -> 
+                                    Enum.map(events, &(Event.payload(&1)))
+                                end)
+                            end)
 
-                            {:reply, {:ok, record}, state}
+                            state = %Producer{producer| position: position}
+
+                            {:reply, {:ok, histories}, state}
 
                         error ->
                             rollback_staged(staged, error)
@@ -173,9 +186,12 @@ defmodule Signal.Events.Producer do
     when is_list(events) and is_tuple(stream) and is_integer(index) and is_pid(stage) do
         {events, version} = 
             Enum.map_reduce(events, index, fn event, acc -> 
-                index = acc + 1
-                event = Event.new(event, action, index)
-                {event,  index}
+                opts = [
+                    causation_id: action.causation_id,
+                    correlation_id: action.correlation_id,
+                ]
+                event = Event.new(event, opts)
+                {event, index + 1}
             end)
         %Staged{events: events, version: version, stream: stream, stage: stage}
     end
