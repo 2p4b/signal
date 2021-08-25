@@ -11,12 +11,12 @@ defmodule Signal.Events.Event do
         field :topic,           String.t()
         field :data,            map()
         field :type,            atom()
-        field :causation_id,    String.t()
-        field :correlation_id,  String.t()
         field :timestamp,       term()
+        field :causation_id,    String.t(),     default: nil
+        field :correlation_id,  String.t(),     default: nil
     end
 
-    def new(event, opts \\ []) when is_struct(event) do
+    def new(event, opts) when is_struct(event) do
         {type, data} = encode(event)
         params = [
             data: data,
@@ -33,14 +33,6 @@ defmodule Signal.Events.Event do
 
     def payload(%Event{data: data, type: type}) do
         Codec.load(struct(type, []), data)
-    end
-
-    def index(%Event{number: nil}=event, number) when is_integer(number) do
-        %Event{event | number: number}
-    end
-
-    def metadata(%Event{}=event) do
-        Metadata.from(event)
     end
 
 end

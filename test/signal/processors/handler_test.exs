@@ -3,7 +3,7 @@ defmodule Signal.Processor.HandlerTest do
 
     alias Signal.Handler
     alias Signal.VoidStore
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Events.Staged
     alias Signal.Events.Recorder
 
@@ -103,9 +103,9 @@ defmodule Signal.Processor.HandlerTest do
                 |> Signal.Execution.Task.new([app: app])
                 |> Signal.Command.Action.from()
 
-            event1 = Signal.Events.Event.new(deposited, action, 1)
+            event1 = Signal.Events.Event.new(deposited)
 
-            event2 = Signal.Events.Event.new(deposited2, action, 2)
+            event2 = Signal.Events.Event.new(deposited2)
 
             staged1 = %Staged{
                 stage: self(),

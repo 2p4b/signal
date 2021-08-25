@@ -1,7 +1,7 @@
 defmodule Signal.Handler do
 
     alias Signal.Handler
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Channels.Channel
 
     defstruct [:app, :name, :state]

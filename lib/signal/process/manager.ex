@@ -47,11 +47,6 @@ defmodule Signal.Process.Manager do
                 Router.init(params ++ opts)
             end
 
-            @impl true
-            def handle_info(:init, state) do
-                Router.handle_init(state)
-            end
-
 
             @impl true
             def handle_info(:start_processes, state) do

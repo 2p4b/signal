@@ -74,7 +74,7 @@ defmodule Signal.Events.RecorderTest do
                 |> Signal.Execution.Task.new([app: app])
                 |> Signal.Command.Action.from()
 
-            event = Signal.Events.Event.new(deposited, action, 1)
+            event = Signal.Events.Event.new(deposited, [])
 
             stage =
                 %Staged{events: [event], version: 1, stream: stream, stage: self()}

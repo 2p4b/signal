@@ -20,36 +20,23 @@ defmodule Signal.Process.Router do
 
 
     def init(opts) do
-        Process.send(self(), :init, [])
         application = Keyword.get(opts, :application)
         app = {application, Keyword.get(opts, :app, application)}
+        name = Keyword.get(opts, :name)
+        topics = Keyword.get(opts, :topics)
+        sub = Channel.subscribe(app, name, topics, opts)
         params = [
             app: app, 
-            name: Keyword.get(opts, :name), 
+            name: name, 
             procs: [],
+            topics: topics,
+            subscription: sub,
             module: Keyword.get(opts, :module),
-            topics: Keyword.get(opts, :topics),
-            store: Signal.Application.store(app), 
         ]
         {:ok, struct(__MODULE__, Keyword.merge(opts, params) )}
     end
 
-    def handle_init(%Router{}=state) do
-        %Router{store: store, name: name, app: app, topics: topics} = state
-        {procs, opts} = 
-            case store.get_state(app, name, :max) do
-                {_index, payload} ->
-                    {load_processes(state, payload), []}
-                _ -> 
-                    {[], []}
-            end
-        Process.send(self(), :start_processes, [])
-        sub = Channel.subscribe(app, name, topics, opts)
-        {:noreply, %Router{state| procs: procs, subscription: sub}}
-    end
-
     def handle_start_processes(%Router{procs: procs}=state) do
-        procs = for proc <- procs, do: pull_event(state, proc)
         {:noreply, %Router{state | procs: procs} }
     end
 
@@ -122,10 +109,6 @@ defmodule Signal.Process.Router do
 
 
             proc = struct(proc, %{ack: number, status: status, load: load})
-
-            # Check if process has falled behind on event
-            # and process has low load
-            proc = pull_event(state, proc)
 
             procs =  List.replace_at(procs, pin, proc)
 
@@ -243,9 +226,7 @@ defmodule Signal.Process.Router do
         %Router{state | subscription: %Subscription{sub | ack: number}}
     end
 
-    defp log_state(%Router{name: name, store: store, app: app}=state, procs) do
-        args = [app, name, dump_processes(procs)]
-        {:ok, _procs} = Kernel.apply(store, :set_state, args)
+    defp log_state(%Router{}=state, procs) do
         %Router{state | procs: procs}
     end
 
@@ -294,20 +275,6 @@ defmodule Signal.Process.Router do
             Proc.new(id, pid, ack) 
             |> Map.put(:status, status)
         end)
-    end
-
-    defp pull_event(%Router{}=state, %Proc{syn: syn, load: load, ack: ack}=proc) do
-        %Router{store: store, topics: topics, app: app, subscription: sub } = state
-
-        if syn == ack and syn < sub.ack and load == 0 do
-            args = [app, topics, syn, 1]
-            events = Kernel.apply(store, :list_events, args)
-            Enum.reduce(events, proc, fn event, proc -> 
-                push_event(event, proc)                    
-            end)
-        else
-            proc
-        end
     end
 
 end

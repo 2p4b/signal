@@ -61,6 +61,12 @@ defmodule Signal.Application do
 
             defdelegate stream_position(stream, opts \\ []), to: @store
 
+            defdelegate snapshot(id, opts \\ []), to: @store
+
+            defdelegate record(snapshot, opts \\ []), to: @store
+
+            defdelegate acknowledge(number, opts \\ []), to: @store
+
             defp supervisor_args(type, name) do
                 [name: Signal.Application.supervisor({__MODULE__, name}, type)]
             end

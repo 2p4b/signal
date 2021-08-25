@@ -6,7 +6,7 @@ defmodule Signal.Process.Saga do
     alias Signal.Process.Saga
     alias Signal.Stream.Event
     alias Signal.Process.Supervisor
-    alias Signal.Events.Event.Metadata
+    alias Signal.Stream.Event.Metadata
 
     defstruct [
         :app, :state, :store, :id, :module, :status,

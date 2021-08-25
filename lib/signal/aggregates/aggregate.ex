@@ -2,7 +2,8 @@ defmodule Signal.Aggregates.Aggregate do
     use GenServer
 
     alias Signal.Codec
-    alias Signal.Events.Event
+    alias Signal.Snapshot
+    alias Signal.Stream.Event
     alias Signal.Stream.Broker
     alias Signal.Stream.Reducer
     alias Signal.Aggregates.Aggregate
@@ -65,11 +66,14 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
-    def handle_info(:init, %Aggregate{app: app, store: store}=aggregate) do
+    def handle_info(:init, %Aggregate{}=aggregate) do
+    %Aggregate{app: {app_module, _tenant}, stream: stream}=aggregate
         aggregate = 
-            case store.get_state(app, aggregate_id(aggregate), :max) do
-                nil -> aggregate
-                {_index, _data} = snapshot ->
+            case app_module.snapshot(aggregate_id(stream)) do
+                nil -> 
+                    aggregate
+
+                snapshot ->
                     load(aggregate, snapshot)
             end
         listen(aggregate)
@@ -164,34 +168,39 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     def aggregate_id({type, id}) when is_atom(type) do
-        Signal.Helper.module_to_string(type) <> ":" <> id
+        Signal.Helper.module_to_string(type)
+        |> aggregate_id(id)
     end
 
-    def aggregate_id({type, id}) when is_binary(type) do
+    def aggregate_id(type, id) when is_binary(type) do
         type <> ":" <> id
     end
 
-    defp snapshot(%Aggregate{app: app, version: version, store: store}=aggregate) do
-        id = aggregate_id(aggregate)
-        data = encode(aggregate)
-        {:ok, ^version} = Kernel.apply(store, :set_state, [app, id, version, data])
+    defp snapshot(%Aggregate{app: app, version: version, stream: stream}=aggregate) do
+        {app_module, _tenant} = app
+        snapshot = %Snapshot{
+            id: aggregate_id(stream),
+            data: encode(aggregate),
+            version: version,
+        }
+        app_module.record(snapshot)
         aggregate
     end
 
-    def encode(%Aggregate{ state: state, index: index}) do
-        %{index: index, data: Codec.encode(state)}
+    def encode(%Aggregate{ state: state}) do
+        Codec.encode(state)
     end
 
-    def load(%Aggregate{state: state}=aggr, {version, %{data: data, index: index}}) do
+    def load(%Aggregate{state: state}=aggr, %Snapshot{}=snapshot) do
         %Aggregate{aggr | 
-            state: Codec.load(state, data), 
-            index: index,
-            version: version, 
+            version: snapshot.version, 
+            state: Codec.load(state, snapshot.data), 
         }
     end
 
-    def listen(%Aggregate{app: app, stream: stream, index: index}) do
-        Broker.stream_from(app, stream, index)
+    def listen(%Aggregate{app: app, stream: stream, version: version}) do
+        {app_module, _tenant} = app
+        app_module.subscribe([stream: stream, position: version])
     end
 
 end

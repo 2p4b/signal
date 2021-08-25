@@ -2,7 +2,7 @@ defmodule Signal.Events.AggregateTest do
     use ExUnit.Case
 
     alias Signal.VoidStore
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
 
     defmodule TestApp do
         use Signal.Application,
@@ -79,17 +79,12 @@ defmodule Signal.Events.AggregateTest do
 
             stream = Signal.Stream.stream(deposited)
 
-            action =
-                Deposite.new([amount: 1])
-                |> Signal.Execution.Task.new([app: TestApp])
-                |> Signal.Command.Action.from()
-
             event1 =
-                Event.new(deposited, action, 1)
+                Event.new(deposited)
                 |> Event.index(1)
 
             event2 =
-                Event.new(deposited, action, 2)
+                Event.new(deposited)
                 |> Event.index(20)
 
             {TestApp, TestApp}
@@ -111,13 +106,8 @@ defmodule Signal.Events.AggregateTest do
 
             stream = Signal.Stream.stream(deposited)
 
-            action =
-                Deposite.new([amount: 3])
-                |> Signal.Execution.Task.new([app: TestApp])
-                |> Signal.Command.Action.from()
-
             event =
-                Event.new(deposited, action, 3)
+                Event.new(deposited)
                 |> Event.index(1)
 
             aggregate =

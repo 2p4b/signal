@@ -2,7 +2,7 @@ defmodule Signal.Events.Recorder do
 
     use GenServer
 
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Events.Staged
     alias Signal.Events.Record
     alias Signal.Stream.History

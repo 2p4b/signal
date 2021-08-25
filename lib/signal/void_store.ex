@@ -3,7 +3,6 @@ defmodule Signal.VoidStore do
     use GenServer
     alias Signal.Snapshot
     alias Signal.Stream.Event
-    alias Signal.Stream.History
     alias Signal.VoidStore, as: Store
 
     @behaviour Signal.Store
@@ -64,82 +63,6 @@ defmodule Signal.VoidStore do
     end
 
     @impl true
-    def handle_call({:get_event, number}, _from, %Store{events: events}=store) do
-        {:reply, Enum.find(events, &(Map.get(&1, :number) == number)), store} 
-    end
-
-    @impl true
-    def handle_call({:get_state, id, version}, _from, %Store{states: states}=store) 
-    when is_binary(id) do
-        state = 
-            case {Map.fetch(states, id), version} do
-                {:error, _version} -> nil
-
-                {{:ok, partition}, :min} -> 
-                    version =
-                        partition
-                        |> Map.keys() 
-                        |> Enum.min()
-
-                    case Map.fetch(partition, version) do
-                        {:ok, val} ->
-                            {version, val}
-
-                        :error ->
-                            nil
-                    end
-
-                {{:ok, partition}, :max} -> 
-                    max =
-                        partition
-                        |> Map.keys() 
-                        |> Enum.max()
-
-                    case Map.fetch(partition, max) do
-                        {:ok, val} ->
-                            {max, val}
-
-                        :error ->
-                            nil
-                    end
-
-
-                {{:ok, partition}, version} -> 
-                    case Map.fetch(partition, version) do
-                        {:ok, val} ->
-                            {version, val}
-
-                        :error ->
-                            nil
-                    end
-            end
-        {:reply, state, store} 
-    end
-
-    @impl true
-    def handle_call({:set_state, id, version, state}, _from, %Store{states: states}=store) do
-        partition = 
-            states
-            |> Map.get(id, %{}) 
-            |> Map.put(version, state)
-        states = Map.put(states, id, partition)
-        {:reply, {:ok, version}, %Store{store | states: states}} 
-    end
-
-    @impl true
-    def handle_call({:get_index, id}, _from, %Store{ indices: indices}=store) 
-    when is_binary(id) do
-        {:reply, Map.get(indices, id), store} 
-    end
-
-    @impl true
-    def handle_call({:set_index, id, index}, _from, %Store{indices: indices}=store) 
-    when is_binary(id) and is_integer(index) do
-        indices = Map.put(indices , id, index)
-        {:reply, {:ok, index}, %Store{store | indices: indices}} 
-    end
-
-    @impl true
     def handle_call({:list_events, topics, position, count}, _from, %Store{}=store) 
     when is_list(topics) and is_integer(position) and is_integer(count) do
         events = 
@@ -165,27 +88,39 @@ defmodule Signal.VoidStore do
     end
 
     @impl true
-    def handle_call({:publish, staged}, from, %Store{cursor: prev}=store) do
-        store = Enum.reduce(staged, store, &(handle_record(&1, &2)))
+    def handle_call({:publish, staged}, _from, %Store{cursor: prev}=store) do
+        store = Enum.reduce(staged, store, &(handle_publish(&2, &1)))
         %{events: events} = store
-        events = Enum.slice(events, prev + 1, length(events))
+        events = Enum.slice(events, prev, length(events))
         {:reply, {:ok, events}, store}
     end
 
     @impl true
-    def handle_call({:record, %Snapshot{}=snapshot}, _from, %Store{}=store) do
-        id = {snapshot.type, snapshot.id}
+    def handle_call({:record, %Snapshot{id: id}=snapshot}, _from, %Store{}=store) do
         store = 
-            Map.update!(store, :snapshots, fn -> snapshots 
+            Map.update!(store, :snapshots, fn snapshots ->  
                 snaps = 
                     Map.get(snapshots, id, %{})
-                    |> Map.put(snapshots.version, snapshots)
+                    |> Map.put(snapshots.version, snapshot)
 
                 Map.put(snapshots, id, snaps)
             end)
-        {:reply, :ok, store}
+        {:reply, {:ok, id}, store}
     end
 
+    @impl true
+    def handle_call({:snapshot, iden, _opts}, _from, %Store{}=store) do
+        snapshot = 
+            store
+            |> Map.get(:snapshots)
+            |> Map.get(iden, %{})
+            |> Map.values()
+            |> Enum.max_by(&(Map.get(&1, :version)), fn -> nil end)
+
+        {:reply, snapshot, store}
+    end
+
+    @impl true
     def handle_info({:next, pid}, %Store{}=store) do
         %Store{subscriptions: subs} = store
         index = Enum.find_index(subs, &(Map.get(&1, :pid) == pid))
@@ -202,6 +137,15 @@ defmodule Signal.VoidStore do
         end
     end
 
+    @impl true
+    def handle_cast({:broadcast, event}, %Store{}=store) do
+        subs = Enum.map(store.subscriptions, fn sub -> 
+            push_event(sub, event)
+        end)
+        {:noreply, %Store{store | subscriptions: subs}}
+    end
+
+    @impl true
     def handle_cast({:ack, pid, number}, %Store{}=store) do
         store = handle_ack(store, pid, number)
         {:noreply, store}
@@ -213,14 +157,13 @@ defmodule Signal.VoidStore do
     end
 
     @impl true
-    def record(_app, log) do
-        GenServer.call(__MODULE__, {:record, log}, 5000)
-    end
-
-    def publish(staged, opts \\ []) do
+    def publish(staged, _opts \\ [])
+    def publish(staged, _opts) when is_list(staged) do
         case GenServer.call(__MODULE__, {:publish, staged}, 5000) do
-            {:ok, event} ->
-                IO.inspect(event)
+            {:ok, events} ->
+                Enum.map(events, fn event -> 
+                    GenServer.cast(__MODULE__, {:broadcast, event})
+                end)
 
                 :ok
             error ->
@@ -228,45 +171,9 @@ defmodule Signal.VoidStore do
         end
     end
 
-    @impl true
-    def get_state(_app, id) do
-        GenServer.call(__MODULE__, {:get_state, id, 0}, 5000)
-    end
-
-    @impl true
-    def get_state(_app, id, version) 
-    when version in [:max, :min] or is_integer(version) do
-        GenServer.call(__MODULE__, {:get_state, id, version}, 5000)
-    end
-
-    @impl true
-    def set_state(app, id, state) do
-        set_state(app, id, 0, state)
-    end
-
-    @impl true
-    def set_state(_app, id, version, state) when is_integer(version) do
-        GenServer.call(__MODULE__, {:set_state, id, version, state}, 5000)
-    end
-
-    @impl true
-    def get_index(_app, handler) do
-        GenServer.call(__MODULE__, {:get_index, handler}, 5000)
-    end
-
-    @impl true
-    def set_index(_app, handler, position) when is_integer(position) do
-        GenServer.call(__MODULE__, {:set_index, handler, position}, 5000)
-    end
-
-    @impl true
-    def next(_app, position, opts \\ []) do
-        GenServer.call(__MODULE__, {:next, position, opts}, 5000)
-    end
-
-    @impl true
-    def get_event(_app, number) do
-        GenServer.call(__MODULE__, {:get_event, number}, 5000)
+    def publish(staged, opts) do
+        List.wrap(staged)
+        |> publish(opts)
     end
 
     @impl true
@@ -305,21 +212,30 @@ defmodule Signal.VoidStore do
         GenServer.call(__MODULE__, :subscription, 5000)
     end
 
+    @impl true
     def acknowledge(number, _opts \\ []) do
         GenServer.cast(__MODULE__, {:ack, self(), number})
     end
 
     @impl true
-    def stream_position(stream, name \\ __MODULE__) 
-    when is_atom(name) and is_tuple(stream) do
+    def record(%Snapshot{}=snapshot, _opts) do
+        GenServer.call(__MODULE__, {:record, snapshot}, 500)
+    end
+
+    @impl true
+    def snapshot(iden, opts) do
+        GenServer.call(__MODULE__, {:snapshot, iden, opts}, 500)
+    end
+
+    @impl true
+    def stream_position(stream, _opts \\ []) when is_tuple(stream) do
         %{position: position} =
-            GenServer.call(name, {:state, :events}, 5000)
+            GenServer.call(__MODULE__, {:state, :events}, 5000)
             |> Enum.filter(&(Map.get(&1, :stream) == stream))
             |> Enum.max_by(&(Map.get(&1, :number)), fn -> %{position: 0} end)
         position
     end
 
-    @impl true
     def list_events(_app, topics, position, count) 
     when is_integer(position) and is_integer(count) do
         GenServer.call(__MODULE__, {:list_events, topics, position, count}, 5000)
@@ -331,7 +247,7 @@ defmodule Signal.VoidStore do
     end
 
     defp push_event(%{from: position}=sub, %{number: number})
-    when position > number do
+    when is_integer(position) and position > number do
         sub
     end
 
@@ -410,12 +326,16 @@ defmodule Signal.VoidStore do
         end
     end
 
-    defp push_next(%Store{events: events}=store, %{ack: ack}=sub) do
+    defp push_next(%Store{events: events}, %{ack: ack}=sub) do
         event = Enum.find(events, &(Map.get(&1, :number) > ack))
-        push_event(sub, event)
+        if event do
+            push_event(sub, event)
+        else
+            sub
+        end
     end
 
-    defp handle_record(%Store{}=store, staged) do
+    defp handle_publish(%Store{}=store, staged) do
         %{streams: streams, cursor: cursor} = store
         %{stream: stream, events: events, version: version} = staged
 
@@ -426,11 +346,13 @@ defmodule Signal.VoidStore do
 
         %{position: position} = store_stream
 
+        version = if is_nil(version), do: position, else: version
+
         initial = {[], position, cursor}
 
-        {events, position, cursor} = 
+        preped = 
             Enum.reduce(events, initial, fn event, {events, position, number} -> 
-                number = number
+                number = number + 1
                 position = position + 1
                 event = %Event{
                     uuid: UUID.uuid4(), 
@@ -444,13 +366,15 @@ defmodule Signal.VoidStore do
                     causation_id: event.causation_id,
                     correlation_id: event.correlation_id,
                 }
-                {events + List.wrap(event), position}
+                {events ++ List.wrap(event), position, number}
             end)
+
+        {events, ^version, cursor} = preped 
 
         events = store.events ++ events
 
-        streams = Map.put(streams, stream, Map.put(store_stream, :position, position))
-        Store{store | streams: streams, cursor: cursor, events: events}
+        streams = Map.put(streams, stream, Map.put(store_stream, :position, version))
+        %Store{store | streams: streams, cursor: cursor, events: events}
     end
 
 end

@@ -2,7 +2,7 @@ defmodule Signal.Events.BrokerTest do
     use ExUnit.Case, async: true
 
     alias Signal.VoidStore
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Events.Staged
     alias Signal.Stream.Broker
     alias Signal.Events.Recorder
@@ -98,7 +98,7 @@ defmodule Signal.Events.BrokerTest do
                 |> Signal.Execution.Task.new([app: app])
                 |> Signal.Command.Action.from()
 
-            event = Signal.Events.Event.new(deposited, action, 1)
+            event = Signal.Events.Event.new(deposited)
 
             staged = %Staged{
                 stage: self(),

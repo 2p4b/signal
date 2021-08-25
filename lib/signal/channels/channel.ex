@@ -19,7 +19,6 @@ defmodule Signal.Channels.Channel do
 
     @impl true
     def init(opts) do
-        Process.send(self(), :init, [])
         app = Keyword.get(opts, :app)
         name = Keyword.get(opts, :id)
         store = Keyword.get(opts, :store)
@@ -37,49 +36,14 @@ defmodule Signal.Channels.Channel do
     end
 
     @impl true
-    def handle_info(:init, %Channel{name: name, app: app, store: store}=state) do
-        ack = 
-            case store.get_index(app, name) do
-                nil -> 0
-                value -> value
-            end
-        Signal.Application.listen(app)
-        index = Signal.Events.Recorder.cursor(app)
-        {:noreply, %Channel{state | index: index, syn: ack, ack: ack} }
-    end
-
-    @impl true
-    def handle_info(:pull, state) do
-        state =
-            case pull_event(state) do
-                nil -> 
-                    state
-                {:error, _reason} ->
-                    sched_next()
-
-                %Event{topic: topic, number: number}=event ->
-                    if topic in state.topics do
-                        push_event(event, state)
-                    else
-                        handle_ack(number, state)
-                    end
-            end
-        {:noreply, state} 
-    end
-
-    @impl true
     def handle_info(%Event{topic: topic, number: number}=event, %Channel{topics: topics}=state) do
         state = 
             if topic in topics do
-                handle_event(event, state)
+                push_event(state, event)
             else
-                if (state.ack + 1) == number do
-                    handle_ack(number, state)
-                else
-                    state
-                end
+                state
             end
-        {:noreply, %Channel{state | index: number}}
+        {:noreply, %Channel{state | syn: number}}
     end
 
     @impl true
@@ -92,7 +56,7 @@ defmodule Signal.Channels.Channel do
 
         subscription = Enum.at(subscriptions, index) |> Map.put(:ack, number)
         subscriptions = List.replace_at(subscriptions, index, subscription)
-        {:noreply, handle_ack(number, %Channel{ state| subscriptions: subscriptions })} 
+        {:noreply, handle_ack(%Channel{state | subscriptions: subscriptions}, number)} 
     end
 
     @impl true
@@ -114,9 +78,6 @@ defmodule Signal.Channels.Channel do
                 state
             else
                 successor = Enum.max(subscriptions, &Map.get(&1, :ack))
-                if successor.syn == successor.ack do
-                    sched_next()
-                end
                 update_topics(%Channel{state | subscriptions: subscriptions, ack: successor.ack})
             end
         {:noreply, channel}
@@ -143,12 +104,6 @@ defmodule Signal.Channels.Channel do
     when is_list(topics) do
         {sub, channel} = handle_subscribe(state, topics, pid, opts)
 
-        # Do not pull for event if channel
-        # is waiting for an ack request
-        if state.syn == state.ack and state.index > state.ack do
-            sched_next()
-        end
-
         channel = update_topics(channel)
 
         #info = """
@@ -162,7 +117,9 @@ defmodule Signal.Channels.Channel do
         #"""
         #Logger.info(info)
 
-        {:reply, sub, channel} 
+        %{name: name, app: {app_module, _}} = channel
+        {:ok, %{ack: ack, syn: syn}} = app_module.subscribe(name, [topics: topics])
+        {:reply, sub, %Channel{channel | syn: syn, ack: ack}} 
     end
 
     @impl true
@@ -172,9 +129,6 @@ defmodule Signal.Channels.Channel do
         {:reply, sub, update_topics(channel)} 
     end
 
-    defp sched_next() do
-        Process.send(self(), :pull, [])
-    end
 
     defp update_topics(%Channel{subscriptions: subs}=state) do
         topics =
@@ -258,20 +212,7 @@ defmodule Signal.Channels.Channel do
         {sub, %Channel{ state | subscriptions: subs}}
     end
 
-    defp handle_event(%Event{}=event, %Channel{ack: ack, index: index}=channel) do
-        if ack == index do
-            push_event(event, channel)
-        else
-            channel
-        end
-    end
-
-    defp pull_event(%Channel{}=channel) do
-        %Channel{app: app, ack: ack, store: store} = channel
-        store.get_event(app, ack + 1)
-    end
-
-    defp push_event(%Event{topic: topic, number: number}=event, %Channel{}=channel) do
+    defp push_event(%Channel{}=channel, %Event{topic: topic, number: number}=event) do
         index =
             channel.subscriptions
             |> Enum.find_index(fn %Subscription{topics: topics} -> 
@@ -291,12 +232,9 @@ defmodule Signal.Channels.Channel do
         %Channel{channel | syn: number, subscriptions: subscriptions}
     end
 
-    defp handle_ack(number, %Channel{index: index, ack: ack, store: store}=channel) 
-    when number > ack do
-        {:ok, ack} = store.set_index(channel.app, channel.name, number)
-        if number < index do
-            sched_next()
-        end
+    defp handle_ack(%Channel{ack: ack, app: app}=channel, number) when number > ack do
+        {app_module, _tenant} = app
+        app_module.acknowledge(number)
         %Channel{channel| ack: ack}
     end
 

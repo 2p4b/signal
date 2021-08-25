@@ -98,22 +98,19 @@ defmodule Signal.Events.Producer do
 
         if is_map(event_streams) do
             case stage_event_streams(producer, action, event_streams) do
-                {:ok, staged} ->
-                    case app_module.publish(staged) do
+                {:ok, staged_streams} ->
+                    case app_module.publish(staged_streams) do
                         :ok ->
-                            confirm_staged(staged)
+                            confirm_staged(staged_streams)
 
-                            position = Enum.find_value(staged, position, fn 
+                            position = Enum.find_value(staged_streams, position, fn 
                                 %{stream: ^stream, version: version} ->
                                     version
                                 _ -> false
                             end)
 
-                            histories = Enum.map(staged, fn -> 
+                            histories = Enum.map(staged_streams, fn staged -> 
                                 struct(History, Map.from_struct(staged))
-                                |> Map.update(:events, [], fn events -> 
-                                    Enum.map(events, &(Event.payload(&1)))
-                                end)
                             end)
 
                             state = %Producer{producer| position: position}
@@ -121,7 +118,7 @@ defmodule Signal.Events.Producer do
                             {:reply, {:ok, histories}, state}
 
                         error ->
-                            rollback_staged(staged, error)
+                            rollback_staged(staged_streams, error)
                             {:reply, error, producer}
                     end
 

@@ -1,7 +1,7 @@
 defmodule Signal.Projector do
 
     alias Signal.Projector
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Subscription
     alias Signal.Channels.Channel
 

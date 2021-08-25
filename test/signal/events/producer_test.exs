@@ -92,7 +92,7 @@ defmodule Signal.Events.ProducerTest do
                 |> Signal.Execution.Task.new([app: {TestApp, TestApp}])
                 |> Signal.Command.Action.from()
 
-            {:ok, %{histories: histories}}  = Producer.process(action)
+            {:ok, histories}  = Producer.process(action)
             size = length(histories)
             assert size == 2
 

@@ -2,9 +2,8 @@ defmodule Signal.Events.ChannelTest do
     use ExUnit.Case, async: true
 
     alias Signal.VoidStore
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Events.Staged
-    alias Signal.Events.Recorder
     alias Signal.Channels.Channel
 
     defmodule TestApp do
@@ -82,21 +81,16 @@ defmodule Signal.Events.ChannelTest do
         @tag :channel
         test "should recieve events from bus" do
             app = {TestApp, :channel}
-            reduction = 1
 
             deposited = Deposited.new([amount: 5000])
 
             topic = Signal.Helper.module_to_string(Deposited)
 
+            TestApp.subscribe(__MODULE__, [topics: [topic]])
+
             %Signal.Subscription{} = Channel.subscribe(app, "Test.Channel", topic)
 
-            action =
-                [amount: 5000]
-                |> Deposite.new()
-                |> Signal.Execution.Task.new([app: app])
-                |> Signal.Command.Action.from()
-
-            event = Signal.Events.Event.new(deposited, action, reduction)
+            event = Signal.Events.Event.new(deposited, [])
 
             staged =
                 %Staged{
@@ -106,7 +100,8 @@ defmodule Signal.Events.ChannelTest do
                     stage: self()
                 }
 
-            Recorder.record(app, action, staged)
+
+            TestApp.publish([staged])
 
             data = Signal.Codec.encode(deposited)
 
