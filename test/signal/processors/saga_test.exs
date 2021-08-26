@@ -1,7 +1,7 @@
 defmodule Signal.Processor.SagaTest do
     use ExUnit.Case, async: true
 
-    alias Signal.VoidStore
+    alias Signal.Void.Store
 
     defmodule Accounts do
 
@@ -85,7 +85,7 @@ defmodule Signal.Processor.SagaTest do
     defmodule TestApp do
 
         use Signal.Application,
-            store: VoidStore
+            store: Store
 
         router Router
 
@@ -116,27 +116,32 @@ defmodule Signal.Processor.SagaTest do
         end
 
         def apply(%AccountOpened{pid: pid}=ev, %ActivityNotifier{}=act) do
+            IO.inspect(ev)
             Process.send(pid, ev, [])
             {:ok, %ActivityNotifier{act | pid: pid}}
         end
 
         def apply(%Deposited{amount: 4000}=ev, %ActivityNotifier{pid: pid, amount: 5000}=act) do
+            IO.inspect(ev)
             Process.send(pid, ev, [])
             bonus = %Deposite{account: "123", amount: 1000}
             {:dispatch, bonus , %ActivityNotifier{act | amount: 9000} }
         end
 
         def apply(%Deposited{amount: 1000}=ev, %ActivityNotifier{pid: pid, amount: amt}=act) do
+            IO.inspect(ev)
             Process.send(pid, ev, [])
             {:ok, %ActivityNotifier{act | amount: amt + 100} }
         end
 
         def halt(%Deposited{amount: 5000}=ev, %ActivityNotifier{pid: pid}=act) do
+            IO.inspect(ev)
             Process.send(pid, ev, [])
             {:stop, %ActivityNotifier{act | amount: 5000}}
         end
 
         def stop(%Deposited{amount: 5000}=ev, %ActivityNotifier{pid: pid}=act) do
+            IO.inspect(ev)
             Process.send(pid, ev, [])
             {:ok, %ActivityNotifier{act | amount: 5000}}
         end
@@ -148,7 +153,7 @@ defmodule Signal.Processor.SagaTest do
     end
 
     setup_all do
-        start_supervised(VoidStore)
+        start_supervised(Store)
         :ok
     end
 
@@ -167,17 +172,17 @@ defmodule Signal.Processor.SagaTest do
 
             TestApp.dispatch(Deposite.new([amount: 5000]), app: :saga)
 
-            assert_receive(%AccountOpened{ account: "123" }, 1000)
+            assert_receive(%AccountOpened{account: "123"}, 1000)
 
-            assert_receive(%Deposited{ amount: 5000 }, 1000)
+            assert_receive(%Deposited{amount: 5000}, 1000)
 
             Process.sleep(200)
             refute ActivityNotifier.alive?("123")
 
             TestApp.dispatch(Deposite.new([amount: 4000]), app: :saga)
 
-            assert_receive(%Deposited{ amount: 4000 }, 5000)
-            assert_receive(%Deposited{ amount: 1000 }, 5000)
+            assert_receive(%Deposited{amount: 4000}, 5000)
+            assert_receive(%Deposited{amount: 1000}, 5000)
         end
 
     end

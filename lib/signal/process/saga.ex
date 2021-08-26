@@ -89,17 +89,7 @@ defmodule Signal.Process.Saga do
 
         %Saga{app: app, module: module, store: store}=saga
 
-        updates = 
-            case store.get_state(app, identity(saga), :max) do
-                {version, %{state: state}=payload } when is_integer(version) ->
-                    state = Codec.load(struct(module, []), state)
-                    payload
-                    |> Map.put(:state, state)
-                    |> Map.put(:version, version)
-
-                _ ->
-                    %{version: 0}
-            end
+        updates = %{version: 0} 
 
         {:noreply, struct(saga, updates)}
     end
@@ -200,17 +190,6 @@ defmodule Signal.Process.Saga do
     end
 
     defp checkpoint(%Saga{}=saga) do
-        %Saga{app: app, state: state, store: store, version: version} = saga
-
-        payload = %{
-            ack: saga.ack,
-            state: Codec.encode(state),
-            status: saga.status,
-            version: version,
-        }
-
-        args = [app, identity(saga), version, payload]
-        {:ok, ^version} = Kernel.apply(store, :set_state, args) 
         saga
     end
 

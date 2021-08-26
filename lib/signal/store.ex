@@ -6,13 +6,13 @@ defmodule Signal.Store do
 
     @type iden :: {module::atom, id::binary} | binary
 
+    @type sub_handle :: binary() | list()
+
     @callback cursor(app::app) :: integer()
 
     @callback publish(events::list()) :: :ok | {:error, reason::term()}
 
-    @callback subscribe() :: {:ok, any} | {:error, reason::term()}
-
-    @callback subscribe(name::binary()) :: {:ok, any} | {:error, reason::term()}
+    @callback subscribe(handle::sub_handle) :: {:ok, any} | {:error, reason::term()}
 
     @callback subscribe(name::binary(), opts::list()) :: {:ok, any} | {:error, reason::term()}
 

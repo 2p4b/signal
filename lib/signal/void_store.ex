@@ -97,15 +97,15 @@ defmodule Signal.VoidStore do
 
     @impl true
     def handle_call({:record, %Snapshot{id: id}=snapshot}, _from, %Store{}=store) do
-        store = 
-            Map.update!(store, :snapshots, fn snapshots ->  
-                snaps = 
-                    Map.get(snapshots, id, %{})
-                    |> Map.put(snapshots.version, snapshot)
+        %Store{snapshots: snapshots} = store
+        versions =
+            snapshots
+            |> Map.get(id, %{})
+            |> Map.put(snapshot.version, snapshot)
 
-                Map.put(snapshots, id, snaps)
-            end)
-        {:reply, {:ok, id}, store}
+        snapshots = Map.put(snapshots, id, versions)
+
+        {:reply, {:ok, id}, %Store{store | snapshots: snapshots} }
     end
 
     @impl true
@@ -177,26 +177,27 @@ defmodule Signal.VoidStore do
     end
 
     @impl true
-    def subscribe() do
-        subscribe([])
-    end
+    def subscribe(opts \\ [])
 
-    @impl true
     def subscribe(opts) when is_list(opts) do
         subscribe(nil, [])
     end
 
-    @impl true
-    def subscribe(handle, opts \\ [])
+    def subscribe(handle) when is_binary(handle) do
+        subscribe(handle, [])
+    end
 
+    @impl true
     def subscribe(nil, opts) when is_list(opts) do
         GenServer.call(__MODULE__, {:subscribe, opts}, 5000)
     end
 
+    @impl true
     def subscribe(handle, opts) when is_list(opts) and is_atom(handle) do
         subscribe(Atom.to_string(handle), opts)
     end
 
+    @impl true
     def subscribe(handle, opts) when is_list(opts) and is_binary(handle) do
         opts = [handle: handle] ++ opts
         GenServer.call(__MODULE__, {:subscribe, opts}, 5000)

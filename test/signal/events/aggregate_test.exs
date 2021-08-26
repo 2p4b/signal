@@ -1,12 +1,12 @@
 defmodule Signal.Events.AggregateTest do
     use ExUnit.Case
 
-    alias Signal.VoidStore
+    alias Signal.Void.Store
     alias Signal.Stream.Event
 
     defmodule TestApp do
         use Signal.Application,
-            store: VoidStore
+            store: Store
     end
 
     defmodule Accounts do
@@ -49,7 +49,7 @@ defmodule Signal.Events.AggregateTest do
     end
 
     setup_all do
-        start_supervised(VoidStore)
+        start_supervised(Store)
         :ok
     end
 
@@ -67,63 +67,60 @@ defmodule Signal.Events.AggregateTest do
 
         @tag :aggregate
         test "should initialialize state" do
-            stream = Signal.Stream.stream(Deposited.new())
-            aggregate =
-                {TestApp, TestApp}
-                |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
-                |> Signal.Aggregates.Aggregate.state()
-
-            assert match?(%Accounts{number: "123"}, aggregate)
-
             deposited = Deposited.new([amount: 1])
 
             stream = Signal.Stream.stream(deposited)
 
-            event1 =
-                Event.new(deposited)
-                |> Event.index(1)
-
-            event2 =
-                Event.new(deposited)
-                |> Event.index(20)
-
-            {TestApp, TestApp}
-            |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
-            |> Signal.Aggregates.Aggregate.apply(event1)
-
-            {TestApp, TestApp}
-            |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
-            |> Signal.Aggregates.Aggregate.apply(event2)
-
-            account =
+            aggregate =
                 {TestApp, TestApp}
                 |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
-                |> Signal.Aggregates.Aggregate.state()
+
+            state = Signal.Aggregates.Aggregate.state(aggregate)
+
+            assert match?(%Accounts{number: "123"}, state)
+
+            event1 =
+                struct(Event, [])
+                |> Map.put(:type, Deposited)
+                |> Map.put(:data, Map.from_struct(deposited))
+                |> Map.put(:number, 1)
+                |> Map.put(:position, 1)
+
+            event2 =
+                struct(Event, Map.from_struct(deposited))
+                |> Map.put(:type, Deposited)
+                |> Map.put(:data, Map.from_struct(deposited))
+                |> Map.put(:number, 2)
+                |> Map.put(:position, 2)
+
+
+            Signal.Aggregates.Aggregate.apply(aggregate, event1)
+
+            Signal.Aggregates.Aggregate.apply(aggregate, event2)
+
+            account = Signal.Aggregates.Aggregate.state(aggregate)
 
             assert match?(%Accounts{number: "123", balance: 2}, account)
 
             deposited = Deposited.new([amount: 3])
 
-            stream = Signal.Stream.stream(deposited)
-
-            event =
-                Event.new(deposited)
-                |> Event.index(1)
-
-            aggregate =
-                {TestApp, TestApp}
-                |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
+            event3 = 
+                struct(Event, [])
+                |> Map.put(:type, Deposited)
+                |> Map.put(:data, Map.from_struct(deposited))
+                |> Map.put(:number, 3)
+                |> Map.put(:position, 3)
 
             task =
                 Task.async(fn ->
                     Signal.Aggregates.Aggregate.await(aggregate, 3)
                 end)
 
-            Signal.Aggregates.Aggregate.apply(aggregate, event)
+            Signal.Aggregates.Aggregate.apply(aggregate, event3)
 
             account = Task.await(task, :infinity)
 
-            assert match?(%Accounts{number: "123"}, account)
+            assert match?(%Accounts{number: "123", balance: 5}, account)
         end
     end
 

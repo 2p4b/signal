@@ -5,7 +5,7 @@ defmodule Signal.Application do
     defmacro __using__(opts) do
         name  = Keyword.get(opts, :name)
         store = Keyword.get(opts, :store)
-        quote do
+        quote generated: true, location: :keep do
             use Supervisor
 
             import unquote(__MODULE__)
@@ -33,7 +33,6 @@ defmodule Signal.Application do
 
                 children = [
                     { Phoenix.PubSub, name: Signal.Application.bus(app)},
-                    { Signal.Events.Recorder, default_args},
                     { Task.Supervisor, supervisor_args(Task, name)},
                     { Signal.Registry.Supervisor, default_args},
                     { Signal.Aggregates.Supervisor, default_args },
@@ -49,13 +48,12 @@ defmodule Signal.Application do
 
             def store(), do: @store
 
-            defdelegate subscribe(), to: @store
-
-            defdelegate subscribe(name), to: @store 
-
-            defdelegate subscribe(opts, name), to: @store
+            def subscribe(opts \\ [])
+            defdelegate subscribe(handle), to: @store 
+            defdelegate subscribe(handle, opts), to: @store
             
-            defdelegate unsubscribe(opts \\ []), to: @store
+            def unsubscribe(opts \\ [])
+            defdelegate unsubscribe(opts), to: @store
 
             defdelegate publish(staged, opts \\ []), to: @store
 

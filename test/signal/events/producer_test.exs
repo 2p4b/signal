@@ -1,13 +1,13 @@
 defmodule Signal.Events.ProducerTest do
     use ExUnit.Case, async: true
 
-    alias Signal.VoidStore
+    alias Signal.Void.Store
     alias Signal.Stream.History
     alias Signal.Events.Producer
 
     defmodule TestApp do
         use Signal.Application,
-            store: VoidStore
+            store: Store
     end
 
     defmodule Aggregate do
@@ -79,7 +79,7 @@ defmodule Signal.Events.ProducerTest do
     end
 
     setup_all do
-        start_supervised(VoidStore)
+        start_supervised(Store)
         {:ok, _pid} = start_supervised(TestApp)
         :ok
     end
@@ -106,7 +106,7 @@ defmodule Signal.Events.ProducerTest do
             assert length(first.events) == 1
 
             #stream.two events count
-            assert Kernel.hd(first.events) |> Map.get(:stream) == {Aggregate, "stream.one"}
+            assert Kernel.hd(first.events) |> Map.get(:type) == EventOne
 
             assert match?(%History{
                 stream: {Aggregate, "stream.two"},
@@ -115,7 +115,7 @@ defmodule Signal.Events.ProducerTest do
 
             assert length(second.events) == 2
             #stream.two events count
-            assert Kernel.hd(second.events) |> Map.get(:stream) == {Aggregate, "stream.two"}
+            assert Kernel.hd(second.events) |> Map.get(:type) == EventTwo
         end
 
     end

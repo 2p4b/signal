@@ -2,15 +2,14 @@ defmodule Signal.Processor.HandlerTest do
     use ExUnit.Case, async: true
 
     alias Signal.Handler
-    alias Signal.VoidStore
+    alias Signal.Void.Store
     alias Signal.Stream.Event
     alias Signal.Events.Staged
-    alias Signal.Events.Recorder
 
     defmodule TestApp do
 
         use Signal.Application,
-            store: VoidStore
+            store: Store
     end
 
     defmodule Accounts do
@@ -72,7 +71,7 @@ defmodule Signal.Processor.HandlerTest do
     end
 
     setup_all do
-        start_supervised(VoidStore)
+        start_supervised(Store)
         :ok
     end
 
@@ -87,8 +86,6 @@ defmodule Signal.Processor.HandlerTest do
         @tag :handler
         test "should recieve events from topics" do
 
-            app = {TestApp, TestApp}
-
             deposited = Deposited.new([amount: 5000])
 
             deposited2 = Deposited.new([amount: 4000])
@@ -97,15 +94,9 @@ defmodule Signal.Processor.HandlerTest do
 
             stream = Signal.Stream.stream(deposited)
 
-            action =
-                [amount: 5000]
-                |> Deposite.new()
-                |> Signal.Execution.Task.new([app: app])
-                |> Signal.Command.Action.from()
+            event1 = Signal.Events.Event.new(deposited, [])
 
-            event1 = Signal.Events.Event.new(deposited)
-
-            event2 = Signal.Events.Event.new(deposited2)
+            event2 = Signal.Events.Event.new(deposited2, [])
 
             staged1 = %Staged{
                 stage: self(),
@@ -118,13 +109,13 @@ defmodule Signal.Processor.HandlerTest do
                 stage: self(),
                 stream: stream,
                 events: [event2],
-                version: 1,
+                version: 2,
             }
 
-            Recorder.record(app, action, staged1)
+            TestApp.publish(staged1, [])
             assert_receive(%Deposited{ amount: 5000 })
 
-            Recorder.record(app, action, staged2)
+            TestApp.publish(staged2, [])
             assert_receive(%Deposited{ amount: 4000 })
             Process.sleep(1000)
         end

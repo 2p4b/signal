@@ -182,7 +182,7 @@ defmodule Signal.Events.Producer do
     def stage_events(%Producer{ position: index, stream: stream}, action, events, stage) 
     when is_list(events) and is_tuple(stream) and is_integer(index) and is_pid(stage) do
         {events, version} = 
-            Enum.map_reduce(events, index, fn event, acc -> 
+            Enum.map_reduce(events, index, fn event, index -> 
                 opts = [
                     causation_id: action.causation_id,
                     correlation_id: action.correlation_id,

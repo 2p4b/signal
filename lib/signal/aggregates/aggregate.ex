@@ -4,7 +4,6 @@ defmodule Signal.Aggregates.Aggregate do
     alias Signal.Codec
     alias Signal.Snapshot
     alias Signal.Stream.Event
-    alias Signal.Stream.Broker
     alias Signal.Stream.Reducer
     alias Signal.Aggregates.Aggregate
 
@@ -54,11 +53,14 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
-    def handle_info(%Event{number: number}=event, %Aggregate{app: app, stream: stream}=aggregate) do
+    def handle_info(%Event{}=event, %Aggregate{}=aggregate) do
         case apply_event(aggregate, event) do
             %Aggregate{} = aggregate ->
-                Broker.acknowledge(app, stream, number)
-                {:noreply, reply_waiters(aggregate)} 
+                aggregate =
+                    aggregate
+                    |> acknowledge(event)
+                    |> reply_waiters()
+                {:noreply, aggregate} 
 
             error ->
                 {:stop, error, aggregate}
@@ -67,7 +69,7 @@ defmodule Signal.Aggregates.Aggregate do
 
     @impl true
     def handle_info(:init, %Aggregate{}=aggregate) do
-    %Aggregate{app: {app_module, _tenant}, stream: stream}=aggregate
+        %Aggregate{app: {app_module, _tenant}, stream: stream}=aggregate
         aggregate = 
             case app_module.snapshot(aggregate_id(stream)) do
                 nil -> 
@@ -174,6 +176,12 @@ defmodule Signal.Aggregates.Aggregate do
 
     def aggregate_id(type, id) when is_binary(type) do
         type <> ":" <> id
+    end
+
+    defp acknowledge(%Aggregate{app: app}=aggregate, %Event{number: number}) do
+        {app_module, _tenant} = app
+        app_module.acknowledge(number, [])
+        aggregate
     end
 
     defp snapshot(%Aggregate{app: app, version: version, stream: stream}=aggregate) do

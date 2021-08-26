@@ -10,6 +10,7 @@ defmodule Signal.Channels.Channel do
     defstruct [:name, :index, :app, :syn, :ack, :subscriptions, :topics, :store]
 
     @doc """
+    @TODO move channel to store
     Starts a new execution queue.
     """
     def start_link(opts) do
