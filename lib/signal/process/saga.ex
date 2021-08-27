@@ -87,7 +87,7 @@ defmodule Signal.Process.Saga do
     @impl true
     def handle_info(:init, %Saga{}=saga) do
 
-        %Saga{app: app, module: module, store: store}=saga
+        %Saga{app: app}=saga
 
         updates = %{version: 0} 
 
@@ -132,7 +132,7 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info({:halt, %Event{number: number}=event}, %Saga{}=saga) do
+    def handle_cast({:halt, %Event{number: number}=event}, %Saga{}=saga) do
         %Saga{module: module, state: state} = saga
 
         case Kernel.apply(module, :halt, [Event.payload(event), state]) do
@@ -154,8 +154,12 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info(%Event{number: number}=event, %Saga{}=saga) do
-        case Kernel.apply(saga.module, :apply, [Event.payload(event), saga.state]) do
+    def handle_cast({action, %Event{number: number}=event}, %Saga{}=saga) 
+    when action in [:apply, :start, :start!, :apply!]do
+
+        %Saga{module: module, state} = saga
+
+        case Kernel.apply(module, :apply, [Event.payload(event), state]) do
             {:dispatch, command, state} ->
                 Process.send(self(), {:execute, command, Event.metadata(event)}, []) 
                 {:noreply, %Saga{ saga | state: state}}
@@ -169,9 +173,10 @@ defmodule Signal.Process.Saga do
         end
     end
 
-    defp execute(command, %Saga{app: {app_module, app_name}}, opts) do
-        opts = Keyword.merge(opts, [app: app_name])
-        Kernel.apply(app_module, :dispatch, [command, opts])
+    defp execute(command, %Saga{app: app}, opts) do
+        {application, tenant}  = app
+        opts = Keyword.merge(opts, [app: tenant])
+        Kernel.apply(application, :dispatch, [command, opts])
     end
 
     defp acknowledge(%Saga{id: id, module: module}=saga, number, status) do

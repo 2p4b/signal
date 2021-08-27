@@ -108,7 +108,7 @@ defmodule Signal.Processor.SagaTest do
         end
 
         def handle(%Deposited{account: id, amount: 4000}) do
-            {:continue, id}
+            {:apply, id}
         end
 
         def handle(%Deposited{amount: 5000, account: id}) do
@@ -116,32 +116,27 @@ defmodule Signal.Processor.SagaTest do
         end
 
         def apply(%AccountOpened{pid: pid}=ev, %ActivityNotifier{}=act) do
-            IO.inspect(ev)
             Process.send(pid, ev, [])
             {:ok, %ActivityNotifier{act | pid: pid}}
         end
 
         def apply(%Deposited{amount: 4000}=ev, %ActivityNotifier{pid: pid, amount: 5000}=act) do
-            IO.inspect(ev)
             Process.send(pid, ev, [])
             bonus = %Deposite{account: "123", amount: 1000}
             {:dispatch, bonus , %ActivityNotifier{act | amount: 9000} }
         end
 
         def apply(%Deposited{amount: 1000}=ev, %ActivityNotifier{pid: pid, amount: amt}=act) do
-            IO.inspect(ev)
             Process.send(pid, ev, [])
             {:ok, %ActivityNotifier{act | amount: amt + 100} }
         end
 
         def halt(%Deposited{amount: 5000}=ev, %ActivityNotifier{pid: pid}=act) do
-            IO.inspect(ev)
             Process.send(pid, ev, [])
             {:stop, %ActivityNotifier{act | amount: 5000}}
         end
 
         def stop(%Deposited{amount: 5000}=ev, %ActivityNotifier{pid: pid}=act) do
-            IO.inspect(ev)
             Process.send(pid, ev, [])
             {:ok, %ActivityNotifier{act | amount: 5000}}
         end

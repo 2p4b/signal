@@ -49,34 +49,38 @@ defmodule Signal.Process.Manager do
 
 
             @impl true
-            def handle_info(:start_processes, state) do
-                Router.handle_start_processes(state)
-            end
-
-
-            @impl true
-            def handle_info({:ack, id, number, ack}, state) do
-                Router.handle_ack({id, number, ack}, state)
+            def handle_info(:boot, router) do
+                Router.handle_boot(router)
             end
 
             @impl true
-            def handle_info({:ack, id, number}, state) do
-                Router.handle_ack({id, number}, state)
+            def handle_info({:next, id}, router) do
+                Router.handle_next(router, id)
             end
 
             @impl true
-            def handle_info({:DOWN, ref, :process, _obj, _rsn}, manager) do
-                Router.handle_down(ref, manager)
+            def handle_info({:ack, id, number, ack}, router) do
+                Router.handle_ack(router, {id, number, ack})
             end
 
             @impl true
-            def handle_info(%Event{}=event, state) do
-                Router.handle_event(event, state)
+            def handle_info({:ack, id, number}, router) do
+                Router.handle_ack(router, {id, number})
             end
 
             @impl true
-            def handle_call({:alive, id}, _from, state) do
-                Router.handle_alive(id, state)
+            def handle_info({:DOWN, ref, :process, _obj, _rsn}, router) do
+                Router.handle_down(router, ref)
+            end
+
+            @impl true
+            def handle_info(%Event{}=event, router) do
+                Router.handle_event(router, event)
+            end
+
+            @impl true
+            def handle_call({:alive, id}, _from, router) do
+                Router.handle_alive(router, id)
             end
 
             def alive?(id) do
