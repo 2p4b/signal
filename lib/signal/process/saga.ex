@@ -179,11 +179,9 @@ defmodule Signal.Process.Saga do
         Kernel.apply(application, :dispatch, [command, opts])
     end
 
-    defp acknowledge(%Saga{id: id, module: module}=saga, number, status) do
+    defp acknowledge(%Saga{id: id, module: router}=saga, number, status) do
 
-        module
-        |> GenServer.whereis()
-        |> Process.send({:ack, id, number, status}, [])
+        GenServer.cast(router, {:ack, id, number, status})
 
         %Saga{saga | ack: number, status: status}
         |> inc_version()

@@ -59,16 +59,6 @@ defmodule Signal.Process.Manager do
             end
 
             @impl true
-            def handle_info({:ack, id, number, ack}, router) do
-                Router.handle_ack(router, {id, number, ack})
-            end
-
-            @impl true
-            def handle_info({:ack, id, number}, router) do
-                Router.handle_ack(router, {id, number})
-            end
-
-            @impl true
             def handle_info({:DOWN, ref, :process, _obj, _rsn}, router) do
                 Router.handle_down(router, ref)
             end
@@ -76,6 +66,16 @@ defmodule Signal.Process.Manager do
             @impl true
             def handle_info(%Event{}=event, router) do
                 Router.handle_event(router, event)
+            end
+
+            @impl true
+            def handle_cast({:ack, id, number, ack}, router) do
+                Router.handle_ack(router, {id, number, ack})
+            end
+
+            @impl true
+            def handle_cast({:ack, id, number}, router) do
+                Router.handle_ack(router, {id, number})
             end
 
             @impl true
