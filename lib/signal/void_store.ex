@@ -177,6 +177,12 @@ defmodule Signal.VoidStore do
     end
 
     @impl true
+    def event(number, _opts) do
+        GenServer.call(__MODULE__, {:state, :events}, 5000)
+        |> Enum.find(&(Map.get(&1, :number) == number))
+    end
+
+    @impl true
     def subscribe(opts \\ [])
 
     def subscribe(opts) when is_list(opts) do

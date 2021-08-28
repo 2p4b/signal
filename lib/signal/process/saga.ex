@@ -87,9 +87,21 @@ defmodule Signal.Process.Saga do
     @impl true
     def handle_info(:init, %Saga{}=saga) do
 
-        %Saga{app: app}=saga
+        %Saga{app: app, module: module, id: id}=saga
 
-        updates = %{version: 0} 
+        {application, tenant} = app
+
+        {version, state} =
+            case application.snapshot(identity(saga), tenant: tenant) do
+                nil -> 
+                    initial_state = Kernel.apply(module, :init, [id])
+                    {0, initial_state} 
+                %{version: version, data: data}->
+                    state = Codec.load(struct(module, []), data)
+                    {version, state}
+            end
+
+        updates = %{version: version, state: state} 
 
         {:noreply, struct(saga, updates)}
     end
@@ -154,10 +166,16 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
+    def handle_cast({_action, %Event{number: number}}, %Saga{version: version}=saga)
+    when number < version do
+        {:noreply, saga}
+    end
+
+    @impl true
     def handle_cast({action, %Event{number: number}=event}, %Saga{}=saga) 
     when action in [:apply, :start, :start!, :apply!]do
 
-        %Saga{module: module, state} = saga
+        %Saga{module: module, state: state} = saga
 
         case Kernel.apply(module, :apply, [Event.payload(event), state]) do
             {:dispatch, command, state} ->

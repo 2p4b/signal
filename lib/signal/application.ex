@@ -48,10 +48,12 @@ defmodule Signal.Application do
 
             def store(), do: @store
 
+            defdelegate event(number, opts \\ []), to: @store
+
             def subscribe(opts \\ [])
             defdelegate subscribe(handle), to: @store 
             defdelegate subscribe(handle, opts), to: @store
-            
+
             def unsubscribe(opts \\ [])
             defdelegate unsubscribe(opts), to: @store
 

@@ -65,6 +65,11 @@ defmodule Signal.Void.Repo do
         GenServer.call(__MODULE__, {:state, :events}, 5000)
     end
 
+    def event(number) do
+        events()
+        |> Enum.find(&(Map.get(&1, :number) == number))
+    end
+
     def publish(staged) when is_list(staged) do
         GenServer.call(__MODULE__, {:publish, staged}, 5000)
     end

@@ -29,15 +29,17 @@ defmodule Signal.Process.Router do
             cond do
                 syn == ack and number > ack  and queue == [] ->
                     GenServer.cast(pid, {action, event})
-                    queue = Enum.filter(queue, fn 
-                        {_action, ^number} -> false
-                        _ -> true
-                    end)
+                    queue = 
+                        Enum.filter(queue, fn 
+                            ^number -> false
+                            _number -> true
+                        end)
                     %Proc{ proc | syn: number, queue: queue }
 
-                syn == ack and number > ack  ->
-                    queue = queue ++ List.wrap({action, number})
-                    %Proc{ proc | queue: queue }
+                syn >= ack and number > ack  ->
+                    %Proc{ proc | 
+                        queue: queue ++ List.wrap(number) 
+                    }
 
                 true ->
                     proc
@@ -73,10 +75,10 @@ defmodule Signal.Process.Router do
                 snapshot -> 
                     snapshot
             end
+
         procs = Enum.map(data, fn {id, ack} -> 
             pid = start_process(state, id)                        
             signal_continue(state, id, ack, true)
-            |> IO.inspect()
             Proc.new(id, pid, ack)
         end)
 
@@ -111,12 +113,12 @@ defmodule Signal.Process.Router do
 
             pid = start_process(state, id) 
 
-            {_ack, _status} = signal_continue(state, id, ack, true)
+            #{_ack, _status} = signal_continue(state, id, ack, true)
 
             queue =
                 cond do
-                    syn > ack and queue == [] ->
-                        List.wrap({:apply, syn})
+                    syn > ack ->
+                        List.wrap(syn) ++ queue
                         
                     true ->
                         queue
@@ -207,7 +209,6 @@ defmodule Signal.Process.Router do
             case {action, id} do
 
                 {:start, id}  ->
-
                     if is_nil(index) do
                         pid = start_process(state, id)
                         Proc.new(id, pid, ack)
@@ -215,13 +216,6 @@ defmodule Signal.Process.Router do
                         Enum.at(procs, index)
                     end
 
-                {:apply, _id} ->
-                    Enum.at(procs, index)
-
-                {:halt, _id}  ->
-                    Enum.at(procs, index)
-
-                        
                 {:start!, id}  ->
                     if is_nil(index) do
                         pid = start_process(state, id)
@@ -233,6 +227,14 @@ defmodule Signal.Process.Router do
                     end
 
 
+                {:apply, _id} ->
+                    Enum.at(procs, index)
+
+                {:halt, _id}  ->
+                    Enum.at(procs, index)
+
+                        
+
                 _unknown  -> nil
             end
 
@@ -243,7 +245,8 @@ defmodule Signal.Process.Router do
                 if is_nil(index) do
                     procs ++ [proc]
                 else
-                    List.update_at(procs, index, proc)
+                    fun = fn _process -> proc end
+                    List.update_at(procs, index, fun)
                 end
 
             state = %Router{state | procs: procs}
@@ -254,7 +257,7 @@ defmodule Signal.Process.Router do
         end
     end
 
-    defp handle_next(%Router{app: app, procs: procs}=state, id) do
+    def handle_next(%Router{app: app, procs: procs}=state, id) do
 
         {application, tenant} = app
 
@@ -265,20 +268,23 @@ defmodule Signal.Process.Router do
                 state
             else
                 proc = Enum.at(procs, index)
-                {action, number} = List.first(proc.queue)
+                number = List.first(proc.queue)
                 event = application.event(number, tenant: tenant)
-                proc = Proc.push_event(proc, {action, event})
-                procs = List.update_at(procs, index, proc)
-                %Router{state | procs: procs}
+                Process.send(self(), event, [])
+                state
             end
         {:noreply, router}
     end
 
     defp acknowledge(%Router{app: app}=state, %Event{number: number}) do
         {application, tenant} = app
-        application.acknowledge(number, tenant: tenant)
         %Router{subscription: sub} = state
-        %Router{state | subscription: Map.put(sub, :ack, number)}
+        if number > sub.ack  do
+            application.acknowledge(number, tenant: tenant)
+            %Router{state | subscription: Map.put(sub, :ack, number)}
+        else
+            state
+        end
     end
 
     defp log_state(%Router{}=state, procs) do

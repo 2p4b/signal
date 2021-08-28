@@ -11,6 +11,7 @@ defmodule Signal.Void.Store do
         Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
     end
 
+    @impl true
     def init(init_arg) do
         children = [Repo, Broker]
         opts = [strategy: :one_for_one, name: __MODULE__]
@@ -40,6 +41,11 @@ defmodule Signal.Void.Store do
     def publish(staged, opts) do
         List.wrap(staged)
         |> publish(opts)
+    end
+
+    @impl true
+    def event(number, _opts \\ []) do
+        Repo.event(number)
     end
 
     @impl true

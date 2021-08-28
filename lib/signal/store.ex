@@ -4,15 +4,14 @@ defmodule Signal.Store do
 
     @type stream :: {module::atom,  id::binary}
 
-    @type iden :: {module::atom, id::binary} | binary
-
-    @type sub_handle :: binary() | list()
+    @type handle :: binary() | list()
 
     @callback cursor(app::app) :: integer()
 
+    @callback event(number::integer(), opts::list()) :: term() | {:error, reason::term()}
     @callback publish(events::list()) :: :ok | {:error, reason::term()}
 
-    @callback subscribe(handle::sub_handle) :: {:ok, any} | {:error, reason::term()}
+    @callback subscribe(handle) :: {:ok, any} | {:error, reason::term()}
 
     @callback subscribe(name::binary(), opts::list()) :: {:ok, any} | {:error, reason::term()}
 
@@ -26,7 +25,7 @@ defmodule Signal.Store do
 
     @callback record(snapshot::term(), opts::list()) :: {:ok, integer()} | {:error, reason::term()}
 
-    @callback snapshot(iden::iden, opts::list()) :: term() | nil | {:error, reason::term()}
+    @callback snapshot(id::binary(), opts::list()) :: term() | nil | {:error, reason::term()}
 
     @callback acknowledge(number::integer, opts::list()) :: :ok | {:error, reason::term()}
 
