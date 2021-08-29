@@ -8,6 +8,8 @@ defmodule Signal.Process.Saga do
     alias Signal.Process.Supervisor
     alias Signal.Stream.Event.Metadata
 
+    require Logger
+
     defstruct [
         :app, :state, :store, :id, :module, :status,
         ack: 0, version: 0
@@ -103,6 +105,7 @@ defmodule Signal.Process.Saga do
 
         updates = %{version: version, state: state} 
 
+        log(saga, "starting from: #{version}")
         {:noreply, struct(saga, updates)}
     end
 
@@ -144,9 +147,10 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast({:halt, %Event{number: number}=event}, %Saga{}=saga) do
+    def handle_cast({:halt, %Event{type: type, number: number}=event}, %Saga{}=saga) do
         %Saga{module: module, state: state} = saga
 
+        log(saga, "halting: #{inspect(type)}")
         case Kernel.apply(module, :halt, [Event.payload(event), state]) do
 
             {:resume, state} ->
@@ -156,6 +160,7 @@ defmodule Signal.Process.Saga do
                 {:noreply, saga}
 
             {:stop, state} ->
+                log(saga, "stopped")
                 saga = 
                     %Saga{ saga | state: state} 
                     |> acknowledge(number, :stopped) 
@@ -172,11 +177,12 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast({action, %Event{number: number}=event}, %Saga{}=saga) 
-    when action in [:apply, :start, :start!, :apply!]do
+    def handle_cast({action, %Event{type: type, number: number}=event}, %Saga{}=saga) 
+    when action in [:apply, :start, :start!, :apply!] do
 
         %Saga{module: module, state: state} = saga
 
+        log(saga, "applying: #{inspect(type)}")
         case Kernel.apply(module, :apply, [Event.payload(event), state]) do
             {:dispatch, command, state} ->
                 Process.send(self(), {:execute, command, Event.metadata(event)}, []) 
@@ -220,6 +226,16 @@ defmodule Signal.Process.Saga do
 
     defp stop_process(%Saga{}) do
         exit(:normal)
+    end
+
+    defp log(%Saga{module: module, id: id}, info) do
+        info = """ 
+
+        [SAGA] #{inspect(module)} 
+               id: #{id}
+               #{info}
+        """
+        Logger.info(info)
     end
 
 

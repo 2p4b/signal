@@ -4,6 +4,7 @@ defmodule Signal.Void.Store do
     alias Signal.Snapshot
     alias Signal.Void.Repo
     alias Signal.Void.Broker
+    require Logger
 
     @behaviour Signal.Store
 
@@ -12,7 +13,7 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
-    def init(init_arg) do
+    def init(_init_arg) do
         children = [Repo, Broker]
         opts = [strategy: :one_for_one, name: __MODULE__]
         Supervisor.init(children, opts)
@@ -52,7 +53,7 @@ defmodule Signal.Void.Store do
     def subscribe(opts \\ [])
 
     def subscribe(opts) when is_list(opts) do
-        subscribe(nil, [])
+        subscribe(nil, opts)
     end
 
     def subscribe(handle) when is_binary(handle) do
@@ -61,7 +62,7 @@ defmodule Signal.Void.Store do
 
     @impl true
     def subscribe(nil, opts) when is_list(opts) do
-        GenServer.call(Broker, {:subscribe, opts}, 5000)
+        Broker.subscribe(nil, opts)
     end
 
     @impl true
@@ -72,32 +73,32 @@ defmodule Signal.Void.Store do
     @impl true
     def subscribe(handle, opts) when is_list(opts) and is_binary(handle) do
         opts = [handle: handle] ++ opts
-        GenServer.call(Broker, {:subscribe, opts}, 5000)
+        Broker.subscribe(handle, opts)
     end
 
     @impl true
     def unsubscribe(_opts \\ []) do
-        GenServer.call(Broker, :unsubscribe, 5000)
+        Broker.unsubscribe()
     end
 
     @impl true
     def subscription(_opts \\ []) do
-        GenServer.call(Broker, :subscription, 5000)
+        Broker.subscription()
     end
 
     @impl true
     def acknowledge(number, _opts \\ []) do
-        GenServer.cast(Broker, {:ack, self(), number})
+        Broker.acknowledge(number)
     end
 
     @impl true
-    def record(%Snapshot{}=snapshot, _opts) do
-        GenServer.call(Repo, {:record, snapshot}, 500)
+    def record(%Snapshot{}=snapshot, opts) do
+        Repo.record(snapshot, opts)
     end
 
     @impl true
     def snapshot(iden, opts) do
-        GenServer.call(Repo, {:snapshot, iden, opts}, 500)
+        Repo.snapshot(iden, opts)
     end
 
     @impl true

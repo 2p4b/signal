@@ -5,6 +5,8 @@ defmodule Signal.Process.Router do
     alias Signal.Stream.Event
     alias Signal.Process.Router
 
+    require Logger
+
     defstruct [:name, :store, :procs, :app, :topics, :subscription, :module]
 
 
@@ -64,7 +66,7 @@ defmodule Signal.Process.Router do
         {:ok, struct(__MODULE__, Keyword.merge(opts, params) )}
     end
 
-    def handle_boot(%Router{app: app, name: name}=state) do
+    def handle_boot(%Router{app: app, topics: topics, name: name}=state) do
         {application, tenant} = app
 
         %Snapshot{data: data} = 
@@ -86,7 +88,9 @@ defmodule Signal.Process.Router do
             procs
             |> Enum.min_by(&(Map.get(&1, :ack)), fn ->  %{ack: 0} end)
 
-        {:ok, sub} = application.subscribe(name, from: from, tenant: tenant)
+        subopts = [topics: topics, from: from, tenant: tenant]
+
+        {:ok, sub} = application.subscribe(name, subopts)
 
         {:noreply, %Router{state | subscription: sub, procs: procs}}
     end
@@ -276,11 +280,16 @@ defmodule Signal.Process.Router do
         {:noreply, router}
     end
 
-    defp acknowledge(%Router{app: app}=state, %Event{number: number}) do
-        {application, tenant} = app
-        %Router{subscription: sub} = state
+    defp acknowledge(%Router{}=state, %Event{}=event) do
+        %Event{number: number} = event
+        %Router{
+            app: {application, tenant}, 
+            subscription: sub 
+        } = state
+
         if number > sub.ack  do
             application.acknowledge(number, tenant: tenant)
+            log(state, "acknowledged: #{number}")
             %Router{state | subscription: Map.put(sub, :ack, number)}
         else
             state
@@ -321,6 +330,15 @@ defmodule Signal.Process.Router do
             Proc.new(id, pid, ack) 
             |> Map.put(:status, status)
         end)
+    end
+
+    def log(%Router{module: module}, info) do
+        info = """ 
+
+        [ROUTER] #{inspect(module)}
+                 #{info}
+        """
+        Logger.info(info)
     end
 
 end

@@ -1,10 +1,11 @@
 defmodule Signal.Void.Broker do
 
     use GenServer
-    alias Signal.Snapshot
     alias Signal.Void.Repo
     alias Signal.Void.Broker
     alias Signal.Stream.Event
+
+    require Logger
 
     defstruct [
         cursor: 0, 
@@ -97,11 +98,16 @@ defmodule Signal.Void.Broker do
     end
 
     @impl true
-    def handle_cast({:broadcast, event}, %Broker{}=store) do
+    def handle_cast({:broadcast, %{number: number}=event}, %Broker{}=store) do
+        info = """
+
+        [BROKER] published #{inspect(event.type)}
+        """
+        Logger.info(info)
         subs = Enum.map(store.subscriptions, fn sub -> 
             push_event(sub, event)
         end)
-        {:noreply, %Broker{store | subscriptions: subs}}
+        {:noreply, %Broker{store | subscriptions: subs, cursor: number}}
     end
 
     @impl true

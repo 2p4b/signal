@@ -127,7 +127,11 @@ defmodule Signal.Aggregates.Aggregate do
         case event do
             %Event{position: position} when position == (version + 1) ->
 
-                case Reducer.apply(state,Event.metadata(event),Event.payload(event)) do
+                metadata = Event.metadata(event)
+                
+                event_payload = Event.payload(event)
+
+                case Reducer.apply(state, metadata, event_payload) do
                     {:snapshot, state} ->
                         %Aggregate{aggregate | 
                             state: state,
@@ -145,7 +149,9 @@ defmodule Signal.Aggregates.Aggregate do
                 end
 
 
-            _ -> {:error, :out_of_order, event}
+            _ -> 
+                IO.inspect("expected version #{version+1} got #{event.position}")
+                {:error, :out_of_order, event}
         end
     end
 
@@ -185,13 +191,13 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     defp snapshot(%Aggregate{app: app, version: version, stream: stream}=aggregate) do
-        {app_module, _tenant} = app
+        {application, _tenant} = app
         snapshot = %Snapshot{
             id: aggregate_id(stream),
             data: encode(aggregate),
             version: version,
         }
-        app_module.record(snapshot)
+        application.record(snapshot)
         aggregate
     end
 
@@ -200,15 +206,16 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     def load(%Aggregate{state: state}=aggr, %Snapshot{}=snapshot) do
+        %Snapshot{version: version, data: data}=snapshot
         %Aggregate{aggr | 
-            version: snapshot.version, 
-            state: Codec.load(state, snapshot.data), 
+            version: version, 
+            state: Codec.load(state, data), 
         }
     end
 
     def listen(%Aggregate{app: app, stream: stream, version: version}) do
-        {app_module, _tenant} = app
-        app_module.subscribe([stream: stream, position: version])
+        {application, _tenant} = app
+        application.subscribe([stream: stream, position: version])
     end
 
 end
