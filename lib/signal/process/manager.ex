@@ -92,7 +92,7 @@ defmodule Signal.Process.Manager do
 
     defmacro __before_compile__(_env) do
         quote generated: true do
-            def handle(_event), do: :ok
+            def handle(_event), do: {:skip, nil}
         end
     end
 end

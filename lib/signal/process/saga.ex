@@ -147,33 +147,29 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast({:halt, %Event{type: type, number: number}=event}, %Saga{}=saga) do
+    def handle_cast({_action, %Event{number: number}}, %Saga{version: version}=saga)
+    when number < version do
+        {:noreply, saga}
+    end
+
+    @impl true
+    def handle_cast({:stop, %Event{type: type, number: number}=event}, %Saga{}=saga) do
         %Saga{module: module, state: state} = saga
 
-        log(saga, "halting: #{inspect(type)}")
-        case Kernel.apply(module, :halt, [Event.payload(event), state]) do
+        log(saga, "stopping: #{inspect(type)}")
+        case Kernel.apply(module, :stop, [Event.payload(event), state]) do
 
-            {:resume, state} ->
-                saga = 
-                    %Saga{ saga | state: state} 
-                    |> acknowledge(number, :running) 
-                {:noreply, saga}
-
-            {:stop, state} ->
+            {:ok, state} ->
                 log(saga, "stopped")
+
                 saga = 
-                    %Saga{ saga | state: state} 
-                    |> acknowledge(number, :stopped) 
+                    saga
+                    |> struct(%{ack: number, state: state})
+                    |> checkpoint()
 
                 stop_process(saga)
                 {:noreply, saga}
         end
-    end
-
-    @impl true
-    def handle_cast({_action, %Event{number: number}}, %Saga{version: version}=saga)
-    when number < version do
-        {:noreply, saga}
     end
 
     @impl true

@@ -41,19 +41,12 @@ defmodule Signal.Processor.SagaTest do
         end
     end
 
-
-    defmodule Deposite do
-
-        use Signal.Command,
+    defmodule AccountClosed do
+        use Signal.Event,
             stream: {Accounts, :account}
 
         schema do
             field :account,     String.t,   default: "123"
-            field :amount,      integer(),  default: 0
-        end
-
-        def handle(%Deposite{}=deposite, _params, %Accounts{}) do
-            Deposited.from(deposite)
         end
     end
 
@@ -72,6 +65,34 @@ defmodule Signal.Processor.SagaTest do
         end
     end
 
+    defmodule Deposite do
+
+        use Signal.Command,
+            stream: {Accounts, :account}
+
+        schema do
+            field :account,     String.t,   default: "123"
+            field :amount,      integer(),  default: 0
+        end
+
+        def handle(%Deposite{}=deposite, _params, %Accounts{}) do
+            Deposited.from(deposite)
+        end
+    end
+
+    defmodule CloseAccount do
+        use Signal.Command,
+            stream: {Accounts, :account}
+
+        schema do
+            field :account,     String.t,   default: "123"
+        end
+
+        def handle(%CloseAccount{}=cmd, _params, %Accounts{}) do
+            AccountClosed.from(cmd)
+        end
+    end
+
 
     defmodule Router do
 
@@ -79,6 +100,7 @@ defmodule Signal.Processor.SagaTest do
 
         register Deposite
         register OpenAccount
+        register CloseAccount
 
     end
 
@@ -95,7 +117,7 @@ defmodule Signal.Processor.SagaTest do
 
         use Signal.Process.Manager,
             application: TestApp,
-            topics: [AccountOpened, "user.deposited"]
+            topics: [AccountOpened, "user.deposited", AccountClosed]
 
         defstruct [:account, :amount, :pid]
 
@@ -107,41 +129,41 @@ defmodule Signal.Processor.SagaTest do
             {:start, account}
         end
 
-        def handle(%Deposited{account: id, amount: 4000}) do
+        def handle(%Deposited{account: id}) do
             {:apply, id}
         end
 
-        def handle(%Deposited{amount: 5000, account: id}) do
-            {:halt, id}
+        def handle(%AccountClosed{account: id}) do
+            {:stop, id}
+        end
+
+        defp acknowledge(%ActivityNotifier{pid: pid}, event) do
+            Process.send(pid, event, [])
         end
 
         def apply(%AccountOpened{pid: pid}=ev, %ActivityNotifier{}=act) do
-            Process.send(pid, ev, [])
-            {:ok, %ActivityNotifier{act | pid: pid}}
+            state = %ActivityNotifier{act | pid: pid}
+            acknowledge(state, ev)
+            {:ok, state}
         end
 
-        def apply(%Deposited{amount: 4000}=ev, %ActivityNotifier{pid: pid, amount: 5000}=act) do
-            Process.send(pid, ev, [])
-            bonus = %Deposite{account: "123", amount: 1000}
-            {:dispatch, bonus , %ActivityNotifier{act | amount: 9000} }
+        def apply(%Deposited{}=ev, %ActivityNotifier{amount: amt}=act) do
+            acknowledge(act, ev)
+            amount = ev.amount + amt
+            if amount == 9000 do
+                bonus = %Deposite{account: "123", amount: 1000}
+                {:dispatch, bonus , %ActivityNotifier{act | amount: amount} }
+            else
+                {:ok, %ActivityNotifier{act | amount: amount} }
+            end
         end
 
-        def apply(%Deposited{amount: 1000}=ev, %ActivityNotifier{pid: pid, amount: amt}=act) do
-            Process.send(pid, ev, [])
-            {:ok, %ActivityNotifier{act | amount: amt + 100} }
+        def stop(%AccountClosed{}=ev, %ActivityNotifier{}=act) do
+            acknowledge(act, ev)
+            {:ok, act}
         end
 
-        def halt(%Deposited{amount: 5000}=ev, %ActivityNotifier{pid: pid}=act) do
-            Process.send(pid, ev, [])
-            {:stop, %ActivityNotifier{act | amount: 5000}}
-        end
-
-        def stop(%Deposited{amount: 5000}=ev, %ActivityNotifier{pid: pid}=act) do
-            Process.send(pid, ev, [])
-            {:ok, %ActivityNotifier{act | amount: 5000}}
-        end
-
-        def error(%Deposite{amount: 1000}, _error, %ActivityNotifier{}=acc) do
+        def error(%Deposite{}, _error, %ActivityNotifier{}=acc) do
             {:ok, acc}
         end
 
@@ -171,13 +193,17 @@ defmodule Signal.Processor.SagaTest do
 
             assert_receive(%Deposited{amount: 5000}, 1000)
 
-            Process.sleep(200)
-            refute ActivityNotifier.alive?("123")
-
             TestApp.dispatch(Deposite.new([amount: 4000]), app: :saga)
 
-            assert_receive(%Deposited{amount: 4000}, 5000)
-            assert_receive(%Deposited{amount: 1000}, 5000)
+            assert_receive(%Deposited{amount: 4000}, 1000)
+            assert_receive(%Deposited{amount: 1000}, 1000)
+
+            TestApp.dispatch(CloseAccount.new([]), app: :saga, await: true)
+
+            assert_receive(%AccountClosed{}, 1000)
+
+            Process.sleep(2000)
+            refute ActivityNotifier.alive?("123")
         end
 
     end

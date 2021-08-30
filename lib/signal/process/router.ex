@@ -26,10 +26,13 @@ defmodule Signal.Process.Router do
         end
 
         def push_event(%Proc{}=proc, {action, %Event{number: number}=event}) do
+
             %Proc{ pid: pid, syn: syn, ack: ack, queue: queue} =  proc
 
+            qnext = Enum.min(queue, &<=/2, fn -> number end)
+
             cond do
-                syn == ack and number > ack  and queue == [] ->
+                syn == ack and number > ack and qnext == number ->
                     GenServer.cast(pid, {action, event})
                     queue = 
                         Enum.filter(queue, fn 
@@ -38,7 +41,7 @@ defmodule Signal.Process.Router do
                         end)
                     %Proc{ proc | syn: number, queue: queue }
 
-                syn >= ack and number > ack  ->
+                number > syn  ->
                     %Proc{ proc | 
                         queue: queue ++ List.wrap(number) 
                     }
@@ -210,9 +213,17 @@ defmodule Signal.Process.Router do
         index = Enum.find_index(procs, &(Map.get(&1, :id) == id))
 
         proc =
-            case {action, id} do
+            case {action, index} do
 
-                {:start, id}  ->
+                {:stop, index} ->
+                    if is_nil(index) do
+                        nil
+                    else
+                        Enum.at(procs, index)
+                    end
+
+
+                {:start, index}  ->
                     if is_nil(index) do
                         pid = start_process(state, id)
                         Proc.new(id, pid, ack)
@@ -220,43 +231,58 @@ defmodule Signal.Process.Router do
                         Enum.at(procs, index)
                     end
 
-                {:start!, id}  ->
+                {:start!, index}  ->
                     if is_nil(index) do
                         pid = start_process(state, id)
                         Proc.new(id, pid, index)
                     else
                         Enum.at(procs, index)
-                        |> IO.inspect(label: "PROCESS ALREADY UP")
+                        |> IO.inspect(label: "PROCESS ALREADY STARTED")
                         nil
                     end
 
 
-                {:apply, _id} ->
+                {:apply, index} when is_integer(index) ->
                     Enum.at(procs, index)
 
-                {:halt, _id}  ->
+
+                {:halt, index}  when is_integer(index) ->
                     Enum.at(procs, index)
 
                         
+                    _ ->  nil
 
-                _unknown  -> nil
             end
 
         if proc do
             proc = Proc.push_event(proc, {action, event})
 
+            %Proc{queue: queue, ref: ref} = proc
+
             procs = 
-                if is_nil(index) do
-                    procs ++ [proc]
-                else
-                    fun = fn _process -> proc end
-                    List.update_at(procs, index, fun)
+                case {action, index} do
+                    {:stop, index} when is_integer(index) and queue == [] ->
+                        Process.demonitor(ref)
+                        Enum.filter(procs, fn %Proc{id: pid} -> pid !== id end)
+
+                    {_action, nil} ->
+                        procs ++ [proc]
+
+                    {_action, index} when is_integer(index) ->
+                        fun = fn _process -> proc end
+                        List.update_at(procs, index, fun)
+
+                    _ ->
+                        procs
                 end
 
             state = %Router{state | procs: procs}
 
             state = acknowledge(state, event)
 
+            {:noreply, log_state(state, procs)}
+        else
+            state = acknowledge(state, event)
             {:noreply, log_state(state, procs)}
         end
     end
