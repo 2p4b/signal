@@ -1,7 +1,7 @@
 defmodule Signal.Events.ChannelTest do
     use ExUnit.Case, async: true
 
-    alias Signal.VoidStore
+    alias Signal.Void.Store
     alias Signal.Stream.Event
     alias Signal.Events.Staged
     alias Signal.Channels.Channel
@@ -9,7 +9,7 @@ defmodule Signal.Events.ChannelTest do
     defmodule TestApp do
 
         use Signal.Application,
-            store: VoidStore
+            store: Store
     end
 
     defmodule Accounts do
@@ -51,7 +51,7 @@ defmodule Signal.Events.ChannelTest do
     end
 
     setup_all do
-        start_supervised(VoidStore)
+        start_supervised(Store)
         :ok
     end
 

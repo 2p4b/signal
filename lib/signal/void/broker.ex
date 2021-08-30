@@ -40,16 +40,23 @@ defmodule Signal.Void.Broker do
     @impl true
     def handle_call({:subscribe, opts}, {pid, _ref}=from, %Broker{}=store) do
         %Broker{subscriptions: subscriptions} = store
-        events = Repo.events()
         subscription = Enum.find(subscriptions, &(Map.get(&1, :pid) == pid))
+
         if is_nil(subscription) do
             subscription = create_subscription(store, pid, opts)
             GenServer.reply(from, {:ok, subscription})
             position = subscription.from
+
             subscriptions =
-                Enum.filter(events, &(Map.get(&1, :number) > position))
-                |> Enum.reduce(subscription, fn event, sub -> 
-                    push_event(sub, event)
+                Repo.events()
+                |> Enum.filter(&(Map.get(&1, :number) > position))
+                |> Enum.find_value(subscription, fn event -> 
+                    sub = push_event(subscription, event) 
+                    if sub.syn == subscription.syn do
+                        false
+                    else
+                        sub
+                    end
                 end)
                 |> List.wrap()
                 |> Enum.concat(subscriptions)
@@ -114,6 +121,11 @@ defmodule Signal.Void.Broker do
     def handle_cast({:ack, pid, number}, %Broker{}=store) do
         store = handle_ack(store, pid, number)
         {:noreply, store}
+    end
+
+    defp push_event(%{syn: syn, ack: ack}=sub, _ev)
+    when syn != ack do
+        sub
     end
 
     defp push_event(%{handle: handle, syn: syn, ack: ack}=sub, _event)

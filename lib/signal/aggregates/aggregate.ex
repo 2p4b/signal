@@ -123,7 +123,6 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp apply_event(%Aggregate{}=aggregate, %Event{number: number}=event) do
         %Aggregate{version: version, state: state} = aggregate
-
         case event do
             %Event{position: position} when position == (version + 1) ->
 

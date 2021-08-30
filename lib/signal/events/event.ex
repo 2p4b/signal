@@ -3,9 +3,7 @@ defmodule Signal.Events.Event do
     use Signal.Type
 
     alias Signal.Codec
-    alias Signal.Stream
     alias Signal.Events.Event
-    alias Signal.Command.Action
 
     schema enforce: true do
         field :topic,           String.t()

@@ -3,9 +3,7 @@ defmodule Signal.Stream.Event do
     use Signal.Type
 
     alias Signal.Codec
-    alias Signal.Stream
     alias Signal.Stream.Event
-    alias Signal.Command.Action
 
     defmodule Metadata do
 
@@ -38,7 +36,7 @@ defmodule Signal.Stream.Event do
         field :timestamp,       term()
     end
 
-    defp encode(%{__struct__: type}=payload) when is_struct(payload) do
+    def encode(%{__struct__: type}=payload) when is_struct(payload) do
         {type, Codec.encode(payload)}
     end
 
