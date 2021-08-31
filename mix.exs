@@ -10,6 +10,7 @@ defmodule Signal.MixProject do
             deps_path: "../../deps",
             lockfile: "../../mix.lock",
             elixir: "~> 1.11",
+            elixirc_paths: elixirc_paths(Mix.env()),
             start_permanent: Mix.env() == :prod,
             consolidate_protocols: Mix.env() != :test,
             deps: deps()
@@ -23,6 +24,10 @@ defmodule Signal.MixProject do
             mod: {Signal, []}
         ]
     end
+
+    # Specifies which paths to compile per environment.
+    defp elixirc_paths(:test), do: ["lib", "test/support"]
+    defp elixirc_paths(_), do: ["lib"]
 
     # Run "mix help deps" to learn about dependencies.
     defp deps do

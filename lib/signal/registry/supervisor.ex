@@ -17,8 +17,6 @@ defmodule Signal.Registry.Supervisor do
         children = [
             { Registry, registry_args(app, Aggregate) },
             { Registry, registry_args(app, Producer) },
-            { Registry, registry_args(app, Channel) },
-            { Registry, registry_args(app, Broker) },
             { Registry, registry_args(app, Queue) },
             { Registry, registry_args(app, Saga) },
         ]

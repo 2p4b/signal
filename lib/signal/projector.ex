@@ -5,7 +5,7 @@ defmodule Signal.Projector do
     alias Signal.Subscription
     alias Signal.Channels.Channel
 
-    defstruct [:app, :name]
+    defstruct [:app, :name, :module]
 
     defmacro __using__(opts) do
         app = Keyword.get(opts, :application)
@@ -43,30 +43,31 @@ defmodule Signal.Projector do
             end
 
             @impl true
-            def handle_info(%Event{}=event, %Projector{}=handler) do
-                Projector.handle_event(__MODULE__, event, handler)
+            def handle_info(%Event{}=event, %Projector{}=projector) do
+                Projector.handle_event(projector, event)
             end
 
         end
     end
 
 
-    def init(_module, opts) do
+    def init(module, opts) do
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
         application = Keyword.get(opts, :application)
-        app_name = Keyword.get(opts, :app, application)
-        app = {application, app_name}
-        %Subscription{} = subscribe(app, name, topics)
-        params = [name: name, app: app]
+        tenant = Keyword.get(opts, :tenant, application)
+        app = {application, tenant}
+        {:ok, _sub} = subscribe(app, name, topics)
+        params = [name: name, app: app, module: module]
         {:ok, struct(__MODULE__, params)} 
     end
 
     def subscribe(app, name, topics) do
+        {application, tenant} = app
         Enum.find_value(1..5, fn _x -> 
-            case Channel.subscribe(app, name, topics) do
-                %Subscription{} = subscription ->
-                    subscription
+            case application.subscribe(name, topics: topics, tenant: tenant) do
+                {:ok, subscription} ->
+                    {:ok, subscription}
                 _ ->
                     Process.sleep(50)
                     false
@@ -74,15 +75,16 @@ defmodule Signal.Projector do
         end)
     end
 
-    def handle_event(module, %Event{number: number}=event, handler) do
-        %Projector{app: app, name: name} = handler
+    def handle_event(%Projector{}=projector, %Event{number: number}=event) do
+        %Projector{app: app, module: module} = projector
+        {application, tenant} = app
         args = [Event.payload(event), Event.metadata(event)]
         response = Kernel.apply(module, :project, args)
-        Channel.acknowledge(app, name, number)
-        handle_response(response, handler)
+        application.acknowledge(number, tenant: tenant)
+        handle_response(projector, response)
     end
 
-    def handle_response(response, %Projector{}=handler) do
+    def handle_response(%Projector{}=handler, response) do
         case response do
             :stop ->
                 {:stop, :stopped, handler}

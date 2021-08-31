@@ -32,15 +32,12 @@ defmodule Signal.Application do
                 default_args = [app: app, store: @store]
 
                 children = [
-                    { Phoenix.PubSub, name: Signal.Application.bus(app)},
                     { Task.Supervisor, supervisor_args(Task, name)},
                     { Signal.Registry.Supervisor, default_args},
                     { Signal.Aggregates.Supervisor, default_args },
                     { Signal.Execution.Supervisor, default_args },
-                    { Signal.Channels.Supervisor, default_args },
                     { Signal.Process.Supervisor, default_args },
                     { Signal.Events.Supervisor, default_args },
-                    { Signal.Stream.Supervisor, default_args },
                 ]
                 opts = [strategy: :one_for_one, name: Signal.Application.name({__MODULE__, name}, Supervisor)]
                 Supervisor.init(children, opts)

@@ -2,9 +2,8 @@ defmodule Signal.Handler do
 
     alias Signal.Handler
     alias Signal.Stream.Event
-    alias Signal.Channels.Channel
 
-    defstruct [:app, :name, :state]
+    defstruct [:app, :state, :module]
 
     defmacro __using__(opts) do
         app = Keyword.get(opts, :application)
@@ -13,7 +12,7 @@ defmodule Signal.Handler do
         quote do
             use GenServer
             alias Signal.Handler
-            alias Signal.Events.Event
+            alias Signal.Stream.Event
 
             @app unquote(app)
 
@@ -43,7 +42,7 @@ defmodule Signal.Handler do
 
             @impl true
             def handle_info(%Event{}=event, %Handler{}=handler) do
-                Handler.handle_event(__MODULE__, event, handler)
+                Handler.handle_event(handler, event)
             end
 
             @impl true
@@ -78,14 +77,13 @@ defmodule Signal.Handler do
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
         application = Keyword.get(opts, :application)
-        app_name = Keyword.get(opts, :app, application)
-        app = {application, app_name}
+        tenant = Keyword.get(opts, :tenant, application)
+        app = {application, tenant}
         subscription = subscribe(app, name, topics)
-        init_params = [app: app_name, name: name]
-
+        init_params = []
         case Kernel.apply(module, :init, [subscription, init_params]) do
             {:ok, state} ->
-                params = [name: name, state: state, app: app]
+                params = [state: state, app: app, module: module]
                 {:ok, struct(__MODULE__, params)} 
             error -> 
                 error
@@ -93,10 +91,11 @@ defmodule Signal.Handler do
     end
 
     def subscribe(app, name, topics) do
+        {application, tenant} = app
         Enum.find_value(1..5, fn _x -> 
-            case Channel.subscribe(app, name, topics) do
-                %Signal.Subscription{} = subscription ->
-                    subscription
+            case application.subscribe(name, topics: topics, tenant: tenant) do
+                {:ok, subscription} ->
+                    {:ok, subscription}
                 _ ->
                     Process.sleep(50)
                     false
@@ -105,16 +104,17 @@ defmodule Signal.Handler do
     end
 
 
-    def handle_event(module, event, handler) do
+    def handle_event(handler, event) do
         %Event{number: number} = event
-        %Handler{app: app, name: name, state: state} = handler
+        %Handler{app: app, module: module, state: state} = handler
+        {application, tenant} = app
         args = [Event.payload(event), Event.metadata(event), state]
         response = Kernel.apply(module, :handle_event, args)
-        Channel.acknowledge(app, name, number)
-        handle_response(response, handler)
+        application.acknowledge(number, tenant: tenant)
+        handle_response(handler, response)
     end
 
-    def handle_response(response, %Handler{}=handler) do
+    def handle_response(%Handler{}=handler, response) do
         case response do
             {:noreply, state} ->
                 {:noreply, %Handler{handler | state: state}}

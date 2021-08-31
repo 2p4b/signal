@@ -6,11 +6,9 @@ defmodule Signal.Events.Producer do
     alias Signal.Events
     alias Signal.Events.Event
     alias Signal.Events.Staged
-    alias Signal.Events.Record
     alias Signal.Stream.History
     alias Signal.Command.Action
     alias Signal.Command.Handler
-    alias Signal.Events.Recorder
     alias Signal.Events.Producer
 
     defstruct [:app, :stream, position: 0]
