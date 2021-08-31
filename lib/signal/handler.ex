@@ -111,10 +111,10 @@ defmodule Signal.Handler do
         args = [Event.payload(event), Event.metadata(event), state]
         response = Kernel.apply(module, :handle_event, args)
         application.acknowledge(number, tenant: tenant)
-        handle_response(handler, response)
+        handle_response(response, handler)
     end
 
-    def handle_response(%Handler{}=handler, response) do
+    def handle_response(response, %Handler{}=handler) do
         case response do
             {:noreply, state} ->
                 {:noreply, %Handler{handler | state: state}}

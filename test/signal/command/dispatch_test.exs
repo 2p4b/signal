@@ -3,13 +3,13 @@ defmodule Signal.Command.DispatchTest do
     use ExUnit.Case
 
     alias Signal.Result
-    alias Signal.VoidStore
+    alias Signal.Void.Store
     alias Signal.Stream.History
     alias Signal.Execution.Task
 
     defmodule TestApplication do
         use Signal.Application,
-            store: VoidStore
+            store: Store
 
         queue :default, timeout: 5000, retries: 0
     end
@@ -59,7 +59,7 @@ defmodule Signal.Command.DispatchTest do
     end
 
     setup do
-        {:ok, _pid} = start_supervised(VoidStore)
+        {:ok, _pid} = start_supervised(Store)
         {:ok, _pid} = start_supervised(TestApplication)
         :ok
     end
@@ -81,7 +81,7 @@ defmodule Signal.Command.DispatchTest do
 
         @tag :dispatcher
         test "should execute task" do
-            {:ok, %{histories: histories}} =
+            {:ok, histories} =
                 Deposite.new([amount: 5000])
                 |> Signal.Execution.Task.new([
                     timeout: :infinity,
