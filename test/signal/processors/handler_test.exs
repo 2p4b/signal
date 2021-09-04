@@ -4,7 +4,7 @@ defmodule Signal.Processor.HandlerTest do
     alias Signal.Handler
     alias Signal.Void.Store
     alias Signal.Stream.Event
-    alias Signal.Events.Staged
+    alias Signal.Events.Stage
 
     defmodule TestApp do
 
@@ -98,14 +98,14 @@ defmodule Signal.Processor.HandlerTest do
 
             event2 = Signal.Events.Event.new(deposited2, [])
 
-            staged1 = %Staged{
+            staged1 = %Stage{
                 stage: self(),
                 stream: stream,
                 events: [event1],
                 version: 1,
             }
 
-            staged2 = %Staged{
+            staged2 = %Stage{
                 stage: self(),
                 stream: stream,
                 events: [event2],

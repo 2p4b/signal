@@ -314,7 +314,7 @@ defmodule Signal.Process.Router do
         } = state
 
         if number > sub.ack  do
-            application.acknowledge(number, tenant: tenant)
+            application.acknowledge(sub.handle, number, tenant: tenant)
             log(state, "acknowledged: #{number}")
             %Router{state | subscription: Map.put(sub, :ack, number)}
         else

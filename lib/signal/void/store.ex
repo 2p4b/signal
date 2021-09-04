@@ -20,7 +20,7 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
-    def cursor(_app) do
+    def index(_app) do
         GenServer.call(__MODULE__, {:state, :cursor}, 5000)
     end
 

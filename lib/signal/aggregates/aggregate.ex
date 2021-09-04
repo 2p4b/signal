@@ -12,6 +12,7 @@ defmodule Signal.Aggregates.Aggregate do
         :store,
         :state, 
         :stream, 
+        :subscription,
         index: 0, 
         version: 0,
         awaiting: [],
@@ -78,8 +79,7 @@ defmodule Signal.Aggregates.Aggregate do
                 snapshot ->
                     load(aggregate, snapshot)
             end
-        listen(aggregate)
-        {:noreply, aggregate}
+        {:noreply, listen(aggregate)}
     end
 
     @impl true
@@ -183,9 +183,10 @@ defmodule Signal.Aggregates.Aggregate do
         type <> ":" <> id
     end
 
-    defp acknowledge(%Aggregate{app: app}=aggregate, %Event{number: number}) do
+    defp acknowledge(%Aggregate{}=aggregate, %Event{number: number}) do
+        %Aggregate{app: app, subscription: %{handle: handle}}=aggregate
         {app_module, _tenant} = app
-        app_module.acknowledge(number, [])
+        app_module.acknowledge(handle, number, [])
         aggregate
     end
 
@@ -212,9 +213,10 @@ defmodule Signal.Aggregates.Aggregate do
         }
     end
 
-    def listen(%Aggregate{app: app, stream: stream, version: version}) do
+    def listen(%Aggregate{app: app, stream: stream, version: version}=aggr) do
         {application, _tenant} = app
-        application.subscribe([stream: stream, position: version])
+        subscription = application.subscribe([stream: stream, position: version])
+        %Aggregate{aggr| subscription: subscription}
     end
 
 end

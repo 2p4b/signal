@@ -3,7 +3,7 @@ defmodule Signal.Handler do
     alias Signal.Handler
     alias Signal.Stream.Event
 
-    defstruct [:app, :state, :module]
+    defstruct [:app, :state, :module, :subscription]
 
     defmacro __using__(opts) do
         app = Keyword.get(opts, :application)
@@ -83,7 +83,7 @@ defmodule Signal.Handler do
         init_params = []
         case Kernel.apply(module, :init, [subscription, init_params]) do
             {:ok, state} ->
-                params = [state: state, app: app, module: module]
+                params = [state: state, app: app, subscription: subscription, module: module]
                 {:ok, struct(__MODULE__, params)} 
             error -> 
                 error
@@ -106,11 +106,16 @@ defmodule Signal.Handler do
 
     def handle_event(handler, event) do
         %Event{number: number} = event
-        %Handler{app: app, module: module, state: state} = handler
+        %Handler{
+            app: app, 
+            module: module, 
+            state: state, 
+            subscription: %{handle: handle}
+        } = handler
         {application, tenant} = app
         args = [Event.payload(event), Event.metadata(event), state]
         response = Kernel.apply(module, :handle_event, args)
-        application.acknowledge(number, tenant: tenant)
+        application.acknowledge(handle, number, tenant: tenant)
         handle_response(response, handler)
     end
 

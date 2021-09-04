@@ -2,11 +2,11 @@ defmodule Signal.Command.QueueTest do
 
     use ExUnit.Case, async: true
 
-    alias Signal.VoidStore
+    alias Signal.Void.Store
 
     defmodule TestApplication do
         use Signal.Application,
-            store: VoidStore
+            store: Store
 
         queue default: [timeout: :infinity]
         queue :thread, timeout: 500
@@ -14,13 +14,13 @@ defmodule Signal.Command.QueueTest do
     end
 
     setup_all do
-        {:ok, _pid} = start_supervised(VoidStore)
+        {:ok, _pid} = start_supervised(Store)
         {:ok, _pid} = start_supervised({TestApplication, [name: :queue]})
         :ok
     end
 
     describe "Queue" do
-        
+
         @tag :queue
         test "should have options" do
             assert 500 == TestApplication.queue(:thread) |> Keyword.get(:timeout)

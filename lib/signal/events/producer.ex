@@ -5,7 +5,7 @@ defmodule Signal.Events.Producer do
     alias Signal.Result
     alias Signal.Events
     alias Signal.Events.Event
-    alias Signal.Events.Staged
+    alias Signal.Events.Stage
     alias Signal.Stream.History
     alias Signal.Command.Action
     alias Signal.Command.Handler
@@ -38,15 +38,15 @@ defmodule Signal.Events.Producer do
     end
 
     @impl true
-    def handle_call({:stage, action, events}, from, %Producer{}=state) 
+    def handle_call({:stage, action, events}, from, %Producer{}=state)
     when is_list(events) do
 
         %Producer{app: app} = state
 
-        channel = 
+        channel =
             app
             |> Signal.Application.supervisor(Task)
-            |> Task.Supervisor.async_nolink(fn -> 
+            |> Task.Supervisor.async_nolink(fn ->
                 receive do
                     {:ok, version} ->
                         {:ok, version}
@@ -61,7 +61,7 @@ defmodule Signal.Events.Producer do
 
         stage = stage_events(state, action, events, channel.pid)
 
-        %Staged{version: version} = stage
+        %Stage{version: version} = stage
 
         GenServer.reply(from, stage)
 
@@ -89,7 +89,7 @@ defmodule Signal.Events.Producer do
 
         aggregate = aggregate_state(producer, action.consistent)
 
-        event_streams = 
+        event_streams =
             command
             |> handle_command(result, aggregate)
             |> group_events_by_stream()
@@ -101,13 +101,13 @@ defmodule Signal.Events.Producer do
                         :ok ->
                             confirm_staged(staged_streams)
 
-                            position = Enum.find_value(staged_streams, position, fn 
+                            position = Enum.find_value(staged_streams, position, fn
                                 %{stream: ^stream, version: version} ->
                                     version
                                 _ -> false
                             end)
 
-                            histories = Enum.map(staged_streams, fn staged -> 
+                            histories = Enum.map(staged_streams, fn staged ->
                                 struct(History, Map.from_struct(staged))
                             end)
 
@@ -128,7 +128,7 @@ defmodule Signal.Events.Producer do
         end
     end
 
-    def stage_event_streams(%Producer{}=producer, action, stream_events) 
+    def stage_event_streams(%Producer{}=producer, action, stream_events)
     when is_map(stream_events) do
         %Producer{app: app, stream: stream} = producer
 
@@ -138,14 +138,14 @@ defmodule Signal.Events.Producer do
             stream_events
             |> Enum.map(fn
                 {^stream, events} ->
-                    Task.Supervisor.async_nolink(task_supervisor, fn -> 
+                    Task.Supervisor.async_nolink(task_supervisor, fn ->
                         stage_events(producer, action, events, self())
                     end)
 
 
                 {stream, events} ->
                     # Process event steams in parallel
-                    Task.Supervisor.async_nolink(task_supervisor, fn -> 
+                    Task.Supervisor.async_nolink(task_supervisor, fn ->
                         app
                         |> Signal.Events.Supervisor.prepare_producer(stream)
                         |> stage_events(action, events)
@@ -153,12 +153,12 @@ defmodule Signal.Events.Producer do
 
             end)
             |> Task.yield_many(:infinity)
-            |> Enum.map(fn {_task, res} -> 
+            |> Enum.map(fn {_task, res} ->
                 case res do
-                    {:ok, resp} -> 
+                    {:ok, resp} ->
                         resp
 
-                    {:exit, reason} -> 
+                    {:exit, reason} ->
                         {:error, reason}
                 end
             end)
@@ -177,10 +177,10 @@ defmodule Signal.Events.Producer do
         GenServer.call(producer, {:stage, action, events})
     end
 
-    def stage_events(%Producer{ position: index, stream: stream}, action, events, stage) 
+    def stage_events(%Producer{ position: index, stream: stream}, action, events, stage)
     when is_list(events) and is_tuple(stream) and is_integer(index) and is_pid(stage) do
-        {events, version} = 
-            Enum.map_reduce(events, index, fn event, index -> 
+        {events, version} =
+            Enum.map_reduce(events, index, fn event, index ->
                 opts = [
                     causation_id: action.causation_id,
                     correlation_id: action.correlation_id,
@@ -188,10 +188,10 @@ defmodule Signal.Events.Producer do
                 event = Event.new(event, opts)
                 {event, index + 1}
             end)
-        %Staged{events: events, version: version, stream: stream, stage: stage}
+        %Stage{events: events, version: version, stream: stream, stage: stage}
     end
 
-    def process(%Action{stream: stream, app: app}=action) do 
+    def process(%Action{stream: stream, app: app}=action) do
         Events.Supervisor.prepare_producer(app, stream)
         |> GenServer.call({:process, action}, :infinity)
     end
@@ -233,17 +233,17 @@ defmodule Signal.Events.Producer do
                 event when is_struct(event) ->
                     [event]
 
-                event when is_list(event) -> 
+                event when is_list(event) ->
                     event
 
                 {:error, reason} ->
                     Result.error(reason)
             end
         rescue
-            raised -> 
+            raised ->
                 {:error, :raised, {raised, __STACKTRACE__}}
         catch
-            thrown -> 
+            thrown ->
                 {:error, :threw, {thrown, __STACKTRACE__}}
         end
     end
@@ -253,10 +253,10 @@ defmodule Signal.Events.Producer do
         try do
             Enum.group_by(events, &event_stream!/1)
         rescue
-            raised -> 
+            raised ->
                 {:error, :raised, {raised, __STACKTRACE__}}
         catch
-            thrown -> 
+            thrown ->
                 {:error, :threw, {thrown, __STACKTRACE__}}
         end
     end
@@ -281,13 +281,13 @@ defmodule Signal.Events.Producer do
             struct(module, [])
             stream
         rescue
-            _error -> 
+            _error ->
                 raise(Signal.Exception.InvalidStreamError, [stream: stream])
         end
     end
 
     defp confirm_staged(staged) do
-        Enum.each(staged, fn %Staged{version: version, stage: stage}->  
+        Enum.each(staged, fn %Stage{version: version, stage: stage}->
             Process.send(stage, {:ok, version}, [])
         end)
     end
@@ -295,12 +295,12 @@ defmodule Signal.Events.Producer do
     defp rollback_staged(staged, error) when is_list(staged) do
         reason =
             case error do
-                {:error, reason} -> 
+                {:error, reason} ->
                     reason
                 _ -> nil
             end
-        Enum.each(staged, fn 
-            %Staged{stage: stage} ->  
+        Enum.each(staged, fn
+            %Stage{stage: stage} ->
                 Process.send(stage, {:rollback, reason}, [:nosuspend])
             _ ->
                 nil
@@ -309,5 +309,3 @@ defmodule Signal.Events.Producer do
 
 
 end
-
-

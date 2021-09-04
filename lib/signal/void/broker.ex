@@ -32,18 +32,23 @@ defmodule Signal.Void.Broker do
     end
 
     @impl true
-    def handle_call(:subscription, {pid, _ref}, %Broker{subscriptions: subs}=store) do
-        subscription = Enum.find(subs, &(Map.get(&1, :pid) == pid))
+    def handle_call({:subscription, handle}, {pid, _ref}, %Broker{subscriptions: subs}=store) do
+        subscription = Enum.find(subs, fn sub -> 
+            sub.id == pid and sub.handle == handle
+        end)
         {:reply, subscription, store} 
     end
 
     @impl true
-    def handle_call({:subscribe, opts}, {pid, _ref}=from, %Broker{}=store) do
+    def handle_call({:subscribe, handle, opts}, {pid, _ref}=from, %Broker{}=store) do
         %Broker{subscriptions: subscriptions} = store
-        subscription = Enum.find(subscriptions, &(Map.get(&1, :pid) == pid))
+
+        subscription = Enum.find(subs, fn sub -> 
+            sub.id == pid and sub.handle == handle
+        end)
 
         if is_nil(subscription) do
-            subscription = create_subscription(store, pid, opts)
+            subscription = create_subscription(store, handle, pid, opts)
             GenServer.reply(from, {:ok, subscription})
             position = subscription.from
 
@@ -68,9 +73,9 @@ defmodule Signal.Void.Broker do
     end
 
     @impl true
-    def handle_call(:unsubscribe, {pid, _ref}, %Broker{}=store) do
-        subscriptions = Enum.filter(store.subscriptions, fn %{pid: spid} -> 
-            spid != pid 
+    def handle_call({:unsubscribe, handle}, {pid, _ref}, %Broker{}=store) do
+        subscriptions = Enum.filter(store.subscriptions, fn sub -> 
+            not(sub.id == pid and sub.handle == handle)
         end)
         {:reply, :ok, %Broker{store | subscriptions: subscriptions}} 
     end
@@ -173,7 +178,7 @@ defmodule Signal.Void.Broker do
             end
 
         if valid_stream and valid_topic do
-            Process.send(sub.pid, event, []) 
+            Process.send(sub.id, event, []) 
             Map.put(sub, :syn, number)
         else
             sub
@@ -181,13 +186,14 @@ defmodule Signal.Void.Broker do
     end
 
 
-    defp create_subscription(%Broker{cursor: cursor}, pid, opts) do
+    defp create_subscription(%Broker{cursor: cursor}, handle, id, opts) do
         from = Keyword.get(opts, :from, cursor)
         topics = Keyword.get(opts, :topics, [])
         stream = Keyword.get(opts, :stream, nil)
-        handle = Keyword.get(opts, :handle, nil)
+        log = Keyword.get(opts, :log, false)
         %{
-            pid: pid,
+            id: id,
+            log: log,
             ack: from,
             syn: from,
             from: from,
@@ -205,7 +211,7 @@ defmodule Signal.Void.Broker do
         else
             subscriptions = List.update_at(subscriptions, index, fn subscription -> 
                 if cursor > subscription.ack do
-                    Process.send(self(), {:next, subscription.pid}, [])
+                    Process.send(self(), {:next, subscription.id}, [])
                 end
                 Map.put(subscription, :ack, number)
             end)
@@ -225,28 +231,23 @@ defmodule Signal.Void.Broker do
         end
     end
 
-    def subscribe(nil, opts) when is_list(opts) do
-        GenServer.call(__MODULE__, {:subscribe, opts}, 5000)
-    end
-
     def subscribe(handle, opts) when is_list(opts) and is_atom(handle) do
         subscribe(Atom.to_string(handle), opts)
     end
 
     def subscribe(handle, opts) when is_list(opts) and is_binary(handle) do
-        opts = [handle: handle] ++ opts
-        GenServer.call(__MODULE__, {:subscribe, opts}, 5000)
+        GenServer.call(__MODULE__, {:subscribe, handle, opts}, 5000)
     end
 
-    def unsubscribe() do
-        GenServer.call(__MODULE__, :unsubscribe, 5000)
+    def unsubscribe(handle, _opts) do
+        GenServer.call(__MODULE__, {handle, :unsubscribe}, 5000)
     end
 
-    def subscription(_opts \\ []) do
-        GenServer.call(__MODULE__, :subscription, 5000)
+    def subscription(handle, _opts \\ []) do
+        GenServer.call(__MODULE__, {handle, :subscription}, 5000)
     end
 
-    def acknowledge(number) do
-        GenServer.cast(__MODULE__, {:ack, self(), number})
+    def acknowledge(handle, number) do
+        GenServer.cast(__MODULE__, {:ack, handle, self(), number})
     end
 end

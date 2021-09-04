@@ -10,8 +10,8 @@ defmodule Signal.Stream.Event do
         use Signal.Type
 
         schema enforce: true do
-            field :type,            atom()
             field :uuid,            String.t()
+            field :type,            atom()
             field :topic,           String.t()
             field :stream,          String.t()
             field :position,        integer()
@@ -42,10 +42,6 @@ defmodule Signal.Stream.Event do
 
     def payload(%Event{data: data, type: type}) do
         Codec.load(struct(type, []), data)
-    end
-
-    def index(%Event{number: nil}=event, number) when is_integer(number) do
-        %Event{event | number: number}
     end
 
     def metadata(%Event{}=event) do

@@ -110,7 +110,7 @@ defmodule Signal.Void.Repo do
                 number = number + 1
                 position = position + 1
                 event = %Event{
-                    uuid: UUID.uuid4(), 
+                    uuid: UUID.uuid4(),
                     stream: stream,
                     number: number,
                     position: position,

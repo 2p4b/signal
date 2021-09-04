@@ -2,10 +2,8 @@ defmodule Signal.Projector do
 
     alias Signal.Projector
     alias Signal.Stream.Event
-    alias Signal.Subscription
-    alias Signal.Channels.Channel
 
-    defstruct [:app, :name, :module]
+    defstruct [:app, :name, :module, :subscription]
 
     defmacro __using__(opts) do
         app = Keyword.get(opts, :application)
@@ -57,8 +55,8 @@ defmodule Signal.Projector do
         application = Keyword.get(opts, :application)
         tenant = Keyword.get(opts, :tenant, application)
         app = {application, tenant}
-        {:ok, _sub} = subscribe(app, name, topics)
-        params = [name: name, app: app, module: module]
+        {:ok, sub} = subscribe(app, name, topics)
+        params = [name: name, app: app, module: module, subscription: sub]
         {:ok, struct(__MODULE__, params)} 
     end
 
@@ -76,11 +74,15 @@ defmodule Signal.Projector do
     end
 
     def handle_event(%Projector{}=projector, %Event{number: number}=event) do
-        %Projector{app: app, module: module} = projector
+        %Projector{
+            app: app, 
+            module: module, 
+            subscription: %{handle: handle}
+        } = projector
         {application, tenant} = app
         args = [Event.payload(event), Event.metadata(event)]
         response = Kernel.apply(module, :project, args)
-        application.acknowledge(number, tenant: tenant)
+        application.acknowledge(handle, number, tenant: tenant)
         handle_response(projector, response)
     end
 

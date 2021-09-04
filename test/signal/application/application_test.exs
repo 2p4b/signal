@@ -3,14 +3,14 @@ defmodule Signal.ApplicationTest do
 
     defmodule App do
         use Signal.Application,
-            store: Signal.VoidStore
+            store: Signal.Void.Store
     end
 
     setup do
         {:ok, _pid} = start_supervised(App)
         :ok
     end
-    
+
     describe "Application test" do
 
         @tag :application

@@ -6,14 +6,14 @@ defmodule Signal.Store do
 
     @type handle :: binary() | list()
 
-    @callback cursor(app::app) :: integer()
+    @callback index(opts::list()) :: integer()
 
     @callback event(number::integer(), opts::list()) :: term() | {:error, reason::term()}
     @callback publish(events::list()) :: :ok | {:error, reason::term()}
 
     @callback subscribe(handle) :: {:ok, any} | {:error, reason::term()}
 
-    @callback subscribe(name::binary(), opts::list()) :: {:ok, any} | {:error, reason::term()}
+    @callback subscribe(handle, opts::list()) :: {:ok, any} | {:error, reason::term()}
 
     @callback unsubscribe(opts::list()) :: :ok | {:error, reason::term()}
 
@@ -27,7 +27,7 @@ defmodule Signal.Store do
 
     @callback snapshot(id::binary(), opts::list()) :: term() | nil | {:error, reason::term()}
 
-    @callback acknowledge(number::integer, opts::list()) :: :ok | {:error, reason::term()}
+    @callback acknowledge(handle, number::integer, opts::list()) :: :ok | {:error, reason::term()}
 
 end
 
