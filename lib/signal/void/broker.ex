@@ -43,7 +43,7 @@ defmodule Signal.Void.Broker do
     def handle_call({:subscribe, handle, opts}, {pid, _ref}=from, %Broker{}=store) do
         %Broker{subscriptions: subscriptions} = store
 
-        subscription = Enum.find(subs, fn sub -> 
+        subscription = Enum.find(subscriptions, fn sub -> 
             sub.id == pid and sub.handle == handle
         end)
 
@@ -81,31 +81,19 @@ defmodule Signal.Void.Broker do
     end
 
     @impl true
-    def handle_call({:next, position, opts}, _from, %Broker{}=store) 
-    when is_integer(position) do
-        {:ok, stream} = Keyword.fetch(opts, :stream)
-        event = 
-            Repo.events()
-            |> Enum.find(fn %Event{stream: estream, number: number} -> 
-                stream == estream and number > position
-            end)
-        {:reply, event, store} 
-    end
-
-    @impl true
-    def handle_info({:next, pid}, %Broker{}=store) do
-        %Broker{subscriptions: subs} = store
-        index = Enum.find_index(subs, &(Map.get(&1, :pid) == pid))
+    def handle_info({:next, pid}, %Broker{}=broker) do
+        %Broker{subscriptions: subs} =broker
+        index = Enum.find_index(subs, &(Map.get(&1, :id) == pid))
         if is_nil(index) do
-            {:noreply, store}
+            {:noreply, broker}
         else
             subs =
-                store
+                broker
                 |> Map.get(:subscriptions)
                 |> List.update_at(index, fn sub -> 
-                    push_next(store, sub)
+                    push_next(broker, sub)
                 end)
-            {:noreply, %Broker{store | subscriptions: subs}}
+            {:noreply, %Broker{broker| subscriptions: subs}}
         end
     end
 
@@ -123,9 +111,9 @@ defmodule Signal.Void.Broker do
     end
 
     @impl true
-    def handle_cast({:ack, pid, number}, %Broker{}=store) do
-        store = handle_ack(store, pid, number)
-        {:noreply, store}
+    def handle_cast({:ack, handle, pid, number}, %Broker{}=broker) do
+        broker = handle_ack(broker, handle, pid, number)
+        {:noreply, broker}
     end
 
     defp push_event(%{syn: syn, ack: ack}=sub, _ev)
@@ -203,9 +191,11 @@ defmodule Signal.Void.Broker do
         }
     end
 
-    defp handle_ack(%Broker{}=store, pid, number) do
+    defp handle_ack(%Broker{}=store, handle, pid, number) do
         %Broker{subscriptions: subscriptions, cursor: cursor} = store
-        index = Enum.find_index(subscriptions, &(Map.get(&1, :pid) == pid))
+        index = Enum.find_index(subscriptions, fn sub -> 
+            sub.id == pid and sub.handle == handle
+        end)
         if is_nil(index) do
             store
         else
@@ -250,4 +240,5 @@ defmodule Signal.Void.Broker do
     def acknowledge(handle, number) do
         GenServer.cast(__MODULE__, {:ack, handle, self(), number})
     end
+
 end

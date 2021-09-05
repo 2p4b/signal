@@ -47,12 +47,25 @@ defmodule Signal.Application do
 
             defdelegate event(number, opts \\ []), to: @store
 
-            def subscribe(opts \\ [])
-            defdelegate subscribe(handle), to: @store 
+            def subscribe(opts) when is_list(opts) do
+                self()
+                |> Signal.Application.handle_from_pid()
+                |> subscribe(opts ++ [log: false])
+            end
+
+            def subscribe(handle) when is_binary(handle) do
+                subscribe(handle, [])
+            end
+
             defdelegate subscribe(handle, opts), to: @store
 
-            def unsubscribe(opts \\ [])
-            defdelegate unsubscribe(opts), to: @store
+            def unsubscribe(opts \\ []) do
+                self()
+                |> Signal.Application.handle_from_pid()
+                |> unsubscribe(opts)
+            end
+
+            defdelegate unsubscribe(handle, opts), to: @store
 
             defdelegate publish(staged, opts \\ []), to: @store
 
@@ -62,7 +75,7 @@ defmodule Signal.Application do
 
             defdelegate record(snapshot, opts \\ []), to: @store
 
-            defdelegate acknowledge(number, opts \\ []), to: @store
+            defdelegate acknowledge(handle, number, opts \\ []), to: @store
 
             defp supervisor_args(type, name) do
                 [name: Signal.Application.supervisor({__MODULE__, name}, type)]
@@ -73,6 +86,11 @@ defmodule Signal.Application do
             end
 
         end
+    end
+
+    def handle_from_pid(pid) when is_pid(pid) do
+        :crypto.hash(:md5 , inspect(pid)) 
+        |> Base.encode16()
     end
 
     def store({module, _name}) do
@@ -197,4 +215,5 @@ defmodule Signal.Application do
         end
 
     end
+
 end

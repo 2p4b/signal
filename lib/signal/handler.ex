@@ -79,7 +79,7 @@ defmodule Signal.Handler do
         application = Keyword.get(opts, :application)
         tenant = Keyword.get(opts, :tenant, application)
         app = {application, tenant}
-        subscription = subscribe(app, name, topics)
+        {:ok, subscription} = subscribe(app, name, topics)
         init_params = []
         case Kernel.apply(module, :init, [subscription, init_params]) do
             {:ok, state} ->

@@ -50,45 +50,28 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
-    def subscribe(opts \\ [])
-
-    def subscribe(opts) when is_list(opts) do
-        subscribe(nil, opts)
-    end
-
-    def subscribe(handle) when is_binary(handle) do
-        subscribe(handle, [])
-    end
-
-    @impl true
-    def subscribe(nil, opts) when is_list(opts) do
-        Broker.subscribe(nil, opts)
-    end
-
-    @impl true
     def subscribe(handle, opts) when is_list(opts) and is_atom(handle) do
         subscribe(Atom.to_string(handle), opts)
     end
 
     @impl true
     def subscribe(handle, opts) when is_list(opts) and is_binary(handle) do
-        opts = [handle: handle] ++ opts
         Broker.subscribe(handle, opts)
     end
 
     @impl true
-    def unsubscribe(_opts \\ []) do
-        Broker.unsubscribe()
+    def unsubscribe(handle, _opts \\ []) do
+        Broker.unsubscribe(handle)
     end
 
     @impl true
-    def subscription(_opts \\ []) do
-        Broker.subscription()
+    def subscription(handle, _opts \\ []) do
+        Broker.subscription(handle)
     end
 
     @impl true
-    def acknowledge(number, _opts \\ []) do
-        Broker.acknowledge(number)
+    def acknowledge(handle, number, _opts \\ []) do
+        Broker.acknowledge(handle, number)
     end
 
     @impl true

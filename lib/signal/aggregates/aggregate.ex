@@ -1,6 +1,5 @@
 defmodule Signal.Aggregates.Aggregate do
     use GenServer
-
     alias Signal.Codec
     alias Signal.Snapshot
     alias Signal.Stream.Event
@@ -215,7 +214,7 @@ defmodule Signal.Aggregates.Aggregate do
 
     def listen(%Aggregate{app: app, stream: stream, version: version}=aggr) do
         {application, _tenant} = app
-        subscription = application.subscribe([stream: stream, position: version])
+        {:ok, subscription} = application.subscribe([stream: stream, position: version])
         %Aggregate{aggr| subscription: subscription}
     end
 

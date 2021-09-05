@@ -306,24 +306,24 @@ defmodule Signal.Process.Router do
         {:noreply, router}
     end
 
-    defp acknowledge(%Router{}=state, %Event{}=event) do
+    defp acknowledge(%Router{}=router, %Event{}=event) do
         %Event{number: number} = event
         %Router{
             app: {application, tenant}, 
             subscription: sub 
-        } = state
+        } =router
 
         if number > sub.ack  do
             application.acknowledge(sub.handle, number, tenant: tenant)
-            log(state, "acknowledged: #{number}")
-            %Router{state | subscription: Map.put(sub, :ack, number)}
+            log(router, "acknowledged: #{number}")
+            %Router{router| subscription: Map.put(sub, :ack, number)}
         else
-            state
+            router
         end
     end
 
-    defp log_state(%Router{}=state, procs) do
-        %Router{state | procs: procs}
+    defp log_state(%Router{}=router, procs) do
+        %Router{router| procs: procs}
     end
 
     defp sched_next(%Proc{id: id}) do
