@@ -50,11 +50,11 @@ defmodule Signal.Application do
             def subscribe(opts) when is_list(opts) do
                 self()
                 |> Signal.Application.handle_from_pid()
-                |> subscribe(opts ++ [log: false])
+                |> subscribe(opts ++ [track: false])
             end
 
             def subscribe(handle) when is_binary(handle) do
-                subscribe(handle, [])
+                subscribe(handle, [track: true])
             end
 
             defdelegate subscribe(handle, opts), to: @store

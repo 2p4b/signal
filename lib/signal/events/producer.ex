@@ -101,8 +101,10 @@ defmodule Signal.Events.Producer do
                         :ok ->
                             confirm_staged(staged_streams)
 
+                            {_, stream_id} = stream
+
                             position = Enum.find_value(staged_streams, position, fn
-                                %{stream: ^stream, version: version} ->
+                                %{stream: ^stream_id, version: version} ->
                                     version
                                 _ -> false
                             end)
@@ -178,7 +180,8 @@ defmodule Signal.Events.Producer do
     end
 
     def stage_events(%Producer{ position: index, stream: stream}, action, events, stage)
-    when is_list(events) and is_tuple(stream) and is_integer(index) and is_pid(stage) do
+    when is_list(events) and is_integer(index) and is_pid(stage) do
+        {_, stream_id} = stream
         {events, version} =
             Enum.map_reduce(events, index, fn event, index ->
                 opts = [
@@ -188,20 +191,12 @@ defmodule Signal.Events.Producer do
                 event = Event.new(event, opts)
                 {event, index + 1}
             end)
-        %Stage{events: events, version: version, stream: stream, stage: stage}
+        %Stage{events: events, version: version, stream: stream_id, stage: stage}
     end
 
     def process(%Action{stream: stream, app: app}=action) do
         Events.Supervisor.prepare_producer(app, stream)
         |> GenServer.call({:process, action}, :infinity)
-    end
-
-    def stream_id(%Producer{stream: stream}) do
-        stream_id(stream)
-    end
-
-    def stream_id({type, id}) do
-        Signal.Helper.module_to_string(type) <> ":" <> id
     end
 
     defp calibrate(%Producer{app: app, stream: stream}=prod) do
@@ -210,7 +205,7 @@ defmodule Signal.Events.Producer do
         %Producer{prod | position: position}
     end
 
-    defp aggregate_state(%Producer{ app: app, stream: stream}, _consistency) do
+    defp aggregate_state(%Producer{ app: app, stream: stream}, _version) do
         Signal.Aggregates.Supervisor.prepare_aggregate(app, stream)
         |> Signal.Aggregates.Aggregate.state()
     end

@@ -3,6 +3,7 @@ defmodule Signal.Events.Event do
     use Signal.Type
 
     alias Signal.Codec
+    alias Signal.Helper
     alias Signal.Events.Event
 
     schema enforce: true do
@@ -26,11 +27,12 @@ defmodule Signal.Events.Event do
     end
 
     defp encode(%{__struct__: type}=payload) when is_struct(payload) do
-        {type, Codec.encode(payload)}
+        {Helper.module_to_string(type), Codec.encode(payload)}
     end
 
     def payload(%Event{data: data, type: type}) do
-        Codec.load(struct(type, []), data)
+        module = Helper.string_to_module(type)
+        Codec.load(struct(module, []), data)
     end
 
 end

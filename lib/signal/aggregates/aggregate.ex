@@ -7,6 +7,7 @@ defmodule Signal.Aggregates.Aggregate do
     alias Signal.Aggregates.Aggregate
 
     defstruct [
+        :id,
         :app, 
         :store,
         :state, 
@@ -53,7 +54,28 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
+    def handle_info(:init, %Aggregate{}=aggregate) do
+        %Aggregate{app: {application, tenant}, stream: stream}=aggregate
+        aggregate = 
+            case application.snapshot(aggregate_id(stream), tenant: tenant) do
+                nil -> 
+                    aggregate
+
+                snapshot ->
+                    load(aggregate, snapshot)
+            end
+        {:noreply, listen(aggregate)}
+    end
+
+    @impl true
+    def handle_info(%Event{number: number}, %Aggregate{index: index}=aggregate) 
+    when number <= index do
+        {:noreply, aggregate}
+    end
+
+    @impl true
     def handle_info(%Event{}=event, %Aggregate{}=aggregate) do
+        IO.inspect(event, label: "#{aggregate.state.__struct__}")
         case apply_event(aggregate, event) do
             %Aggregate{} = aggregate ->
                 aggregate =
@@ -65,20 +87,6 @@ defmodule Signal.Aggregates.Aggregate do
             error ->
                 {:stop, error, aggregate}
         end
-    end
-
-    @impl true
-    def handle_info(:init, %Aggregate{}=aggregate) do
-        %Aggregate{app: {app_module, _tenant}, stream: stream}=aggregate
-        aggregate = 
-            case app_module.snapshot(aggregate_id(stream)) do
-                nil -> 
-                    aggregate
-
-                snapshot ->
-                    load(aggregate, snapshot)
-            end
-        {:noreply, listen(aggregate)}
     end
 
     @impl true
@@ -184,8 +192,8 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp acknowledge(%Aggregate{}=aggregate, %Event{number: number}) do
         %Aggregate{app: app, subscription: %{handle: handle}}=aggregate
-        {app_module, _tenant} = app
-        app_module.acknowledge(handle, number, [])
+        {application, tenant} = app
+        application.acknowledge(handle, number, [tenant: tenant])
         aggregate
     end
 
@@ -200,21 +208,39 @@ defmodule Signal.Aggregates.Aggregate do
         aggregate
     end
 
-    def encode(%Aggregate{ state: state}) do
-        Codec.encode(state)
-    end
-
     def load(%Aggregate{state: state}=aggr, %Snapshot{}=snapshot) do
         %Snapshot{version: version, data: data}=snapshot
+        case data do
+            %{index: index, state: payload} ->
+                %Aggregate{aggr | 
+                    index: index,
+                    version: version, 
+                    state: Codec.load(state, payload), 
+                }
+
+            _ ->
+                aggr
+        end
         %Aggregate{aggr | 
             version: version, 
             state: Codec.load(state, data), 
         }
     end
 
-    def listen(%Aggregate{app: app, stream: stream, version: version}=aggr) do
+    def encode(%Aggregate{index: index, state: state}) do
+        %{
+            index: index,
+            state: Codec.encode(state)
+        }
+    end
+
+    def listen(%Aggregate{app: app, stream: {_, stream}, index: index}=aggr) do
         {application, _tenant} = app
-        {:ok, subscription} = application.subscribe([stream: stream, position: version])
+        {:ok, subscription} = application.subscribe([
+            from: index,
+            track: false, 
+            stream: stream, 
+        ])
         %Aggregate{aggr| subscription: subscription}
     end
 

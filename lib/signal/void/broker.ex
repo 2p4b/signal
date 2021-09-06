@@ -178,13 +178,13 @@ defmodule Signal.Void.Broker do
         from = Keyword.get(opts, :from, cursor)
         topics = Keyword.get(opts, :topics, [])
         stream = Keyword.get(opts, :stream, nil)
-        log = Keyword.get(opts, :log, false)
+        track = Keyword.get(opts, :track, false)
         %{
             id: id,
-            log: log,
             ack: from,
             syn: from,
             from: from,
+            track: track,
             handle: handle,
             stream: stream,
             topics: topics,
