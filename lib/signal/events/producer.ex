@@ -199,10 +199,15 @@ defmodule Signal.Events.Producer do
         |> GenServer.call({:process, action}, :infinity)
     end
 
-    defp calibrate(%Producer{app: app, stream: stream}=prod) do
+    defp calibrate(%Producer{app: app, stream: {_, stream}}=prod) do
         {application, _name} = app
-        position = application.stream_position(stream)
-        %Producer{prod | position: position}
+        case application.stream_position(stream) do
+            nil ->
+                %Producer{prod | position: 0}
+
+            position ->
+                %Producer{prod | position: position}
+        end
     end
 
     defp aggregate_state(%Producer{ app: app, stream: stream}, _version) do

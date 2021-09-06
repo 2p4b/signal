@@ -55,9 +55,9 @@ defmodule Signal.Aggregates.Aggregate do
 
     @impl true
     def handle_info(:init, %Aggregate{}=aggregate) do
-        %Aggregate{app: {application, tenant}, stream: stream}=aggregate
+        %Aggregate{app: {application, tenant}, stream: {_, stream}}=aggregate
         aggregate = 
-            case application.snapshot(aggregate_id(stream), tenant: tenant) do
+            case application.snapshot(stream, tenant: tenant) do
                 nil -> 
                     aggregate
 
@@ -176,19 +176,6 @@ defmodule Signal.Aggregates.Aggregate do
         GenServer.call(aggregate, {:await, stage}, timeout)
     end
 
-    def aggregate_id(%Aggregate{stream: stream}) do
-        aggregate_id(stream)
-    end
-
-    def aggregate_id({type, id}) when is_atom(type) do
-        Signal.Helper.module_to_string(type)
-        |> aggregate_id(id)
-    end
-
-    def aggregate_id(type, id) when is_binary(type) do
-        type <> ":" <> id
-    end
-
     defp acknowledge(%Aggregate{}=aggregate, %Event{number: number}) do
         %Aggregate{app: app, subscription: %{handle: handle}}=aggregate
         {application, tenant} = app
@@ -198,8 +185,9 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp snapshot(%Aggregate{app: app, version: version, stream: stream}=aggregate) do
         {application, _tenant} = app
+        {_, id} = stream
         snapshot = %Snapshot{
-            id: aggregate_id(stream),
+            id: id,
             data: encode(aggregate),
             version: version,
         }
@@ -220,10 +208,6 @@ defmodule Signal.Aggregates.Aggregate do
             _ ->
                 aggr
         end
-        %Aggregate{aggr | 
-            version: version, 
-            state: Codec.load(state, data), 
-        }
     end
 
     def encode(%Aggregate{index: index, state: state}) do
