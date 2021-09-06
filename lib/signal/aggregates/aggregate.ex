@@ -75,7 +75,6 @@ defmodule Signal.Aggregates.Aggregate do
 
     @impl true
     def handle_info(%Event{}=event, %Aggregate{}=aggregate) do
-        IO.inspect(event, label: "#{aggregate.state.__struct__}")
         case apply_event(aggregate, event) do
             %Aggregate{} = aggregate ->
                 aggregate =

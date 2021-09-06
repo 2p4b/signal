@@ -131,28 +131,14 @@ defmodule Signal.Void.Broker do
         sub
     end
 
+    defp push_event(%{stream: s_stream}=sub, %{stream: e_stream}=event)
+    when not(is_nil(s_stream)) and  s_stream !=  e_stream do
+        sub
+    end
+
     defp push_event(%{stream: s_stream}=sub, %{stream: e_stream}=event) do
         %{topics: topics} = sub
         %{topic: topic, number: number} = event
-        {e_stream_type, _stream_id} = e_stream
-
-        valid_stream =
-            cond do
-                # All streams
-                is_nil(s_stream) ->
-                    true
-
-                # Same stream type 
-                is_atom(s_stream) ->
-                    s_stream == e_stream_type
-
-                # Same stream 
-                is_tuple(s_stream) ->
-                    e_stream == s_stream
-
-                true ->
-                    false
-            end
 
         valid_topic =
             if length(topics) == 0 do
@@ -165,7 +151,7 @@ defmodule Signal.Void.Broker do
                 end
             end
 
-        if valid_stream and valid_topic do
+        if valid_topic do
             Process.send(sub.id, event, []) 
             Map.put(sub, :syn, number)
         else
