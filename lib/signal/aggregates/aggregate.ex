@@ -124,7 +124,8 @@ defmodule Signal.Aggregates.Aggregate do
         %Aggregate{aggregate | awaiting: awaiting}
     end
 
-    def state(aggregate,  opts \\ [], timeout \\ 5000) do
+    def state(aggregate,  opts \\ []) do
+        timeout = Keyword.get(opts, :timeout, 5000)
         GenServer.call(aggregate, {:state, opts}, timeout)
     end
 
@@ -156,7 +157,6 @@ defmodule Signal.Aggregates.Aggregate do
 
 
             _ -> 
-                IO.inspect("expected version #{version+1} got #{event.position}")
                 {:error, :out_of_order, event}
         end
     end

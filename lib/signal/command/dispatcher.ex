@@ -62,14 +62,15 @@ defmodule Signal.Command.Dispatcher do
             aggregates = 
                 histories
                 |> Enum.map(fn %History{events: [sample | _], version: version} -> 
-
+                    state_opts = [version: version, timeout: :infinity]
                     stream = Event.payload(sample) |> Signal.Stream.stream()
                     app
                     |> Signal.Application.supervisor(Task)
                     |> Task.Supervisor.async_nolink(fn -> 
                         app
                         |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
-                        |> Signal.Aggregates.Aggregate.state([version: version], :infinity)
+                        |> Signal.Aggregates.Aggregate.state(state_opts)
+
                     end, [shutdown: :brutal_kill])
                 end)
                 |> Task.yield_many(timeout(await))

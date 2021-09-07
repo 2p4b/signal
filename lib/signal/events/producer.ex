@@ -211,13 +211,14 @@ defmodule Signal.Events.Producer do
     end
 
     defp aggregate_state(%Producer{ app: app, stream: stream, position: position},consistent) do
-        if consistent do
-            Signal.Aggregates.Supervisor.prepare_aggregate(app, stream)
-            |> Signal.Aggregates.Aggregate.state(version: position)
-        else
-            Signal.Aggregates.Supervisor.prepare_aggregate(app, stream)
-            |> Signal.Aggregates.Aggregate.state()
-        end
+        state_opts =
+            if consistent do
+                [version: position, timeout: :infinity]
+            else
+                []
+            end
+        Signal.Aggregates.Supervisor.prepare_aggregate(app, stream)
+        |> Signal.Aggregates.Aggregate.state(state_opts)
     end
 
     defp handle_command(command, result, aggregate) when is_struct(command) do
