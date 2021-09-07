@@ -5,6 +5,7 @@ defmodule Signal.Aggregates.Aggregate do
     alias Signal.Stream.Event
     alias Signal.Stream.Reducer
     alias Signal.Aggregates.Aggregate
+    require Logger
 
     defstruct [
         :id,
@@ -130,13 +131,22 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     defp apply_event(%Aggregate{}=aggregate, %Event{number: number}=event) do
-        %Aggregate{version: version, state: state} = aggregate
+        %Aggregate{version: version, state: state, stream: {_, stream} } = aggregate
         case event do
             %Event{position: position} when position == (version + 1) ->
 
                 metadata = Event.metadata(event)
                 
                 event_payload = Event.payload(event)
+
+                info = """
+
+                [Aggregate] #{inspect(state.__struct__)} 
+                stream: #{stream}
+                applying: #{event.type}
+                version: #{event.position}
+                """
+                Logger.info(info)
 
                 case Reducer.apply(state, metadata, event_payload) do
                     {:snapshot, state} ->
@@ -178,9 +188,23 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     defp acknowledge(%Aggregate{}=aggregate, %Event{number: number}) do
-        %Aggregate{app: app, subscription: %{handle: handle}}=aggregate
+        %Aggregate{
+            app: app, 
+            state: state,
+            stream: {_, stream}, 
+            subscription: %{handle: handle}
+        } = aggregate
+
         {application, tenant} = app
         application.acknowledge(handle, number, [tenant: tenant])
+        info = """
+
+        [Aggregate] #{state.__struct__} 
+        stream: #{stream}
+        acknowleded: #{number}
+        version: #{aggregate.version}
+        """
+        Logger.info(info)
         aggregate
     end
 
