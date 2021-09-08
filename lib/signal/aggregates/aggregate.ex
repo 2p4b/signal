@@ -140,8 +140,7 @@ defmodule Signal.Aggregates.Aggregate do
                 event_payload = Event.payload(event)
 
                 info = """
-
-                [Aggregate] #{inspect(state.__struct__)} 
+                [Aggregate] #{state.__struct__} 
                 stream: #{stream}
                 applying: #{event.type}
                 version: #{event.position}
@@ -198,7 +197,6 @@ defmodule Signal.Aggregates.Aggregate do
         {application, tenant} = app
         application.acknowledge(handle, number, [tenant: tenant])
         info = """
-
         [Aggregate] #{state.__struct__} 
         stream: #{stream}
         acknowleded: #{number}

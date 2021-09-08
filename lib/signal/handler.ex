@@ -2,6 +2,7 @@ defmodule Signal.Handler do
 
     alias Signal.Handler
     alias Signal.Stream.Event
+    require Logger
 
     defstruct [:app, :state, :module, :subscription]
 
@@ -113,6 +114,14 @@ defmodule Signal.Handler do
             subscription: %{handle: handle}
         } = handler
         {application, tenant} = app
+
+        info = """
+        [HANDLER] #{module} 
+        processing: #{event.type}
+        topic: #{event.topic}
+        number: #{event.number}
+        """
+        Logger.info(info)
         args = [Event.payload(event), Event.metadata(event), state]
         response = Kernel.apply(module, :handle_event, args)
         application.acknowledge(handle, number, tenant: tenant)

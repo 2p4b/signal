@@ -1,7 +1,7 @@
 defprotocol Signal.Queue do
     
     @fallback_to_any true
-    @spec queue(t) :: {atom, String.t()}
+    @spec queue(t) :: String.t() | nil
     def queue(t)
 
 end

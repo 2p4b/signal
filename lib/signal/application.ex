@@ -93,10 +93,6 @@ defmodule Signal.Application do
         |> Base.encode16()
     end
 
-    def store({module, _name}) do
-        Kernel.apply(module, :store, [])
-    end
-
     def supervisor({module, name}, type) do
         if module == name do
             Module.concat([module, type, Supervisor])
@@ -121,21 +117,6 @@ defmodule Signal.Application do
         end
     end
 
-    def bus({module, name}) when is_atom(name) do
-        Module.concat([module, name, :bus])
-    end
-
-    def publish(app, %Event{}=event) when is_tuple(app) do
-        Phoenix.PubSub.broadcast(bus(app), "bus", event)
-    end
-
-    def listen(app) when is_tuple(app) do
-        Phoenix.PubSub.subscribe(bus(app), "bus")
-    end
-
-    def unlisten(app) when is_tuple(app) do
-        Phoenix.PubSub.unsubscribe(bus(app), "bus")
-    end
 
     def registry_application(registry) when is_atom(registry) do
         registry

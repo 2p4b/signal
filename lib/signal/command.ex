@@ -7,13 +7,24 @@ defmodule Signal.Command  do
             @module __MODULE__
             @before_compile unquote(__MODULE__)
             @version Keyword.get(unquote(opts), :version)
+            @queue_specs Keyword.get(unquote(opts), :queue)
             @stream_opts Keyword.get(unquote(opts), :stream)
         end
     end
 
     defmacro __before_compile__(_env) do
         quote generated: true, location: :keep do
-            with {stream_mod, field} <- Module.get_attribute(__MODULE__, :stream_opts) do
+
+            with field when is_atom(field) <- Module.get_attribute(__MODULE__,:queue) do
+                defimpl Signal.Queue, for: __MODULE__ do
+                    @field field
+                    def queue(command) do 
+                        Map.get(command, @field)
+                    end
+                end
+            end
+
+            with {stream_mod, field} <- Module.get_attribute(__MODULE__,:stream_opts) do
                 defimpl Signal.Stream, for: __MODULE__ do
                     @field field
                     @stream_module stream_mod

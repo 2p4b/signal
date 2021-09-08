@@ -24,13 +24,14 @@ defmodule Signal.Execution.Queue do
         {:reply, execute(command, assigns, opts), state}
     end
 
-    def handle(application, command, assigns, opts \\ []) do
+    def handle(app, command, assigns, opts \\ []) do
 
-        queue = Signal.Queue.queue(command)
+        qid = Signal.Queue.queue(command)
 
-        case queue do
-            {type, id} when is_atom(type) and is_binary(id) ->
-                application
+        case qid  do
+            id when is_binary(id) ->
+                type = Keyword.get(opts, :type, :default)
+                app
                 |> Signal.Execution.Supervisor.prepare_queue(id, type)
                 |> GenServer.call({:execute, command, assigns, opts})
 
