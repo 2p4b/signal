@@ -85,6 +85,13 @@ defmodule Signal.Application do
                 [keys: :unique, name: Signal.Application.registry({__MODULE__, name}, type)]
             end
 
+            def aggregate(type, id, opts \\ []) do
+                tenant = Keyword.get(opts, :tenant, __MODULE__)
+                {__MODULE__, tenant}
+                |> Signal.Aggregates.Supervisor.prepare_aggregate({type, id})
+                |> Signal.Aggregates.Aggregate.state(opts)
+            end
+
         end
     end
 

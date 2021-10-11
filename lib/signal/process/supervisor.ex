@@ -41,7 +41,6 @@ defmodule Signal.Process.Supervisor do
             app: app,
             name: via_name,
             module: module,
-            store: Signal.Application.store(app),
         ] 
     end
 

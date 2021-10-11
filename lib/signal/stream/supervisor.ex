@@ -39,7 +39,7 @@ defmodule Signal.Stream.Supervisor do
     end
 
     defp broker_args(app, {_, _, {_, type, _app}}=name) do
-        [name: name, app: app, store: Signal.Application.store(app), type: Helper.string_to_module(type)]
+        [name: name, app: app, type: Helper.string_to_module(type)]
     end
 
 end

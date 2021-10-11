@@ -240,7 +240,7 @@ defmodule Signal.Aggregates.Aggregate do
         }
     end
 
-    def listen(%Aggregate{app: app, stream: {_, stream}, index: index}=aggr) do
+    defp listen(%Aggregate{app: app, stream: {_, stream}, index: index}=aggr) do
         {application, _tenant} = app
         {:ok, subscription} = application.subscribe([
             from: index,
