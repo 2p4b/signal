@@ -1,6 +1,7 @@
 defmodule Signal.Stream.Event do
     use Timex
     use Signal.Type
+    require Logger
 
     alias Signal.Codec
     alias Signal.Helper
@@ -43,7 +44,24 @@ defmodule Signal.Stream.Event do
 
     def payload(%Event{data: data, type: type}) do
         module = Helper.string_to_module(type)
-        Codec.load(struct(module, []), data)
+
+        event_instance = 
+            try do
+                struct(module, [])
+            rescue
+                UndefinedFunctionError ->
+                    msg = """
+                    Could not create event instance: #{type}
+                    fallback to map instance
+                    """
+                    Logger.error(msg)
+                    %{__struct__: module}
+
+                exception ->
+                    reraise(exception, __STACKTRACE__)
+            end
+            
+        Codec.load(event_instance, data)
     end
 
     def metadata(%Event{}=event) do
