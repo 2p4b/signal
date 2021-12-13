@@ -8,9 +8,9 @@ defmodule Signal.Events.EventTest do
             version: "v1",
             stream: {Signal.Sample.Aggregate, :uuid}
 
-        schema do
-            field :id,      String.t,   default: "event.id"
-            field :uuid,    String.t,   default: "event.uuid"
+        blueprint do
+            field :id,      :string,   default: "event.id"
+            field :uuid,    :string,   default: "event.uuid"
         end
 
     end

@@ -16,11 +16,11 @@ defmodule Signal.Command.DispatchTest do
 
     defmodule Accounts do
 
-        use Signal.Type
+        use Blueprint.Struct
 
-        schema do
-            field :number,      String.t,   default: "123"
-            field :balance,     integer(),  default: 0
+        blueprint do
+            field :number,      :string,    default: "123"
+            field :balance,     :number,    default: 0
         end
     end
 
@@ -29,9 +29,9 @@ defmodule Signal.Command.DispatchTest do
         use Signal.Event,
             stream: {Accounts, :account}
 
-        schema do
-            field :account,     String.t,   default: ""
-            field :amount,      integer(),  default: 0
+        blueprint do
+            field :account, :string,   default: ""
+            field :amount,  :number,  default: 0
         end
 
     end
@@ -41,9 +41,9 @@ defmodule Signal.Command.DispatchTest do
         use Signal.Command,
             stream: {Accounts, :account}
 
-        schema do
-            field :account,     String.t,   default: "123"
-            field :amount,      integer(),  default: 0
+        blueprint do
+            field :account, :string,    default: "123"
+            field :amount,  :number,    default: 0
         end
 
         def handle(%Deposite{}=deposite, _params, %Accounts{number: "123", balance: 0}) do

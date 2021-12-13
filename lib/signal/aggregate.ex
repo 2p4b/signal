@@ -2,7 +2,7 @@ defmodule Signal.Aggregate do
 
     defmacro __using__(_opts) do
         quote do
-            use Signal.Type
+            use Blueprint.Struct
             @module __MODULE__
             @before_compile unquote(__MODULE__)
         end

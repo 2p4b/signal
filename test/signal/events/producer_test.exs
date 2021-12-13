@@ -13,9 +13,9 @@ defmodule Signal.Events.ProducerTest do
     defmodule Aggregate do
         use Signal.Aggregate
 
-        schema do
-            field :id,      String.t,   default: ""
-            field :uuid,    String.t,   default: ""
+        blueprint do
+            field :id,      :string,   default: ""
+            field :uuid,    :string,   default: ""
         end
 
         def apply(%Aggregate{}=aggr, _meta, _event) do
@@ -28,9 +28,9 @@ defmodule Signal.Events.ProducerTest do
         use Signal.Event,
             stream: {Aggregate, :uuid}
 
-        schema do
-            field :id,      String.t,   default: "event.id"
-            field :uuid,    String.t,   default: "stream.one"
+        blueprint do
+            field :id,      :string,   default: "event.id"
+            field :uuid,    :string,   default: "stream.one"
         end
     end
 
@@ -38,9 +38,9 @@ defmodule Signal.Events.ProducerTest do
         use Signal.Event,
             stream: {Aggregate, :uuid}
 
-        schema do
-            field :id,      String.t,   default: "event.id"
-            field :uuid,    String.t,   default: "stream.two"
+        blueprint do
+            field :id,      :string,   default: "event.id"
+            field :uuid,    :string,   default: "stream.two"
         end
     end
 
@@ -48,22 +48,22 @@ defmodule Signal.Events.ProducerTest do
         use Signal.Event,
             stream: {Aggregate, :uuid}
 
-        schema do
-            field :id,      String.t,   default: "event.id"
-            field :uuid,    String.t,   default: "stream.two"
+        blueprint do
+            field :id,      :string,   default: "event.id"
+            field :uuid,    :string,   default: "stream.two"
         end
     end
 
     defmodule Command do
 
-        use Signal.Command, 
+        use Signal.Command,
             stream: {Aggregate, :uuid}
 
-        schema do
-            field :id,      String.t,   default: "command.id"
-            field :uuid,    String.t,   default: "command.uuid"
+        blueprint do
+            field :id,      :string,   default: "command.id"
+            field :uuid,    :string,   default: "command.uuid"
         end
-            
+
         def handle(_command, _params, _aggregate) do
             [
                 EventOne.new(),

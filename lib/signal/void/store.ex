@@ -60,8 +60,8 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
-    def unsubscribe(handle, _opts \\ []) do
-        Broker.unsubscribe(handle)
+    def unsubscribe(handle, opts \\ []) do
+        Broker.unsubscribe(handle, opts)
     end
 
     @impl true
@@ -85,7 +85,7 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
-    def stream_position(stream, _opts \\ []) when is_tuple(stream) do
+    def stream_position(stream, _opts \\ []) when is_binary(stream) do
         %{position: position} =
             GenServer.call(Repo, {:state, :events}, 5000)
             |> Enum.filter(&(Map.get(&1, :stream) == stream))

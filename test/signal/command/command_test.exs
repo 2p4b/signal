@@ -13,9 +13,9 @@ defmodule Signal.Command.CommandTest do
         use Signal.Event,
             stream: { TestAggregate, :uuid}
 
-        schema do
-            field :id,      String.t,   default: "event.id"
-            field :uuid,    String.t,   default: "event.uuid"
+        blueprint do
+            field :id,      :string,   default: "event.id"
+            field :uuid,    :string,   default: "event.uuid"
         end
     end
 
@@ -24,9 +24,9 @@ defmodule Signal.Command.CommandTest do
         use Signal.Command, 
             stream: {TestAggregate, :uuid}
 
-        schema do
-            field :id,      String.t,   default: "command.id"
-            field :uuid,    String.t,   default: "command.uuid"
+        blueprint do
+            field :id,      :string,   default: "command.id"
+            field :uuid,    :string,   default: "command.uuid"
         end
             
         def handle(%Command{}=command, _params, _aggregate) do

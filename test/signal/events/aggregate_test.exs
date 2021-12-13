@@ -12,9 +12,9 @@ defmodule Signal.Events.AggregateTest do
     defmodule Accounts do
         use Signal.Aggregate
 
-        schema do
-            field :number,      String.t,   default: "123"
-            field :balance,     integer(),  default: 0
+        blueprint do
+            field :number,      :number,    default: "123"
+            field :balance,     :number,    default: 0
         end
 
     end
@@ -23,9 +23,9 @@ defmodule Signal.Events.AggregateTest do
         use Signal.Command,
             stream: {Accounts, :account}
 
-        schema do
-            field :account,     String.t,   default: "123"
-            field :amount,      integer(),  default: 0
+        blueprint do
+            field :account,     :string,   default: "123"
+            field :amount,      :string,    default: 0
         end
     end
 
@@ -33,9 +33,9 @@ defmodule Signal.Events.AggregateTest do
         use Signal.Event,
             stream: {Accounts, :account}
 
-        schema do
-            field :account,     String.t,   default: "123"
-            field :amount,      integer(),  default: 0
+        blueprint do
+            field :account, :string,    default: "123"
+            field :amount,  :number,    default: 0
         end
     end
 
@@ -104,7 +104,7 @@ defmodule Signal.Events.AggregateTest do
 
             deposited = Deposited.new([amount: 3])
 
-            event3 = 
+            event3 =
                 struct(Event, [])
                 |> Map.put(:type, Signal.Helper.module_to_string(Deposited))
                 |> Map.put(:data, Map.from_struct(deposited))

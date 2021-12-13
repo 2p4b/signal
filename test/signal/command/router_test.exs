@@ -5,19 +5,20 @@ defmodule Signal.Command.RouterTest do
 
         defmodule PipeCommand do
             use Signal.Command
-            schema do
-                field :one,         integer() 
-                field :two,         integer() 
+            blueprint do
+                field :one, :number
+                field :two, :number
             end
         end
 
         defmodule PipelineCommand do
             use Signal.Command
-            schema do
-                field :uuid,        String.t()
-                field :one,         integer() 
-                field :two,         integer() 
-                field :executed,    boolean() 
+
+            blueprint do
+                field :uuid,        :string
+                field :one,         :number
+                field :two,         :number
+                field :executed,    :number
             end
         end
 
@@ -53,11 +54,11 @@ defmodule Signal.Command.RouterTest do
                 pipe :pipe_two
             end
 
-            register PipeCommand, 
-                await: true, 
-                through: :pipe_one, 
+            register PipeCommand,
+                await: true,
+                through: :pipe_one,
                 consistent: true
-                            
+
             register PipelineCommand, through: :pipeline
 
         end
@@ -65,13 +66,13 @@ defmodule Signal.Command.RouterTest do
 
         @tag :router
         test "should pass through pipe only" do
-            assert {:ok, %{assigns: %{one: 1}} } =  
+            assert {:ok, %{assigns: %{one: 1}} } =
                 Router.run(PipeCommand.new(),[])
         end
 
         @tag :router
         test "should pass through pipeline" do
-            assert {:ok, %{assigns: %{one: 1, two: 2}} } =  
+            assert {:ok, %{assigns: %{one: 1, two: 2}} } =
                 Router.run(PipelineCommand.new(),[])
         end
 
@@ -94,4 +95,3 @@ defmodule Signal.Command.RouterTest do
     end
 
 end
-

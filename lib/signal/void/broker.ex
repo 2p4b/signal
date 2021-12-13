@@ -3,7 +3,6 @@ defmodule Signal.Void.Broker do
     use GenServer
     alias Signal.Void.Repo
     alias Signal.Void.Broker
-    alias Signal.Stream.Event
 
     require Logger
 
@@ -131,13 +130,13 @@ defmodule Signal.Void.Broker do
         sub
     end
 
-    defp push_event(%{stream: s_stream}=sub, %{stream: e_stream}=event)
+    defp push_event(%{stream: s_stream}=sub, %{stream: e_stream})
     when not(is_nil(s_stream)) and  s_stream !=  e_stream do
         sub
     end
 
-    defp push_event(%{stream: s_stream}=sub, %{stream: e_stream}=event) do
-        %{topics: topics} = sub
+    defp push_event(subscription, event) do
+        %{topics: topics, id: sub_id} = subscription
         %{topic: topic, number: number} = event
 
         valid_topic =
@@ -152,10 +151,10 @@ defmodule Signal.Void.Broker do
             end
 
         if valid_topic do
-            Process.send(sub.id, event, []) 
-            Map.put(sub, :syn, number)
+            Process.send(sub_id, event, []) 
+            Map.put(subscription, :syn, number)
         else
-            sub
+            subscription
         end
     end
 

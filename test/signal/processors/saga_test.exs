@@ -7,9 +7,9 @@ defmodule Signal.Processor.SagaTest do
 
         use Signal.Aggregate
 
-        schema do
-            field :number,      String.t,   default: "123"
-            field :balance,     integer(),  default: 0
+        blueprint do
+            field :number,  :string,   default: "123"
+            field :balance, :number,  default: 0
         end
 
         def apply(_event, _meta, %Accounts{}=act) do
@@ -24,9 +24,9 @@ defmodule Signal.Processor.SagaTest do
             topic: "user.deposited",
             stream: {Accounts, :account}
 
-        schema do
-            field :account,     String.t,   default: "123"
-            field :amount,      integer(),  default: 0
+        blueprint do
+            field :account, :string,    default: "123"
+            field :amount,  :number,    default: 0
         end
 
     end
@@ -35,9 +35,9 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Event,
             stream: {Accounts, :account}
 
-        schema do
-            field :pid,         term()
-            field :account,     String.t,   default: "123"
+        blueprint do
+            field :pid,     :number
+            field :account, :string,   default: "123"
         end
     end
 
@@ -45,8 +45,8 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Event,
             stream: {Accounts, :account}
 
-        schema do
-            field :account,     String.t,   default: "123"
+        blueprint do
+            field :account, :string,   default: "123"
         end
     end
 
@@ -55,9 +55,9 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Command,
             stream: {Accounts, :account}
 
-        schema do
-            field :pid,         term()
-            field :account,     String.t,   default: "123"
+        blueprint do
+            field :pid,     :number
+            field :account, :string,   default: "123"
         end
 
         def handle(%OpenAccount{}=cmd, _params, %Accounts{}) do
@@ -70,9 +70,9 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Command,
             stream: {Accounts, :account}
 
-        schema do
-            field :account,     String.t,   default: "123"
-            field :amount,      integer(),  default: 0
+        blueprint do
+            field :account,     :string,    default: "123"
+            field :amount,      :number,    default: 0
         end
 
         def handle(%Deposite{}=deposite, _params, %Accounts{}) do
@@ -84,8 +84,8 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Command,
             stream: {Accounts, :account}
 
-        schema do
-            field :account,     String.t,   default: "123"
+        blueprint do
+            field :account,     :string,   default: "123"
         end
 
         def handle(%CloseAccount{}=cmd, _params, %Accounts{}) do
