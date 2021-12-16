@@ -1,7 +1,7 @@
 defmodule Signal.ApplicationTest do
     use ExUnit.Case, async: true
 
-    alias Signal.Execution.Task
+    alias Signal.Task
 
     defmodule Command do
         use Signal.Command
@@ -11,14 +11,14 @@ defmodule Signal.ApplicationTest do
     end
 
     defmodule PipeOne do
-        import Signal.Command.Pipe
+        import Signal.Task
         def handle(task) do
             {:ok, assign(task, :one, 1)}
         end
     end
 
     defmodule PipeTwo do
-        import Signal.Command.Pipe
+        import Signal.Task
         def handle(task) do
             {:ok, assign(task, :two, 2)}
         end

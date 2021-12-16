@@ -6,7 +6,7 @@ defmodule Signal.Command.Dispatcher do
     alias Signal.Command.Action
     alias Signal.Events.Producer
     alias Signal.Execution.Queue
-    alias Signal.Execution.Task, as: SigTask
+    alias Signal.Task, as: SigTask
 
     def dispatch(%SigTask{}=task) do
         case execute(task) do

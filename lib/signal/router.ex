@@ -1,6 +1,6 @@
 defmodule Signal.Router do
 
-    alias Signal.Execution.Task
+    alias Signal.Task
     alias Signal.Command.Dispatcher
 
     defmacro __using__(_) do

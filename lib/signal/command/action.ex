@@ -1,6 +1,6 @@
 defmodule Signal.Command.Action do
 
-    alias Signal.Execution.Task
+    alias Signal.Task
     alias Signal.Command.Action
 
 

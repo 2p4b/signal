@@ -1,5 +1,5 @@
-defmodule Signal.Execution.Task do
-    alias Signal.Execution.Task
+defmodule Signal.Task do
+    alias Signal.Task
 
     defstruct [
         :app,
@@ -51,5 +51,15 @@ defmodule Signal.Execution.Task do
         %Task{task | command: command}
     end
 
-end
+    def assign(%Task{assigns: assigns}=task, key, value) 
+    when is_binary(key) or is_atom(key) do
+        %Task{ task | assigns: Map.put(assigns, key, value) }
+    end
 
+    def assign(%Task{assigns: assigns}=task, params) when is_list(params) do
+        %Task{ task | assigns: Enum.reduce(params, assigns, fn({key, value}, acc) ->
+            Map.put(acc, key, value)
+        end) }
+    end
+
+end

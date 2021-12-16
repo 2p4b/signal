@@ -1,6 +1,8 @@
 defmodule Signal.Command.RouterTest do
     use ExUnit.Case
 
+    alias Signal.Task
+
     describe "router test" do
 
         defmodule PipeCommand do
@@ -23,29 +25,27 @@ defmodule Signal.Command.RouterTest do
         end
 
         defmodule PipeOne do
-            import Signal.Command.Pipe
+            import Signal.Task
             def handle(task) do
                 {:ok, assign(task, :one, 1)}
             end
         end
 
         defmodule PipeTwo do
-            import Signal.Command.Pipe
+            import Signal.Task
             def handle(task) do
                 {:ok, assign(task, :two, 2)}
             end
         end
 
         defmodule EmptyRouter do
-
             use Signal.Router
-
         end
 
         defmodule Router do
 
             use Signal.Router
-            import Signal.Command.Pipe
+            import Signal.Task
 
             pipe :pipe_one, PipeOne
             pipe :pipe_two, PipeTwo
@@ -91,7 +91,7 @@ defmodule Signal.Command.RouterTest do
         @tag :router
         test "can apply side effect to command" do
             case Router.run(PipelineCommand.new(), []) do
-                {:ok, %Signal.Execution.Task{}} ->
+                {:ok, %Task{}} ->
                     assert true
                 _ ->
                     assert false

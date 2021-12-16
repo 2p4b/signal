@@ -2,10 +2,10 @@ defmodule Signal.Command.DispatchTest do
 
     use ExUnit.Case
 
+    alias Signal.Task
     alias Signal.Result
     alias Signal.Void.Store
     alias Signal.Stream.History
-    alias Signal.Execution.Task
 
     defmodule TestApplication do
         use Signal.Application,
@@ -70,7 +70,7 @@ defmodule Signal.Command.DispatchTest do
         test "should process task" do
             result =
                 Deposite.new([amount: 5000])
-                |> Signal.Execution.Task.new([
+                |>Task.new([
                     timeout: :infinity,
                     app: {TestApplication, TestApplication}
                 ])
@@ -83,7 +83,7 @@ defmodule Signal.Command.DispatchTest do
         test "should execute task" do
             {:ok, histories} =
                 Deposite.new([amount: 5000])
-                |> Signal.Execution.Task.new([
+                |>Task.new([
                     timeout: :infinity,
                     app: {TestApplication, TestApplication}
                 ])
