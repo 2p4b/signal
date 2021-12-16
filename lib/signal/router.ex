@@ -101,6 +101,8 @@ defmodule Signal.Router do
 
                 if @pipethrough do
                     @pipethrough if is_atom(pipethrough), do: [pipethrough], else: pipethrough
+                    @pipethrough Enum.map(@pipethrough, &({__MODULE__, &1}))
+
                     def run(%@command_module{} = command, opts) do
                         run(command, @pipethrough, opts)
                     end
@@ -116,9 +118,9 @@ defmodule Signal.Router do
 
                     task = Task.new(command, @task_opts ++ opts)
 
-                    Enum.reduce(pipeline, {:ok, task}, fn pipe, acc -> 
+                    Enum.reduce(pipeline, {:ok, task}, fn {pipemod, pipe}, acc -> 
                         with {:ok, %Task{}=task} <- acc do
-                            Kernel.apply(__MODULE__, pipe, [task])
+                            Kernel.apply(pipemod, pipe, [task])
                         else
                             error -> error
                         end
