@@ -33,10 +33,18 @@ defmodule Signal.Router do
         end
     end
 
-    defmacro pipe(name, middleware_module) do
+    defmacro pipe(name, middleware) do
         quote location: :keep do
-            def unquote(name)(command) do
-                Kernel.apply(unquote(middleware_module), :handle, [command])
+            case unquote(middleware) do
+                middleware when is_atom(middleware) ->
+                    def unquote(name)(command) do
+                        Kernel.apply(unquote(middleware), :handle, [command])
+                    end
+
+                middleware when is_function(middleware) ->
+                    def unquote(name)(command) do
+                        Kernel.apply(unquote(middleware), [command])
+                    end
             end
         end
     end
