@@ -1,7 +1,5 @@
 defmodule Signal.Application do
 
-    alias Signal.Events.Event
-
     defmacro __using__(opts) do
         name  = Keyword.get(opts, :name)
         store = Keyword.get(opts, :store)
@@ -9,6 +7,7 @@ defmodule Signal.Application do
             use Supervisor
 
             import unquote(__MODULE__)
+            import Signal.Router, only: [pipe: 1, pipe: 2, pipeline: 2]
 
             @app __MODULE__
 
@@ -18,7 +17,7 @@ defmodule Signal.Application do
 
             @before_compile unquote(__MODULE__)
             Module.register_attribute(__MODULE__, :queues, accumulate: true)
-            Module.register_attribute(__MODULE__, :registered_routers, accumulate: true)
+            Module.register_attribute(__MODULE__, :signal_routers, accumulate: true)
 
             def start_link(init_arg) do
                 name = Keyword.get(init_arg, :name, @name)
@@ -132,9 +131,9 @@ defmodule Signal.Application do
         |> Module.concat()
     end
 
-    defmacro router(router_module) do
+    defmacro router(router_module, opts \\ []) do
         quote do
-            Module.put_attribute(__MODULE__,:registered_routers, unquote(router_module))
+            Module.put_attribute(__MODULE__,:signal_routers, {unquote(router_module), build_pipeline(__MODULE__, unquote(opts))})
         end
     end
 
@@ -152,31 +151,58 @@ defmodule Signal.Application do
         end
     end
 
+    def build_pipeline(app, opts) do 
+        Keyword.update(opts, :via, [], fn pipeline -> 
+            cond do
+                is_atom(pipeline) ->
+                    [{app, pipeline}]
+
+                is_list(pipeline) ->
+                    Enum.map(pipeline, &({app, &1}))
+
+                true ->
+                    []
+            end
+        end)
+    end
+
     defmacro __before_compile__(_env) do
 
         quote generated: true do
+
+            def options(opts) when is_list(opts) do
+                case Keyword.fetch(opts, :app) do
+                    {:ok, app} when is_atom(app) and not(app in [nil, true, false]) ->
+                        app = {__MODULE__, app}
+                        Keyword.merge(opts, [app: app])
+
+                    :error ->
+                        app = {__MODULE__, __MODULE__}
+                        Keyword.merge(opts, [app: app])
+
+                    _ -> 
+                        opts
+                end
+            end
+
+            def handler(command, opts\\[]) when is_struct(command) do
+                error_value = {:error, :unroutable, command}
+
+                Enum.find_value(@signal_routers, error_value, fn {router, ropts} -> 
+                    if Kernel.apply(router, :dispatchable?, [command]) do
+                        {router, ropts ++ options(opts)}
+                    end
+                end)
+            end
+
             def dispatch(command, opts \\ [])
             def dispatch(command, opts) when is_struct(command) and is_list(opts) do
-                router = Enum.find(@registered_routers, fn router -> 
-                    Kernel.apply(router, :dispatchable?, [command])
-                end)
-                if router do
-                    opts =
-                        case Keyword.fetch(opts, :app) do
-                            {:ok, app} when is_atom(app) and not(app in [nil, :true, :false]) ->
-                                app = {__MODULE__, app}
-                                Keyword.merge(opts, [app: app])
+                case handler(command, opts) do
+                    {router, options} ->
+                        Kernel.apply(router, :dispatch, [command, options])
 
-                            :error ->
-                                app = {__MODULE__, __MODULE__}
-                                Keyword.merge(opts, [app: app])
-
-                            _ -> 
-                                opts
-                        end
-                    Kernel.apply(router, :dispatch, [command, opts])
-                else
-                    {:error, :command_not_routeable}
+                    error ->
+                        error
                 end
             end
 
