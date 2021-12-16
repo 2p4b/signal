@@ -45,13 +45,19 @@ defmodule Signal.Command.RouterTest do
         defmodule Router do
 
             use Signal.Router
+            import Signal.Command.Pipe
 
             pipe :pipe_one, PipeOne
             pipe :pipe_two, PipeTwo
 
+            pipe :fn_pipe, fn task -> 
+                {:ok, assign(task, :fn_pipe, true)}
+            end 
+
             pipeline :pipeline do
                 via :pipe_one
                 via :pipe_two
+                via :fn_pipe
             end
 
             register PipeCommand,
@@ -72,7 +78,7 @@ defmodule Signal.Command.RouterTest do
 
         @tag :router
         test "should pass through pipeline" do
-            assert {:ok, %{assigns: %{one: 1, two: 2}} } =
+            assert {:ok, %{assigns: %{one: 1, two: 2, fn_pipe: true}} } =
                 Router.run(PipelineCommand.new(),[])
         end
 
