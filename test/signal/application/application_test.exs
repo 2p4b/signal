@@ -41,8 +41,8 @@ defmodule Signal.ApplicationTest do
         pipe :pipe_two, PipeTwo
 
         pipeline :combined do
-            pipe :pipe_one
-            pipe :pipe_two
+            via :pipe_one
+            via :pipe_two
         end
 
         router Router, via: :combined

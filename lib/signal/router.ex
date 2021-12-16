@@ -27,7 +27,7 @@ defmodule Signal.Router do
         end
     end
 
-    defmacro pipe(pipe_name) do
+    defmacro via(pipe_name) do
         quote location: :keep do
             Module.put_attribute(__MODULE__, :pipeline_pipes, unquote(pipe_name))
         end
@@ -93,7 +93,7 @@ defmodule Signal.Router do
 
             for {command_module, command_opts} <- @registered_commands do
 
-                {pipethrough, command_opts} = Keyword.pop(command_opts, :through)
+                {pipethrough, command_opts} = Keyword.pop(command_opts, :via)
 
                 @pipethrough pipethrough
 
@@ -122,7 +122,7 @@ defmodule Signal.Router do
 
                 def run(%@command_module{} = command, pipeline, opts) do
 
-                    {app_pipeline, opts} = Keyword.pop(opts, :pipeline, [])
+                    {app_pipeline, opts} = Keyword.pop(opts, :via, [])
 
                     opts = Keyword.merge(@command_opts, opts)
 

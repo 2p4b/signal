@@ -50,16 +50,16 @@ defmodule Signal.Command.RouterTest do
             pipe :pipe_two, PipeTwo
 
             pipeline :pipeline do
-                pipe :pipe_one
-                pipe :pipe_two
+                via :pipe_one
+                via :pipe_two
             end
 
             register PipeCommand,
                 await: true,
-                through: :pipe_one,
+                via: :pipe_one,
                 consistent: true
 
-            register PipelineCommand, through: :pipeline
+            register PipelineCommand, via: :pipeline
 
         end
 

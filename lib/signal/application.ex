@@ -7,7 +7,7 @@ defmodule Signal.Application do
             use Supervisor
 
             import unquote(__MODULE__)
-            import Signal.Router, only: [pipe: 1, pipe: 2, pipeline: 2]
+            import Signal.Router, only: [via: 1, pipe: 2, pipeline: 2]
 
             @app __MODULE__
 
