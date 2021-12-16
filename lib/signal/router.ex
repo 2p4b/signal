@@ -114,11 +114,14 @@ defmodule Signal.Router do
 
                 def run(%@command_module{} = command, pipeline, opts) do
 
+                    {app_pipeline, opts} = Keyword.pop(opts, :pipeline, [])
+
                     opts = Keyword.merge(@command_opts, opts)
 
                     task = Task.new(command, @task_opts ++ opts)
 
-                    Enum.reduce(pipeline, {:ok, task}, fn {pipemod, pipe}, acc -> 
+                    app_pipeline ++ pipeline
+                    |> Enum.reduce({:ok, task}, fn {pipemod, pipe}, acc -> 
                         with {:ok, %Task{}=task} <- acc do
                             Kernel.apply(pipemod, pipe, [task])
                         else
