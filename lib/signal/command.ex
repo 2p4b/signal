@@ -6,6 +6,7 @@ defmodule Signal.Command  do
             import Signal.Command
             @module __MODULE__
             @before_compile unquote(__MODULE__)
+            @sync Keyword.get(unquote(opts), :sync)
             @version Keyword.get(unquote(opts), :version)
             @queue_specs Keyword.get(unquote(opts), :queue)
             @stream_opts Keyword.get(unquote(opts), :stream)
@@ -20,6 +21,15 @@ defmodule Signal.Command  do
                     @field field
                     def queue(command) do 
                         Map.get(command, @field)
+                    end
+                end
+            end
+
+            with sync when is_boolean(sync) <- Module.get_attribute(__MODULE__,:sync) do
+                defimpl Signal.Sync, for: __MODULE__ do
+                    @csync sync
+                    def sync(_command, _results) do 
+                        @csync
                     end
                 end
             end

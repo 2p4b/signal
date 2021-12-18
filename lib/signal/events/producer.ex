@@ -87,7 +87,7 @@ defmodule Signal.Events.Producer do
 
         {app_module, _tenant} =  app
 
-        aggregate = aggregate_state(producer, action.consistent)
+        aggregate = aggregate_state(producer, Signal.Sync.sync(command, result))
 
         event_streams =
             command
@@ -210,9 +210,10 @@ defmodule Signal.Events.Producer do
         end
     end
 
-    defp aggregate_state(%Producer{ app: app, stream: stream, position: position},consistent) do
+    defp aggregate_state(%Producer{}=producer, sync) do
+        %Producer{ app: app, stream: stream, position: position} = producer
         state_opts =
-            if consistent do
+            if sync do
                 [version: position, timeout: :infinity]
             else
                 []
