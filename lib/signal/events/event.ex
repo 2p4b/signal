@@ -1,5 +1,4 @@
 defmodule Signal.Events.Event do
-    use Timex
     use Signal.Type
 
     alias Signal.Codec
@@ -21,7 +20,7 @@ defmodule Signal.Events.Event do
             data: data,
             type: type,
             topic: Signal.Topic.topic(event), 
-            timestamp: Timex.now(),
+            timestamp: DateTime.utc_now(),
         ]
         struct(__MODULE__, params ++ opts)
     end
