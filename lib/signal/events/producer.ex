@@ -4,6 +4,7 @@ defmodule Signal.Events.Producer do
     alias Signal.Multi
     alias Signal.Result
     alias Signal.Events
+    alias Signal.Transaction
     alias Signal.Events.Event
     alias Signal.Events.Stage
     alias Signal.Stream.History
@@ -83,9 +84,13 @@ defmodule Signal.Events.Producer do
 
         %{stream: stream, app: app, position: position} = producer
 
-        %Action{command: command, result: result} = action
+        %Action{
+            result: result,
+            command: command, 
+            snapshots: snapshots, 
+        } = action
 
-        {app_module, _tenant} =  app
+        {app_module, tenant} =  app
 
         aggregate = aggregate_state(producer, Signal.Sync.sync(command, result))
 
@@ -96,21 +101,22 @@ defmodule Signal.Events.Producer do
 
         if is_map(event_streams) do
             case stage_event_streams(producer, action, event_streams) do
-                {:ok, staged_streams} ->
-                    case app_module.publish(staged_streams) do
+                {:ok, staged} ->
+                    transaction = Transaction.new(staged, snapshots: snapshots)
+                    case app_module.publish(transaction, [tenant: tenant]) do
                         :ok ->
-                            confirm_staged(staged_streams)
+                            confirm_staged(staged)
 
                             {_, stream_id} = stream
 
-                            position = Enum.find_value(staged_streams, position, fn
+                            position = Enum.find_value(staged, position, fn
                                 %{stream: ^stream_id, version: version} ->
                                     version
                                 _ -> false
                             end)
 
-                            histories = Enum.map(staged_streams, fn staged ->
-                                struct(History, Map.from_struct(staged))
+                            histories = Enum.map(staged, fn staged_stream ->
+                                struct(History, Map.from_struct(staged_stream))
                             end)
 
                             state = %Producer{producer| position: position}
@@ -118,7 +124,7 @@ defmodule Signal.Events.Producer do
                             {:reply, {:ok, histories}, state}
 
                         error ->
-                            rollback_staged(staged_streams, error)
+                            rollback_staged(staged, error)
                             {:reply, error, producer}
                     end
 

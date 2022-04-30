@@ -3,6 +3,7 @@ defmodule Signal.Process.Saga do
 
     alias Signal.Codec
     alias Signal.Result
+    alias Signal.Snapshot
     alias Signal.Process.Saga
     alias Signal.Stream.Event
     alias Signal.Process.Supervisor
@@ -11,8 +12,13 @@ defmodule Signal.Process.Saga do
     require Logger
 
     defstruct [
-        :app, :state, :store, :id, :module, :status,
-        ack: 0, version: 0
+        :id, 
+        :app, 
+        :state, 
+        :module, 
+        ack: 0, 
+        status: :init,
+        version: 0,
     ]
 
     @doc """
@@ -29,8 +35,12 @@ defmodule Signal.Process.Saga do
         {:ok, struct(__MODULE__, opts)}
     end
 
-    def start(app, {module, id}) do
-        Supervisor.prepare_saga(app, {module, id})    
+    def start(app, {module, id}, index \\ 0) do
+        saga = Supervisor.prepare_saga(app, {module, id})    
+        saga
+        |> GenServer.whereis()
+        |> GenServer.cast({:start, index})
+        saga
     end
 
     def position(app, {module, id}) do
@@ -38,53 +48,12 @@ defmodule Signal.Process.Saga do
         |> GenServer.call(:position, 5000)
     end
 
-    def continue(app, {module, id}, ack, ensure \\ false) do
-        method = if ensure do :continue! else :continue end
-        Supervisor.prepare_saga(app, {module, id})    
-        |> GenServer.call({method, ack}, 5000)
-    end
 
     @impl true
     def handle_call(:position, _from, %Saga{version: version}=saga) do
         {:reply, version, saga}
     end
 
-
-    @impl true
-    def handle_call({:start, position}, _from, %Saga{id: id, module: module}=saga) do
-        state = Kernel.apply(module, :init, [id])
-        saga = %Saga{saga | 
-            version: 0, 
-            ack: position, 
-            state: state, 
-            status: :running
-        }
-        {:reply, {saga.ack, saga.status}, saga}
-    end
-
-    @impl true
-    def handle_call({:start!, position}, from, %Saga{id: id, status: status}=saga) do
-        if is_nil(status) do
-            handle_call({:start, position}, from, saga)
-        else
-            {:stop, {:process_already_started, id}, saga}
-        end
-    end
-
-    @impl true
-    def handle_call({:continue, _continue_ack}, _from, %Saga{ack: saga_ack}=saga) do
-        acknowledge(saga, saga_ack, :running)
-        {:reply, {saga_ack, saga.status}, saga}
-    end
-
-    @impl true
-    def handle_call({:continue!, ack}, from, %Saga{id: id, status: status}=saga) do
-        if is_nil(status) do
-            {:stop, {:process_not_started, id}, saga}
-        else
-            handle_call({:continue, ack}, from, saga)
-        end
-    end
 
     @impl true
     def handle_info(:init, %Saga{}=saga) do
@@ -103,10 +72,11 @@ defmodule Signal.Process.Saga do
                     {version, state}
             end
 
-        updates = %{version: version, state: state} 
-
         log(saga, "starting from: #{version}")
-        {:noreply, struct(saga, updates)}
+
+        saga = struct(saga, %{ack: version, version: version, state: state})
+
+        {:noreply, saga}
     end
 
     @impl true
@@ -114,9 +84,14 @@ defmodule Signal.Process.Saga do
         %Saga{state: state, module: module} = saga
         %Metadata{number: number, uuid: uuid, correlation_id: correlation_id} = meta
 
-        snapshot = {identity(saga), number, Codec.encode(state)}
+        snapshots = 
+            saga
+            |> identity()
+            |> Snapshot.new(Codec.encode(state), version: number)
+            |> List.wrap()
+
         opts = [
-            states: [snapshot],
+            snapshots: snapshots,
             causation_id: uuid,
             correlation_id: correlation_id
         ]
@@ -147,6 +122,31 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
+    def handle_cast({:start, index}, %Saga{status: :init}=saga) do
+        %Saga{id: id, module: module, ack: ack, version: version} = saga
+        saga = 
+            cond do
+                ack == 0 and version == 0 and index > ack ->
+                    state = Kernel.apply(module, :init, [id])
+                     %Saga{saga | 
+                        ack: 0, 
+                        state: state, 
+                        status: :running,
+                        version: 0, 
+                    }
+
+                index <= ack ->
+                    struct(saga, status: :running)
+
+                true ->
+                    saga
+            end
+
+        GenServer.cast(module, {:ack, id, saga.ack, saga.status})
+        {:noreply, saga}
+    end
+
+    @impl true
     def handle_cast({_action, %Event{number: number}}, %Saga{version: version}=saga)
     when number < version do
         {:noreply, saga}
@@ -173,9 +173,10 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast({action, %Event{type: type, number: number}=event}, %Saga{}=saga) 
+    def handle_cast({action, %Event{}=event}, %Saga{status: :running}=saga) 
     when action in [:apply, :start, :start!, :apply!] do
 
+        %Event{type: type, number: number}=event
         %Saga{module: module, state: state} = saga
 
         log(saga, "applying: #{inspect(type)}")
@@ -217,7 +218,7 @@ defmodule Signal.Process.Saga do
     end
 
     defp identity(%Saga{id: id, module: module}) do
-        Signal.Helper.module_to_string(module) <> ":" <> id
+        {Signal.Helper.module_to_string(module), id}
     end
 
     defp stop_process(%Saga{}) do
