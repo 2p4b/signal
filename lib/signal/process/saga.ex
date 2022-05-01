@@ -80,9 +80,14 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info({:execute, command, %Metadata{}=meta}, %Saga{}=saga) do
+    def handle_info({:execute, %Event{}=event, command}, %Saga{}=saga) do
         %Saga{state: state, module: module} = saga
-        %Metadata{number: number, uuid: uuid, correlation_id: correlation_id} = meta
+        %Metadata{
+            number: number, 
+            uuid: uuid, 
+            correlation_id: 
+            correlation_id
+        } = Event.metadata(event)
 
         snapshots = 
             saga
@@ -100,21 +105,12 @@ defmodule Signal.Process.Saga do
                 {:noreply, acknowledge(saga, number, :running)}
 
             {:error, error}->
-                case Kernel.apply(module, :error, [command, error, state]) do
-                    {:dispatch, command, state} ->
-                        Process.send(self(), {:execute, command, meta}, []) 
-                        {:noreply, %Saga{saga | state: state}}
-
-                    {:ok, state} ->
-                        saga = 
-                            %Saga{saga | state: state}
-                            |> acknowledge(number, :running)
-                            |> checkpoint()
-                        {:noreply, saga}
-
-                    error ->
-                        {:stop, error, saga}
-                end
+                params = %{
+                    error: error,
+                    event: Event.payload(event),
+                }
+                reply = Kernel.apply(module, :error, [command, params, state]) 
+                handle_reply(saga, event, reply)
 
             error ->
                 {:stop, error, saga}
@@ -167,40 +163,14 @@ defmodule Signal.Process.Saga do
     def handle_cast({action, %Event{}=event}, %Saga{status: :running}=saga) 
     when action in [:apply, :start] do
 
-        %Event{type: type, number: number}=event
+        %Event{type: type}=event
         %Saga{module: module, state: state} = saga
 
         log(saga, "applying: #{inspect(type)}")
-        case Kernel.apply(module, :apply, [Event.payload(event), state]) do
-            {:dispatch, command, state} ->
-                Process.send(self(), {:execute, command, Event.metadata(event)}, []) 
-                {:noreply, %Saga{ saga | state: state}}
 
+        reply = Kernel.apply(module, :apply, [Event.payload(event), state])
 
-            {:ok, state} ->
-                saga = 
-                    %Saga{ saga | state: state}
-                    |> acknowledge(number, :running)
-                    |> checkpoint()
-                {:noreply, saga}
-
-            {:halt, state} ->
-                saga = 
-                    %Saga{ saga | state: state}
-                    |> acknowledge(number, :halted)
-                    |> checkpoint()
-
-                {:noreply, saga}
-
-
-            {:stop, state} ->
-                saga = 
-                    %Saga{ saga | state: state}
-                    |> acknowledge(number, :stopped)
-
-                stop_process(saga)
-                {:noreply, saga}
-        end
+        handle_reply(saga, event, reply)
     end
 
     defp execute(command, %Saga{app: app}, opts) do
@@ -246,5 +216,37 @@ defmodule Signal.Process.Saga do
         Logger.info(info)
     end
 
+
+    defp handle_reply(%Saga{}=saga, %Event{number: number}=event, reply) do
+        case reply do 
+            {:dispatch, command, state} ->
+                Process.send(self(), {:execute, event, command}, []) 
+                {:noreply, %Saga{saga | state: state}}
+
+            {:ok, state} ->
+                saga = 
+                    %Saga{ saga | state: state}
+                    |> acknowledge(number, :running)
+                    |> checkpoint()
+                {:noreply, saga}
+
+            {:halt, state} ->
+                saga = 
+                    %Saga{ saga | state: state}
+                    |> acknowledge(number, :halted)
+                    |> checkpoint()
+
+                {:noreply, saga}
+
+
+            {:stop, state} ->
+                saga = 
+                    %Saga{ saga | state: state}
+                    |> acknowledge(number, :stopped)
+
+                stop_process(saga)
+                {:noreply, saga}
+        end
+    end
 
 end

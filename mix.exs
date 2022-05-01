@@ -34,6 +34,7 @@ defmodule Signal.MixProject do
         [
             {:uuid, "~> 1.1" },
             {:jason, "~> 1.0"},
+            {:timex, "~> 3.7.6"},
             {:telemetry, "~> 0.4"},
             {:blueprint, in_umbrella: true},
         ]
