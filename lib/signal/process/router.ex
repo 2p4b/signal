@@ -14,12 +14,33 @@ defmodule Signal.Process.Router do
     defmodule Proc do
         defstruct [:id, :pid, :ack, :syn, :ref, :status, queue: []]
 
-        def new(id, pid, opts \\ []) do
+        def new(id, pid, opts \\ []) 
+        def new(id, pid, opts) when is_nil(pid) do
+            syn = Keyword.get(opts, :syn, 0)
+            ack = Keyword.get(opts, :ack, 0)
+            queue = Keyword.get(opts, :queue, [])
+            status = Keyword.get(opts, :ack, :halted)
+            struct(__MODULE__, [
+                id: id, 
+                ref: nil, 
+                pid: nil, 
+                syn: syn,
+                ack: ack, 
+                queue: queue,
+                status: status
+            ])
+        end
+
+        def new(id, pid, opts) when is_pid(pid) and is_map(opts) do
+            new(id, pid, Map.to_list(opts))
+        end
+
+        def new(id, pid, opts) when is_pid(pid) and is_list(opts) do
             ref = Process.monitor(pid)
             syn = Keyword.get(opts, :syn, 0)
             ack = Keyword.get(opts, :ack, 0)
             queue = Keyword.get(opts, :queue, [])
-            status = Keyword.get(opts, :ack, :init)
+            status = Keyword.get(opts, :status, :init)
             struct(__MODULE__, [
                 id: id, 
                 ref: ref, 
@@ -59,13 +80,18 @@ defmodule Signal.Process.Router do
             end
         end
 
-        def acknowledge(%Proc{status: status, syn: syn, queue: queue}=proc, number) do
-
+        def acknowledge(%Proc{}=proc, {stat, number}) do
+            %Proc{status: status, syn: syn, queue: queue}=proc
             {status, syn} = 
-                if status == :init do
-                    {:running, number}
-                else
-                    {status, syn}
+                case {status, stat} do
+                    {:init, :running} ->
+                        {stat, number}
+
+                    {:running, :halted} ->
+                        {stat, syn}
+
+                    _ ->
+                        {status, syn}
                 end
 
             queue = Enum.filter(queue, fn x -> x > number end)
@@ -166,7 +192,7 @@ defmodule Signal.Process.Router do
             proc = 
                 procs
                 |> Enum.at(pin)
-                |> Proc.acknowledge(number)
+                |> Proc.acknowledge({:running, number})
 
 
             if not Enum.empty?(proc.queue) do
@@ -193,11 +219,51 @@ defmodule Signal.Process.Router do
             {:noreply,router}
         else
 
-            %Proc{ref: ref} = Enum.at(procs, pin)
+            case Enum.at(procs, pin) do
+                %{pid: pid, ref: ref} when is_pid(pid) ->
+                    Process.demonitor(ref)
 
-            Process.demonitor(ref)
+                _ ->
+                    nil
+            end
 
-            procs =  List.delete_at(procs, pin)
+            procs = Enum.filter(procs, fn %{id: sid} ->  sid != id end)
+            {:noreply, log_state(router, procs)}
+        end
+    end
+
+
+    def handle_ack(%Router{procs: procs}=router, {id, number, :halted}) do
+        pin =
+            Enum.find_index(procs, fn 
+                %Proc{id: ^id, syn: ^number} -> 
+                    true
+
+                _ -> 
+                    false
+            end)
+
+        if is_nil(pin) do
+            {:noreply,router}
+        else
+
+            proc = 
+                procs
+                |> Enum.at(pin)
+                |> Proc.acknowledge({:halted, number})
+                |> struct(%{ref: nil, pid: nil})
+
+
+            # Demonitor if process queue is empty
+            # else ignor stopped event
+            procs =
+                if Enum.empty?(proc.queue) do
+                    signal_stop(proc)
+                    List.replace_at(procs, pin, proc)
+                else
+                    sched_next(proc)
+                    List.replace_at(procs, pin, proc)
+                end
 
             {:noreply, log_state(router, procs)}
         end
@@ -224,47 +290,26 @@ defmodule Signal.Process.Router do
         proc =
             case {action, index} do
 
-                {:stop, index} ->
-                    if is_nil(index) do
-                        nil
-                    else
-                        Enum.at(procs, index)
-                    end
-
-
                 {:start, index}  ->
-                    if is_nil(index) do
-                        pid = start_process( router, id)
-                        Proc.new(id, pid)
-                    else
-                        Enum.at(procs, index)
-                    end
-
-                {:start!, index}  ->
                     if is_nil(index) do
                         pid = start_process(router, id)
                         Proc.new(id, pid)
                     else
                         Enum.at(procs, index)
-                        |> IO.inspect(label: "PROCESS ALREADY STARTED")
-                        nil
                     end
-
 
                 {:apply, index} when is_integer(index) ->
                     Enum.at(procs, index)
 
-
-                {:halt, index}  when is_integer(index) ->
-                    Enum.at(procs, index)
-
-                        
                     _ ->  nil
-
             end
 
         if proc do
-            proc = Proc.push_event(proc, {action, event})
+
+            proc = 
+                router
+                |> wake_process(proc)
+                |> Proc.push_event({action, event})
 
             %Proc{queue: queue, ref: ref} = proc
 
@@ -359,26 +404,44 @@ defmodule Signal.Process.Router do
     end
 
     defp dump_processes(procs) when is_list(procs) do
-        Enum.map(procs, fn %Proc{id: id, queue: queue} -> 
-            %{id: id, queue: queue}
+        Enum.map(procs, fn %Proc{id: id, ack: ack, queue: queue, status: status} -> 
+            %{id: id, ack: ack, status: Atom.to_string(status), queue: queue}
         end)
     end
 
     defp load_processes(%Router{}=router, %Snapshot{data: data}) do
         procs = 
             data
-            |> Enum.filter(fn 
-                %{queue: []} -> 
-                    false
-                _ ->
-                    true
-            end)
-            |> Enum.map(fn %{id: id, queue: queue} -> 
-                pid = start_process(router, id, 0)
-                Proc.new(id, pid, queue: queue)
+            |> Enum.map(fn 
+                %{id: id, queue: []} -> 
+                    Proc.new(id, nil, queue: [], status: :halted)
+
+                %{id: id, queue: queue} -> 
+                    pid = start_process(router, id, 0)
+                    Proc.new(id, pid, queue: queue)
             end)
 
         %Router{router | procs: procs}
+    end
+
+    defp wake_process(%Router{}=router, %Proc{id: id, status: status}=proc)
+    when status not in [:running, :init] do
+        pid = start_process(router, id, 0)
+        opts =
+            proc
+            |> Map.from_struct() 
+            |> Map.put(:status, :init)
+
+        Proc.new(id, pid,  opts)
+    end
+
+    defp wake_process(%Router{}, %Proc{}=proc) do
+        proc
+    end
+
+    defp signal_stop(%Proc{pid: pid, ref: ref}) when is_pid(pid) do
+        Process.demonitor(ref)
+        GenServer.cast(pid, :stop)
     end
 
     defp subscribe_router(%Router{}=router, %Snapshot{version: version}) do

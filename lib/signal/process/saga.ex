@@ -107,7 +107,7 @@ defmodule Signal.Process.Saga do
 
                     {:ok, state} ->
                         saga = 
-                            %Saga{ saga | state: state}
+                            %Saga{saga | state: state}
                             |> acknowledge(number, :running)
                             |> checkpoint()
                         {:noreply, saga}
@@ -119,6 +119,12 @@ defmodule Signal.Process.Saga do
             error ->
                 {:stop, error, saga}
         end
+    end
+
+    @impl true
+    def handle_cast(:stop, %Saga{}=saga) do
+        stop_process(saga)
+        {:noreply, saga}
     end
 
     @impl true
@@ -147,34 +153,19 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast({_action, %Event{number: number}}, %Saga{version: version}=saga)
-    when number < version do
+    def handle_cast({_action, %Event{}}, %Saga{status: :halted}=saga) do
         {:noreply, saga}
     end
 
     @impl true
-    def handle_cast({:stop, %Event{type: type, number: number}=event}, %Saga{}=saga) do
-        %Saga{module: module, state: state} = saga
-
-        log(saga, "stopping: #{inspect(type)}")
-        case Kernel.apply(module, :stop, [Event.payload(event), state]) do
-
-            {:ok, state} ->
-                log(saga, "stopped")
-
-                saga = 
-                    saga
-                    |> struct(%{ack: number, state: state})
-                    |> checkpoint()
-
-                stop_process(saga)
-                {:noreply, saga}
-        end
+    def handle_cast({_action, %Event{number: number}}, %Saga{ack: ack}=saga)
+    when number <= ack do
+        {:noreply, saga}
     end
 
     @impl true
     def handle_cast({action, %Event{}=event}, %Saga{status: :running}=saga) 
-    when action in [:apply, :start, :start!, :apply!] do
+    when action in [:apply, :start] do
 
         %Event{type: type, number: number}=event
         %Saga{module: module, state: state} = saga
@@ -190,6 +181,24 @@ defmodule Signal.Process.Saga do
                 saga = 
                     %Saga{ saga | state: state}
                     |> acknowledge(number, :running)
+                    |> checkpoint()
+                {:noreply, saga}
+
+            {:halt, state} ->
+                saga = 
+                    %Saga{ saga | state: state}
+                    |> acknowledge(number, :halted)
+                    |> checkpoint()
+
+                {:noreply, saga}
+
+
+            {:stop, state} ->
+                saga = 
+                    %Saga{ saga | state: state}
+                    |> acknowledge(number, :stopped)
+
+                stop_process(saga)
                 {:noreply, saga}
         end
     end
@@ -201,24 +210,26 @@ defmodule Signal.Process.Saga do
     end
 
     defp acknowledge(%Saga{id: id, module: router}=saga, number, status) do
-
         GenServer.cast(router, {:ack, id, number, status})
-
         %Saga{saga | ack: number, status: status}
-        |> inc_version()
-        |> checkpoint()
     end
 
-    defp inc_version(%Saga{version: version}=saga) do
-        %Saga{saga | version: version + 1}
-    end
-
-    defp checkpoint(%Saga{}=saga) do
+    defp checkpoint(%Saga{app: app}=saga) do
+        {application, tenant}  = app
+        saga
+        |> snapshot()
+        |> application.record([tenant: tenant])
         saga
     end
 
     defp identity(%Saga{id: id, module: module}) do
         {Signal.Helper.module_to_string(module), id}
+    end
+
+    defp snapshot(%Saga{state: state, ack: number}=saga) do
+        saga
+        |> identity()
+        |> Snapshot.new(Codec.encode(state), version: number)
     end
 
     defp stop_process(%Saga{}) do
