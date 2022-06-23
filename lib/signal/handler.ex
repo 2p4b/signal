@@ -10,12 +10,15 @@ defmodule Signal.Handler do
         app = Keyword.get(opts, :application)
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
+        start = Keyword.get(opts, :start, :current)
         quote do
             use GenServer
             alias Signal.Handler
             alias Signal.Stream.Event
 
             @app unquote(app)
+
+            @signal_start unquote(start)
 
             @name (if unquote(name) do 
                 unquote(name) 
@@ -32,7 +35,12 @@ defmodule Signal.Handler do
             Starts a new execution queue.
             """
             def start_link(opts) do
-                opts = [application: @app, topics: @topics, name: @name] ++ opts 
+                opts = [
+                    application: @app, 
+                    start: @signal_start 
+                    topics: @topics, 
+                    name: @name
+                ] ++ opts 
                 GenServer.start_link(__MODULE__, opts, name: __MODULE__)
             end
 
@@ -77,10 +85,11 @@ defmodule Signal.Handler do
     def init(module, opts) do
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
+        start = Keyword.get(opts, :start, :current)
         application = Keyword.get(opts, :application)
         tenant = Keyword.get(opts, :tenant, application)
         app = {application, tenant}
-        {:ok, subscription} = subscribe(app, name, topics)
+        {:ok, subscription} = subscribe(app, name, topics, start)
         init_params = []
         case Kernel.apply(module, :init, [subscription, init_params]) do
             {:ok, state} ->
@@ -91,10 +100,11 @@ defmodule Signal.Handler do
         end
     end
 
-    def subscribe(app, name, topics) do
+    def subscribe(app, name, topics, start \\ :current) do
         {application, tenant} = app
+        opts = [topics: topics, tenant: tenant, start: start]
         Enum.find_value(1..5, fn _x -> 
-            case application.subscribe(name, topics: topics, tenant: tenant) do
+            case application.subscribe(name, opts) do
                 {:ok, subscription} ->
                     {:ok, subscription}
                 _ ->
@@ -149,6 +159,9 @@ defmodule Signal.Handler do
         case response do
             {:noreply, state} ->
                 {:noreply, %Handler{handler | state: state}}
+
+            {:stop, state} ->
+                {:stop, nil, state}
 
             {:stop, reason, state} ->
                 {:stop, reason, state}
