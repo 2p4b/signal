@@ -162,10 +162,10 @@ defmodule Signal.Aggregates.Aggregate do
                 
                 event_payload = Event.payload(event)
 
-                aggregate_type = state.__struct__
+                state_type = state.__struct__
 
                 info = """
-                [Aggregate] #{state.__struct__} 
+                [Aggregate] #{state_type} 
                 stream: #{stream}
                 applying: #{event.type}
                 version: #{event.position}
@@ -215,11 +215,8 @@ defmodule Signal.Aggregates.Aggregate do
 
                         {:stop, reason, aggregate}
 
-                    {:error, error}=error ->
-                        error
-
-                        rubish ->
-                        IO.inspect(rubish)
+                    {:error, error} ->
+                        {:error, error}
 
                 end
 
@@ -309,9 +306,11 @@ defmodule Signal.Aggregates.Aggregate do
         %Aggregate{aggr| subscription: subscription}
     end
 
+    @impl true
     def terminate(nil, _state) do
     end
 
+    @impl true
     def terminate(reason, %Aggregate{stream: {type, source}, version: vsn}) do
         info = """
         [Aggregate Stopped] #{type} 
