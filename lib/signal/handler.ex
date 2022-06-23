@@ -36,10 +36,10 @@ defmodule Signal.Handler do
             """
             def start_link(opts) do
                 opts = [
-                    application: @app, 
-                    start: @signal_start 
+                    name: @name,
+                    start: @signal_start,
                     topics: @topics, 
-                    name: @name
+                    application: @app
                 ] ++ opts 
                 GenServer.start_link(__MODULE__, opts, name: __MODULE__)
             end
