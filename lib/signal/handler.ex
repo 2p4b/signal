@@ -123,8 +123,25 @@ defmodule Signal.Handler do
         """
         Logger.info(info)
         args = [Event.payload(event), Event.metadata(event), state]
-        response = Kernel.apply(module, :handle_event, args)
-        application.acknowledge(handle, number, tenant: tenant)
+
+        response =
+            case Kernel.apply(module, :handle_event, args) do
+                {:error, _reason, _}=error  ->
+                    error
+
+                {:error, _}=error ->
+                    error
+
+                response when not is_tuple(response) ->
+                    application.acknowledge(handle, number, tenant: tenant)
+                    {:noreply, response}
+
+
+               response -> 
+                    application.acknowledge(handle, number, tenant: tenant)
+                    response
+            end
+
         handle_response(response, handler)
     end
 
