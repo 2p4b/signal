@@ -447,7 +447,7 @@ defmodule Signal.Process.Router do
     defp subscribe_router(%Router{}=router, %Snapshot{version: version}) do
         %Router{app: {application, tenant}, name: name, topics: topics}=router
 
-        subopts = [topics: topics, from: version, tenant: tenant]
+        subopts = [topics: topics, start: version, tenant: tenant]
 
         {:ok, sub} = application.subscribe(name, subopts)
 

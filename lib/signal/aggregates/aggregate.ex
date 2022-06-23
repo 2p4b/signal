@@ -299,7 +299,7 @@ defmodule Signal.Aggregates.Aggregate do
     defp listen(%Aggregate{app: app, stream: {_, stream}, index: index}=aggr) do
         {application, _tenant} = app
         {:ok, subscription} = application.subscribe([
-            from: index,
+            start: index,
             track: false, 
             stream: stream, 
         ])
