@@ -43,7 +43,7 @@ defmodule Signal.Events.AggregateTest do
     defimpl Signal.Stream.Reducer, for: Accounts do
 
         def apply(%Accounts{balance: balance}=account, _meta, %Deposited{amount: amount}) do
-            %Accounts{ account | balance: balance + amount }
+            {:ok, %Accounts{ account | balance: balance + amount }}
         end
 
     end

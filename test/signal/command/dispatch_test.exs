@@ -54,7 +54,7 @@ defmodule Signal.Command.DispatchTest do
 
     defimpl Signal.Stream.Reducer, for: Accounts do
         def apply(%Accounts{balance: balance}=account, _meta, %Deposited{amount: amt}) do
-            %Accounts{ account | balance: balance + amt }
+            {:ok, %Accounts{ account | balance: balance + amt }}
         end
     end
 

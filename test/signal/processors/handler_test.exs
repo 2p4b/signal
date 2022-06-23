@@ -3,6 +3,7 @@ defmodule Signal.Processor.HandlerTest do
 
     alias Signal.Handler
     alias Signal.Void.Store
+    alias Signal.Transaction
     alias Signal.Stream.Event
     alias Signal.Events.Stage
 
@@ -104,6 +105,7 @@ defmodule Signal.Processor.HandlerTest do
                 events: [event1],
                 version: 1,
             }
+            |> Transaction.new()
 
             staged2 = %Stage{
                 stage: self(),
@@ -111,6 +113,7 @@ defmodule Signal.Processor.HandlerTest do
                 events: [event2],
                 version: 2,
             }
+            |> Transaction.new()
 
             TestApp.publish(staged1, [])
             assert_receive(%Deposited{ amount: 5000 })

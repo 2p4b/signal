@@ -46,8 +46,14 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
-    def handle_call({:await, red}, from, %Aggregate{version: ver, awaiting: waiting, state: state}=aggregate) do
-        if ver >= red do
+    def handle_call({:await, red}, from, %Aggregate{}=aggregate) do
+        %Aggregate{
+            version: vsn, 
+            awaiting: waiting, 
+            state: state
+        } = aggregate
+
+        if vsn >= red do
             {:reply, state, aggregate} 
         else
             ref = Process.monitor(elem(from, 0))
@@ -57,7 +63,11 @@ defmodule Signal.Aggregates.Aggregate do
 
     @impl true
     def handle_info(:init, %Aggregate{}=aggregate) do
-        %Aggregate{app: {application, tenant}, stream: {_, stream}}=aggregate
+        %Aggregate{
+            app: {application, tenant}, 
+            stream: {_, stream}
+        } = aggregate
+
         aggregate = 
             case application.snapshot(stream, tenant: tenant) do
                 nil -> 
@@ -78,12 +88,19 @@ defmodule Signal.Aggregates.Aggregate do
     @impl true
     def handle_info(%Event{}=event, %Aggregate{}=aggregate) do
         case apply_event(aggregate, event) do
-            %Aggregate{} = aggregate ->
+            {:ok, %Aggregate{}=aggregate} ->
                 aggregate =
                     aggregate
                     |> acknowledge(event)
                     |> reply_waiters()
                 {:noreply, aggregate} 
+
+            {:stop, reason, %Aggregate{}=aggregate} ->
+                aggregate =
+                    aggregate
+                    |> acknowledge(event)
+                    |> reply_waiters()
+                {:stop, reason, aggregate} 
 
             error ->
                 {:stop, error, aggregate}
@@ -91,8 +108,8 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
-    def handle_info(:timeout, %Aggregate{} = state) do
-        {:stop, :normal, state}
+    def handle_info(:timeout, %Aggregate{}=aggregate) do
+        {:stop, :normal, aggregate}
     end
 
     @impl true
@@ -110,10 +127,16 @@ defmodule Signal.Aggregates.Aggregate do
         {:noreply, %Aggregate{aggregate | awaiting: awaiting}}
     end
 
-    defp reply_waiters(%Aggregate{version: ver, state: state, awaiting: waiters}=aggregate) do
+    defp reply_waiters(%Aggregate{}=aggregate) do
+        %Aggregate{
+            version: vsn, 
+            state: state, 
+            awaiting: waiters
+        } = aggregate
+
         awaiting =
             Enum.filter(waiters, fn {from, ref, stage} -> 
-                if ver >= stage do
+                if vsn >= stage do
                     Process.demonitor(ref)
                     GenServer.reply(from, state)
                     false
@@ -139,6 +162,8 @@ defmodule Signal.Aggregates.Aggregate do
                 
                 event_payload = Event.payload(event)
 
+                aggregate_type = state.__struct__
+
                 info = """
                 [Aggregate] #{state.__struct__} 
                 stream: #{stream}
@@ -148,20 +173,54 @@ defmodule Signal.Aggregates.Aggregate do
                 Logger.info(info)
 
                 case Reducer.apply(state, metadata, event_payload) do
-                    {:snapshot, state} ->
-                        %Aggregate{aggregate | 
-                            state: state,
-                            index: number,
-                            version: position
-                        }
-                        |> snapshot()
+                    {:ok, state} ->
+                         aggregate = 
+                            %Aggregate{aggregate | 
+                                state: state,
+                                index: number,
+                                version: position
+                            }
+                            |> snapshot()
+                        {:ok, aggregate}
 
-                    state ->
-                        %Aggregate{aggregate | 
-                            state: state,
-                            index: number,
-                            version: position
-                        }
+                    {:nosnap, state} ->
+                        aggregate = 
+                            %Aggregate{aggregate | 
+                                state: state,
+                                index: number,
+                                version: position
+                            }
+
+                        {:ok, aggregate}
+
+                    {:stop, state} ->
+                        aggregate = 
+                            %Aggregate{aggregate | 
+                                state: state,
+                                index: number,
+                                version: position
+                            }
+                            |> snapshot()
+
+                        {:stop, nil, aggregate}
+
+                    {:stop, reason, state} ->
+                        aggregate = 
+                            %Aggregate{aggregate | 
+                                state: state,
+                                index: number,
+                                version: position
+                            }
+                            |> snapshot()
+
+                        {:stop, reason, aggregate}
+
+                    {:error, error}=error ->
+                        error
+
+                        rubish ->
+                        IO.inspect(rubish)
+
                 end
 
 
@@ -248,6 +307,19 @@ defmodule Signal.Aggregates.Aggregate do
             stream: stream, 
         ])
         %Aggregate{aggr| subscription: subscription}
+    end
+
+    def terminate(nil, _state) do
+    end
+
+    def terminate(reason, %Aggregate{stream: {type, source}, version: vsn}) do
+        info = """
+        [Aggregate Stopped] #{type} 
+        source: #{source}
+        version: #{vsn}
+        """
+        Logger.info(info)
+        reason
     end
 
 end

@@ -13,7 +13,7 @@ defmodule Signal.Processor.SagaTest do
         end
 
         def apply(_event, _meta, %Accounts{}=act) do
-            act
+            {:ok, act}
         end
 
     end
