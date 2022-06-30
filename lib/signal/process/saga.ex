@@ -17,7 +17,7 @@ defmodule Signal.Process.Saga do
         :state, 
         :module, 
         ack: 0, 
-        status: :init,
+        status: :running,
         version: 0,
     ]
 
@@ -31,7 +31,7 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def init(opts) do
-        Process.send(self(), :init, [])
+        Process.send(self(), :load, [])
         {:ok, struct(__MODULE__, opts)}
     end
 
@@ -39,7 +39,7 @@ defmodule Signal.Process.Saga do
         saga = Supervisor.prepare_saga(app, {module, id})    
         saga
         |> GenServer.whereis()
-        |> GenServer.cast({:start, index})
+        |> GenServer.cast({:init, index})
         saga
     end
 
@@ -56,7 +56,7 @@ defmodule Signal.Process.Saga do
 
 
     @impl true
-    def handle_info(:init, %Saga{}=saga) do
+    def handle_info(:load, %Saga{}=saga) do
 
         %Saga{app: app, module: module, id: id}=saga
 
@@ -124,7 +124,7 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast({:start, index}, %Saga{status: :init}=saga) do
+    def handle_cast({:init, index}, %Saga{}=saga) when is_number(index) do
         %Saga{id: id, module: module, ack: ack, version: version} = saga
         saga = 
             cond do
@@ -230,19 +230,19 @@ defmodule Signal.Process.Saga do
                     |> checkpoint()
                 {:noreply, saga}
 
-            {:halt, state} ->
+            {:sleep, state} ->
                 saga = 
                     %Saga{ saga | state: state}
-                    |> acknowledge(number, :halted)
+                    |> acknowledge(number, :sleep)
                     |> checkpoint()
 
                 {:noreply, saga}
 
 
-            {:stop, state} ->
+            {:shutdown, state} ->
                 saga = 
                     %Saga{ saga | state: state}
-                    |> acknowledge(number, :stopped)
+                    |> acknowledge(number, :shutdown)
 
                 stop_process(saga)
                 {:noreply, saga}

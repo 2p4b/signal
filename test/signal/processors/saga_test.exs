@@ -160,7 +160,7 @@ defmodule Signal.Processor.SagaTest do
 
         def apply(%AccountClosed{}=ev, %ActivityNotifier{}=act) do
             acknowledge(act, ev)
-            {:stop, act}
+            {:shutdown, act}
         end
 
         def error(%Deposite{}, _error, %ActivityNotifier{}=acc) do
