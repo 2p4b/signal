@@ -18,23 +18,28 @@ defmodule Signal.Aggregates.Supervisor do
 
     def prepare_aggregate(application, {type, id}=stream) 
     when is_binary(id) and is_atom(type) do
-        case Registry.lookup(registry(application), id) do
-            [{_pid, type}] ->
-                via_tuple(application, {id, type})            
+        pname = process_name(stream)
+        case Registry.lookup(registry(application), pname) do
+            [{_pid, _type}] ->
+                via_tuple(application, {pname, stream})            
 
             [] ->
-                via_name = via_tuple(application, {id, type})
+                via_name = via_tuple(application, {pname, stream})
                 application
-                |> child_args(stream, via_name) 
+                |> child_args(via_name) 
                 |> start_child()
                 prepare_aggregate(application, stream)
         end
     end
 
-    defp child_args(app, stream, via_name) do
-        {:via, _reg, {_mreg, id, _mod}} = via_name
-        {aggregate, _aid} = stream
+    def process_name({type, id}) when is_atom(type) and is_binary(id) do
+        id
+    end
+
+    defp child_args(app, via_name) do
+        {:via, _reg, {_mreg, _pname, stream}} = via_name
         {app_module, _app_name} = app
+        {aggregate, id} = stream
         [
             id: id,
             name: via_name,

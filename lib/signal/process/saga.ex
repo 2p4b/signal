@@ -149,11 +149,6 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast({_action, %Event{}}, %Saga{status: :halted}=saga) do
-        {:noreply, saga}
-    end
-
-    @impl true
     def handle_cast({_action, %Event{number: number}}, %Saga{ack: ack}=saga)
     when number <= ack do
         {:noreply, saga}
@@ -233,7 +228,7 @@ defmodule Signal.Process.Saga do
             {:sleep, state} ->
                 saga = 
                     %Saga{ saga | state: state}
-                    |> acknowledge(number, :sleep)
+                    |> acknowledge(number, :sleeping)
                     |> checkpoint()
 
                 {:noreply, saga}
@@ -243,6 +238,7 @@ defmodule Signal.Process.Saga do
                 saga = 
                     %Saga{ saga | state: state}
                     |> acknowledge(number, :shutdown)
+                    |> checkpoint()
 
                 stop_process(saga)
                 {:noreply, saga}
