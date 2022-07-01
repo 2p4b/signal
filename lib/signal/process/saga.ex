@@ -99,7 +99,7 @@ defmodule Signal.Process.Saga do
             causation_id: uuid,
             correlation_id: correlation_id
         ]
-        log("dispatch: #{command.__struct__}")
+        log(saga, "dispatch: #{command.__struct__}")
         case execute(command, saga, opts) do
             %Result{}->
                 {:noreply, acknowledge(saga, number, :running)}
@@ -240,7 +240,7 @@ defmodule Signal.Process.Saga do
                     |> shutdown()
                     |> acknowledge(number, :shutdown)
 
-                log("shutdown")
+                log(saga, "shutdown")
                 {:stop, :shutdown, saga}
         end
     end
