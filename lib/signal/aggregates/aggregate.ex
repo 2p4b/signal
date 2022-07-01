@@ -95,6 +95,28 @@ defmodule Signal.Aggregates.Aggregate do
                     |> reply_waiters()
                 {:noreply, aggregate} 
 
+            {:sleep, %Aggregate{}=aggregate} ->
+
+                aggregate =
+                    aggregate
+                    |> acknowledge(event)
+                    |> reply_waiters()
+
+                case aggregate.awaiting  do
+                    [] ->
+                        {:stop, :sleep, aggregate} 
+                    _ ->
+                        # NO Sleep if there are waiters
+                        {:noreply, aggregate}
+                end
+
+            {:hibernate, %Aggregate{}=aggregate} ->
+                aggregate =
+                    aggregate
+                    |> acknowledge(event)
+                    |> reply_waiters()
+                {:noreply, aggregate, :hibernate} 
+
             {:stop, reason, %Aggregate{}=aggregate} ->
                 aggregate =
                     aggregate
@@ -173,14 +195,15 @@ defmodule Signal.Aggregates.Aggregate do
                 Logger.info(info)
 
                 case Reducer.apply(state, metadata, event_payload) do
-                    {:ok, state} ->
+                    {action, state} when action in [:ok, :sleep, :hibernate] ->
                          aggregate = 
                             %Aggregate{aggregate | 
                                 state: state,
                                 index: number,
                                 version: position
                             }
-                        {:ok, aggregate}
+                        {action, aggregate}
+
 
                     {:snapshot, state} ->
                         aggregate = 
@@ -192,6 +215,17 @@ defmodule Signal.Aggregates.Aggregate do
                             |> snapshot()
 
                         {:ok, aggregate}
+
+                    {:snapshot, state, action} ->
+                        aggregate = 
+                            %Aggregate{aggregate | 
+                                state: state,
+                                index: number,
+                                version: position
+                            }
+                            |> snapshot()
+
+                        {action, aggregate}
 
                     {:stop, state} ->
                         aggregate = 
@@ -314,6 +348,7 @@ defmodule Signal.Aggregates.Aggregate do
         [Aggregate Stopped] #{type} 
         source: #{source}
         version: #{vsn}
+        reason: #{reason}
         """
         Logger.info(info)
         reason

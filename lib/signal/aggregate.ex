@@ -32,6 +32,24 @@ defmodule Signal.Aggregate do
         end
     end
 
+    def snapshot(aggregate, action \\ nil)
+    def snapshot(aggregate, nil) when is_struct(aggregate) do
+        {:snapshot, aggregate}
+    end
+
+    def snapshot(aggregate, action) 
+    when is_struct(aggregate) and action in [:hibernate, :sleep] do
+        {:snapshot, aggregate, action}
+    end
+
+    def sleep(aggregate) do
+        {:sleep, aggregate}
+    end
+
+    def hibernate(aggregate) do
+        {:hibernate, aggregate}
+    end
+
 end
 
 
