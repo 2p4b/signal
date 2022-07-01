@@ -180,16 +180,16 @@ defmodule Signal.Aggregates.Aggregate do
                                 index: number,
                                 version: position
                             }
-                            |> snapshot()
                         {:ok, aggregate}
 
-                    {:nosnap, state} ->
+                    {:snapshot, state} ->
                         aggregate = 
                             %Aggregate{aggregate | 
                                 state: state,
                                 index: number,
                                 version: position
                             }
+                            |> snapshot()
 
                         {:ok, aggregate}
 
@@ -200,7 +200,6 @@ defmodule Signal.Aggregates.Aggregate do
                                 index: number,
                                 version: position
                             }
-                            |> snapshot()
 
                         {:stop, nil, aggregate}
 
@@ -211,7 +210,6 @@ defmodule Signal.Aggregates.Aggregate do
                                 index: number,
                                 version: position
                             }
-                            |> snapshot()
 
                         {:stop, reason, aggregate}
 
