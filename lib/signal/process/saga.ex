@@ -188,7 +188,7 @@ defmodule Signal.Process.Saga do
     end
 
     defp identity(%Saga{id: id, module: module}) do
-        {Signal.Helper.module_to_string(module), id}
+        {id, Signal.Helper.module_to_string(module)}
     end
 
     defp snapshot(%Saga{state: state, ack: number}=saga) do
