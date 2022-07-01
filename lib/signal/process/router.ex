@@ -155,36 +155,43 @@ defmodule Signal.Process.Router do
 
             process = Enum.at(processes, index)
 
-            %Proc{id: id, ack: ack, syn: syn, queue: queue} = process
 
-            Process.demonitor(ref)
+            case process.queue do
+                [] ->
 
-            pid = start_process(router, id, ack) 
+                    process =
+                        %Proc{process | 
+                            pid: nil, 
+                            ref: nil, 
+                            status: :sleeping
+                        }
 
-            queue =
-                cond do
-                    syn > ack ->
-                        List.wrap(syn) ++ queue
-                        
-                    true ->
-                        queue
-                end
+                    processes =  
+                        processes
+                        |> List.replace_at(index, process)
 
-            ref = Process.monitor(pid)
+                    {:noreply, %Router{router | processes: processes}}
 
-            process = %Proc{process | 
-                ref: ref, 
-                pid: pid, 
-                queue: queue
-            } 
+                _ ->
 
-            sched_next(process)
+                    process.ref
+                    |> Process.demonitor()
 
-            processes =  
-                processes
-                |> List.replace_at(index, process)
+                    %Proc{id: id, ack: ack} = process
 
-            {:noreply, %Router{router|processes: processes}}
+                    pid = start_process(router, id, ack) 
+
+                    process = Proc.new(id, pid, Map.from_struct(process))
+
+                    sched_next(process)
+
+                    processes =  
+                        processes
+                        |> List.replace_at(index, process)
+
+                    {:noreply, %Router{router|processes: processes}}
+            end
+
         end
     end
 
