@@ -179,6 +179,14 @@ defmodule Signal.Process.Saga do
         saga
     end
 
+    defp shutdown(%Saga{app: app}=saga) do
+        {application, tenant}  = app
+        saga
+        |> identity()
+        |> application.purge([tenant: tenant])
+        saga
+    end
+
     defp identity(%Saga{id: id, module: module}) do
         {Signal.Helper.module_to_string(module), id}
     end
@@ -187,10 +195,6 @@ defmodule Signal.Process.Saga do
         saga
         |> identity()
         |> Snapshot.new(Codec.encode(state), version: number)
-    end
-
-    defp stop_process(%Saga{}) do
-        exit(:normal)
     end
 
     defp log(%Saga{module: module, id: id}, info) do
@@ -227,14 +231,16 @@ defmodule Signal.Process.Saga do
 
 
             {:shutdown, state} ->
-                saga = 
-                    %Saga{ saga | state: state}
-                    |> acknowledge(number, :shutdown)
-                    |> checkpoint()
-
-                stop_process(saga)
-                {:noreply, saga}
+                %Saga{ saga | state: state}
+                |> shutdown()
+                |> acknowledge(number, :shutdown)
+                {:stop, :shutdown, saga}
         end
+    end
+
+    @impl true
+    def terminate(_, _) do
+        :ok
     end
 
 end

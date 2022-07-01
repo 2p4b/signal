@@ -45,6 +45,11 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
+    def purge(snap, opts \\ []) do
+        Repo.purge(snap, opts)
+    end
+
+    @impl true
     def event(number, _opts \\ []) do
         Repo.event(number)
     end

@@ -4,6 +4,8 @@ defmodule Signal.Store do
 
     @type stream :: {module::atom,  id::binary}
 
+    @type iden  :: {atom() | binary(), id::binary}
+
     @type handle :: binary() | list()
 
     @type opts :: list()
@@ -27,6 +29,8 @@ defmodule Signal.Store do
     @callback stream_position(stream::stream, opts)  :: integer()
 
     @callback record(snapshot, opts) :: {:ok, integer()} | {:error, reason::term()}
+
+    @callback purge(iden, opts) :: :ok | {:error, reason::term()}
 
     @callback snapshot(id::binary(), opts) :: term() | nil | {:error, reason::term()}
 

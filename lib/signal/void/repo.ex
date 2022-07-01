@@ -36,16 +36,25 @@ defmodule Signal.Void.Repo do
     end
 
     @impl true
-    def handle_call({:record, %Snapshot{id: id}=snapshot}, _from, %Repo{}=store) do
+    def handle_call({:record, %Snapshot{}=snapshot}, _from, %Repo{}=store) do
         %Repo{snapshots: snapshots} = store
+        %Snapshot{id: id, type: type, version: version} = snapshot
+
         versions =
             snapshots
-            |> Map.get(id, %{})
-            |> Map.put(snapshot.version, snapshot)
+            |> Map.get({type, id}, %{})
+            |> Map.put(version, snapshot)
 
         snapshots = Map.put(snapshots, id, versions)
 
         {:reply, {:ok, id}, %Repo{store | snapshots: snapshots} }
+    end
+
+    @impl true
+    def handle_call({:purge, iden, _opts}, _from, %Repo{}=store) do
+        %Repo{snapshots: snapshots} = store
+        snapshots = Map.delete(snapshots, iden)
+        {:reply, :ok, %Repo{store | snapshots: snapshots} }
     end
 
     @impl true
@@ -75,6 +84,10 @@ defmodule Signal.Void.Repo do
 
     def publish(staged) when is_list(staged) do
         GenServer.call(__MODULE__, {:publish, staged}, 5000)
+    end
+
+    def purge(snap, opts) when is_tuple(snap) and is_list(opts) do
+        GenServer.call(__MODULE__, {:purge, snap, opts}, 5000)
     end
 
     def record(%Snapshot{}=snapshot, _opts) do

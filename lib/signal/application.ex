@@ -70,7 +70,9 @@ defmodule Signal.Application do
 
             defdelegate stream_position(stream, opts \\ []), to: @store
 
-            defdelegate snapshot(id, opts \\ []), to: @store
+            defdelegate snapshot(iden, opts \\ []), to: @store
+
+            defdelegate purge(iden, opts \\ []), to: @store
 
             defdelegate record(snapshot, opts \\ []), to: @store
 
