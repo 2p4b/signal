@@ -78,7 +78,8 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info({:execute, %Event{}=event, command}, %Saga{}=saga) do
+    def handle_info({:execute, %Event{}=event, command}, %Saga{}=saga) 
+    when is_struct(command) do
         %Saga{state: state, module: module} = saga
         %Metadata{
             number: number, 
@@ -98,6 +99,7 @@ defmodule Signal.Process.Saga do
             causation_id: uuid,
             correlation_id: correlation_id
         ]
+        log("dispatch: #{command.__struct__}")
         case execute(command, saga, opts) do
             %Result{}->
                 {:noreply, acknowledge(saga, number, :running)}
@@ -203,9 +205,8 @@ defmodule Signal.Process.Saga do
     defp log(%Saga{module: module, id: id}, info) do
         info = """ 
 
-        [SAGA] #{inspect(module)} 
-               id: #{id}
-               #{info}
+        [SAGA] #{inspect(module)} #{id}
+        #{info}
         """
         Logger.info(info)
     end
@@ -234,9 +235,12 @@ defmodule Signal.Process.Saga do
 
 
             {:shutdown, state} ->
-                %Saga{ saga | state: state}
-                |> shutdown()
-                |> acknowledge(number, :shutdown)
+                saga =
+                    %Saga{ saga | state: state}
+                    |> shutdown()
+                    |> acknowledge(number, :shutdown)
+
+                log("shutdown")
                 {:stop, :shutdown, saga}
         end
     end

@@ -264,9 +264,9 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp snapshot(%Aggregate{app: app, version: version, stream: stream}=aggregate) do
         {application, _tenant} = app
-        {_, id} = stream
+        {stream_id, _id} = stream
         snapshot = %Snapshot{
-            id: id,
+            id: stream_id,
             data: encode(aggregate),
             version: version,
         }
