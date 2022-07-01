@@ -140,6 +140,7 @@ defmodule Signal.Void.Repo do
                 {events ++ List.wrap(event), position, number}
             end)
 
+        IO.inspect({elem(preped, 1), version})
         {events, ^version, cursor} = preped 
 
         events = store.events ++ events

@@ -29,10 +29,10 @@ defmodule Signal.Events.EventTest do
         @tag :event
         test "event has aggregate" do
             event = Event.new([])
-            aggregate = Stream.stream(event)
-            assert is_tuple(aggregate)
-            assert aggregate |> elem(0) == Signal.Sample.Aggregate
-            assert aggregate |> elem(1) == "event.uuid"
+            stream = Stream.stream(event)
+            assert is_tuple(stream)
+            assert  stream |> elem(0) == "event.uuid"
+            assert  stream |> elem(1) == Signal.Sample.Aggregate
         end
 
     end

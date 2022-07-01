@@ -35,16 +35,16 @@ defmodule Signal.Process.Saga do
         {:ok, struct(__MODULE__, opts)}
     end
 
-    def start(app, {module, id}, index \\ 0) do
-        saga = Supervisor.prepare_saga(app, {module, id})    
+    def start(app, {id, module}, index \\ 0) do
+        saga = Supervisor.prepare_saga(app, {id, module})    
         saga
         |> GenServer.whereis()
         |> GenServer.cast({:init, index})
         saga
     end
 
-    def position(app, {module, id}) do
-        Supervisor.prepare_saga(app, {module, id})    
+    def position(app, {id, module}) do
+        Supervisor.prepare_saga(app, {id, module})    
         |> GenServer.call(:position, 5000)
     end
 

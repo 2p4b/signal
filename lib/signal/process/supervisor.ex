@@ -15,7 +15,7 @@ defmodule Signal.Process.Supervisor do
         DynamicSupervisor.start_child(name(args), {Signal.Process.Saga, args})
     end
 
-    def prepare_saga(application, {type, id}=saga) 
+    def prepare_saga(application, {id, type}=saga) 
     when is_binary(id) and is_atom(type) do
         pname = process_name(saga)
         case Registry.lookup(registry(application), pname) do
@@ -35,12 +35,12 @@ defmodule Signal.Process.Supervisor do
         end
     end
 
-    def process_name({type, id}) when is_atom(type) and is_binary(id) do
+    def process_name({id, type}) when is_atom(type) and is_binary(id) do
         Atom.to_string(type) <> ":" <> id
     end
 
     defp child_args(app, via_name) do
-        {_, _, {_registry, _pname, {module, id}}} = via_name
+        {_, _, {_registry, _pname, {id, module}}} = via_name
         [
             id: id,
             app: app,

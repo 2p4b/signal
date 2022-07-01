@@ -16,7 +16,7 @@ defmodule Signal.Aggregates.Supervisor do
         DynamicSupervisor.start_child(name(args), {Signal.Aggregates.Aggregate, args})
     end
 
-    def prepare_aggregate(application, {type, id}=stream) 
+    def prepare_aggregate(application, {id, type}=stream) 
     when is_binary(id) and is_atom(type) do
         pname = process_name(stream)
         case Registry.lookup(registry(application), pname) do
@@ -32,14 +32,14 @@ defmodule Signal.Aggregates.Supervisor do
         end
     end
 
-    def process_name({type, id}) when is_atom(type) and is_binary(id) do
+    def process_name({id, type}) when is_atom(type) and is_binary(id) do
         id
     end
 
     defp child_args(app, via_name) do
         {:via, _reg, {_mreg, _pname, stream}} = via_name
         {app_module, _app_name} = app
-        {aggregate, id} = stream
+        {id, aggregate} = stream
         [
             id: id,
             name: via_name,

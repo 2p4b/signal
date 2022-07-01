@@ -2,7 +2,7 @@ defmodule Signal.Store do
 
     @type app :: {module::atom, name::atom}
 
-    @type stream :: {module::atom,  id::binary}
+    @type stream :: {id::binary, module::atom}
 
     @type iden  :: {atom() | binary(), id::binary}
 

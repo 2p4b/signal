@@ -107,7 +107,7 @@ defmodule Signal.Events.Producer do
                         :ok ->
                             confirm_staged(staged)
 
-                            {_, stream_id} = stream
+                            {stream_id, _} = stream
 
                             position = Enum.find_value(staged, position, fn
                                 %{stream: ^stream_id, version: version} ->
@@ -185,9 +185,9 @@ defmodule Signal.Events.Producer do
         GenServer.call(producer, {:stage, action, events})
     end
 
-    def stage_events(%Producer{ position: index, stream: stream}, action, events, stage)
+    def stage_events(%Producer{position: index, stream: stream}, action, events, stage)
     when is_list(events) and is_integer(index) and is_pid(stage) do
-        {_, stream_id} = stream
+        {stream_id, _} = stream
         {events, version} =
             Enum.map_reduce(events, index, fn event, index ->
                 opts = [
@@ -205,9 +205,9 @@ defmodule Signal.Events.Producer do
         |> GenServer.call({:process, action}, :infinity)
     end
 
-    defp calibrate(%Producer{app: app, stream: {_, stream}}=prod) do
+    defp calibrate(%Producer{app: app, stream: {stream_id, _}}=prod) do
         {application, _name} = app
-        case application.stream_position(stream) do
+        case application.stream_position(stream_id) do
             nil ->
                 %Producer{prod | position: 0}
 
@@ -281,7 +281,7 @@ defmodule Signal.Events.Producer do
     defp event_stream!(event) do
         stream = Signal.Stream.stream(event)
         case stream do
-            {module, id} when is_atom(module) and is_binary(id) ->
+            {id, module} when is_atom(module) and is_binary(id) ->
                 constructable!(stream)
 
             stream ->
@@ -289,7 +289,7 @@ defmodule Signal.Events.Producer do
         end
     end
 
-    defp constructable!({module, _id}=stream) do
+    defp constructable!({_, module}=stream) do
         try do
             struct(module, [])
             stream

@@ -461,7 +461,7 @@ defmodule Signal.Process.Router do
 
     defp start_process(router, id, index \\ 0)
     defp start_process(%Router{app: app, module: module}, id, index) do
-        Saga.start(app, {module, id}, index)
+        Saga.start(app, {id, module}, index)
         |> GenServer.whereis()
     end
 
@@ -508,7 +508,7 @@ defmodule Signal.Process.Router do
 
     defp stop_process(%Proc{pid: pid, ref: ref}=process, %Router{}=router) 
     when is_pid(pid) do
-        pname = Supervisor.process_name({process.type, process.id})
+        pname = Supervisor.process_name({process.id, process.type})
         router.app
         |> Supervisor.stop_child(pname)
         Process.demonitor(ref)

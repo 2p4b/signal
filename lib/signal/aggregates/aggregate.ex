@@ -65,11 +65,11 @@ defmodule Signal.Aggregates.Aggregate do
     def handle_info(:init, %Aggregate{}=aggregate) do
         %Aggregate{
             app: {application, tenant}, 
-            stream: {_, stream}
+            stream: {stream_id, _}
         } = aggregate
 
         aggregate = 
-            case application.snapshot(stream, tenant: tenant) do
+            case application.snapshot(stream_id, tenant: tenant) do
                 nil -> 
                     aggregate
 
@@ -154,7 +154,7 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     defp apply_event(%Aggregate{}=aggregate, %Event{number: number}=event) do
-        %Aggregate{version: version, state: state, stream: {_, stream} } = aggregate
+        %Aggregate{version: version, state: state, stream: {stream_id, _} } = aggregate
         case event do
             %Event{position: position} when position == (version + 1) ->
 
@@ -166,7 +166,7 @@ defmodule Signal.Aggregates.Aggregate do
 
                 info = """
                 [Aggregate] #{state_type} 
-                stream: #{stream}
+                stream: #{stream_id}
                 applying: #{event.type}
                 version: #{event.position}
                 """
@@ -246,7 +246,7 @@ defmodule Signal.Aggregates.Aggregate do
         %Aggregate{
             app: app, 
             state: state,
-            stream: {_, stream}, 
+            stream: {stream_id, _}, 
             subscription: %{handle: handle}
         } = aggregate
 
@@ -254,7 +254,7 @@ defmodule Signal.Aggregates.Aggregate do
         application.acknowledge(handle, number, [tenant: tenant])
         info = """
         [Aggregate] #{state.__struct__} 
-        stream: #{stream}
+        stream: #{stream_id}
         acknowleded: #{number}
         version: #{aggregate.version}
         """
@@ -296,12 +296,12 @@ defmodule Signal.Aggregates.Aggregate do
         }
     end
 
-    defp listen(%Aggregate{app: app, stream: {_, stream}, index: index}=aggr) do
+    defp listen(%Aggregate{app: app, stream: {stream_id, _}, index: index}=aggr) do
         {application, _tenant} = app
         {:ok, subscription} = application.subscribe([
             start: index,
             track: false, 
-            stream: stream, 
+            stream: stream_id, 
         ])
         %Aggregate{aggr| subscription: subscription}
     end
@@ -311,7 +311,7 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
-    def terminate(reason, %Aggregate{stream: {type, source}, version: vsn}) do
+    def terminate(reason, %Aggregate{stream: {source, type}, version: vsn}) do
         info = """
         [Aggregate Stopped] #{type} 
         source: #{source}

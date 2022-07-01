@@ -46,8 +46,8 @@ defmodule Signal.Command.CommandTest do
         test "has aggregate" do
             command = Command.new()
             aggregate = Stream.stream(command, %{})
-            assert elem(aggregate, 0) == TestAggregate
-            assert elem(aggregate, 1) == "command.uuid"
+            assert elem(aggregate, 0) == "command.uuid"
+            assert elem(aggregate, 1) == TestAggregate
         end
 
         @tag :command

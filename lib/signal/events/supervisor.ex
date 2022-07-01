@@ -15,7 +15,8 @@ defmodule Signal.Events.Supervisor do
         DynamicSupervisor.init(strategy: :one_for_one)
     end
 
-    def prepare_producer(application, {type, id}=stream) when is_atom(type) and is_binary(id) do
+    def prepare_producer(application, {id, type}=stream) 
+    when is_atom(type) and is_binary(id) do
         case Registry.lookup(registry(application), id) do
             [{_pid, ^id}] ->
                 via_tuple(application, {id, id})            

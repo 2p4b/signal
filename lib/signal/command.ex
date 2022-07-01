@@ -39,7 +39,7 @@ defmodule Signal.Command  do
                     @field field
                     @stream_module stream_mod
                     def stream(command, _res) do 
-                        {@stream_module, Map.get(command, @field)}
+                        {Map.get(command, @field), @stream_module}
                     end
                 end
             end
