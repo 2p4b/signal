@@ -5,6 +5,7 @@ defmodule Signal.Process.Router do
     alias Signal.Process.Saga
     alias Signal.Stream.Event
     alias Signal.Process.Router
+    alias Signal.Process.Supervisor
 
     require Logger
 
@@ -13,12 +14,13 @@ defmodule Signal.Process.Router do
 
     defmodule Proc do
         alias Signal.Process.Router
-        defstruct [:id, :pid, :ack, :syn, :ref, :status, queue: []]
+        defstruct [:id, :pid, :ack, :syn, :ref, :type, :status, queue: []]
 
         def new(id, pid, opts \\ []) 
         def new(id, pid, opts) when is_nil(pid) do
             syn = Keyword.get(opts, :syn, 0)
             ack = Keyword.get(opts, :ack, 0)
+            type = Keyword.get(opts, :type)
             queue = Keyword.get(opts, :queue, [])
             status = Keyword.get(opts, :ack, :sleeping)
             struct(__MODULE__, [
@@ -27,6 +29,7 @@ defmodule Signal.Process.Router do
                 pid: nil, 
                 syn: syn,
                 ack: ack, 
+                type: type,
                 queue: queue,
                 status: status
             ])
@@ -40,6 +43,7 @@ defmodule Signal.Process.Router do
             ref = Process.monitor(pid)
             syn = Keyword.get(opts, :syn, 0)
             ack = Keyword.get(opts, :ack, 0)
+            type = Keyword.get(opts, :type)
             queue = Keyword.get(opts, :queue, [])
             status = Keyword.get(opts, :status, :sleeping)
             struct(__MODULE__, [
@@ -48,6 +52,7 @@ defmodule Signal.Process.Router do
                 pid: pid, 
                 syn: syn,
                 ack: ack, 
+                type: type,
                 queue: queue,
                 status: status
             ])
@@ -98,7 +103,7 @@ defmodule Signal.Process.Router do
             # On init ack syn === 0 
             # sync with ack from
             # process saga
-            syn = if syn == 0 and ack > syn, do: ack, else: syn
+            syn = if syn == 0 and number > syn, do: number, else: syn
 
             %Proc{proc | syn: syn, ack: number, queue: queue, status: status}
         end
@@ -133,7 +138,7 @@ defmodule Signal.Process.Router do
         {:noreply, router}
     end
 
-    def handle_down(%Router{processes: processes}=router, ref) do
+    def handle_down(ref, %Router{processes: processes}=router) do
 
         index = 
             processes
@@ -183,7 +188,7 @@ defmodule Signal.Process.Router do
         end
     end
 
-    def handle_ack(%Router{}=router, {id, number, :running}) do
+    def handle_ack({:running, id, number}, %Router{}=router) do
 
         %Router{processes: processes}=router
 
@@ -226,7 +231,7 @@ defmodule Signal.Process.Router do
         end
     end
 
-    def handle_ack(%Router{}=router, {id, number, :sleeping}) do
+    def handle_ack({:sleeping, id, number}, %Router{}=router) do
         %Router{processes: processes}=router
 
         log(router, """
@@ -261,7 +266,7 @@ defmodule Signal.Process.Router do
                     %{queue: []} ->
                         process =
                             process
-                            |> signal_stop()
+                            |> stop_process(router)
                             |> struct(%{ref: nil, pid: nil})
                         List.replace_at(processes, index, process)
 
@@ -274,7 +279,7 @@ defmodule Signal.Process.Router do
         end
     end
 
-    def handle_ack(%Router{}=router, {id, number, :shutdown}) do
+    def handle_ack({:shutdown, id, number}, %Router{}=router) do
         %Router{processes: processes}=router
         log(router, """
             process: #{id}
@@ -297,7 +302,7 @@ defmodule Signal.Process.Router do
             case Enum.at(processes, index) do
                 %{pid: pid} when is_pid(pid) ->
                     Enum.at(processes, index)
-                    |> signal_stop()
+                    |> stop_process(router)
 
                 _ ->
                     nil
@@ -312,7 +317,7 @@ defmodule Signal.Process.Router do
 
 
 
-    def handle_alive(%Router{processes: processes}=router, id) do
+    def handle_alive(id, %Router{processes: processes}=router) do
         found =
             case Enum.find(processes, &(Map.get(&1, :id) == id))  do
                 %Proc{} ->  
@@ -323,7 +328,7 @@ defmodule Signal.Process.Router do
         {:reply, found, router}
     end
 
-    def handle_event(%Router{}=router, %Event{}=event) do
+    def handle_event(%Event{}=event, %Router{}=router) do
 
         %{module: module, processes: processes}= router
 
@@ -346,13 +351,13 @@ defmodule Signal.Process.Router do
                 {:start, index}  ->
                     if is_nil(index) do
                         pid = start_process(router, id)
-                        Proc.new(id, pid)
+                        Proc.new(id, pid, type: module)
                     else
                         Enum.at(processes, index)
                     end
 
                 {:apply, index} when is_integer(index) ->
-                    Enum.at(processes, index)
+                    Enum.at(processes, index, type: module)
 
                 _ ->  
                     nil
@@ -392,7 +397,7 @@ defmodule Signal.Process.Router do
         end
     end
 
-    def handle_next(%Router{processes: processes}=router, id) do
+    def handle_next(id, %Router{processes: processes}=router) do
 
         case Enum.find(processes, nil, &(Map.get(&1, :id) == id)) do
             nil ->
@@ -465,16 +470,16 @@ defmodule Signal.Process.Router do
         end)
     end
 
-    defp load_processes(%Router{}=router, %Snapshot{data: data}) do
+    defp load_processes(%Router{module: module}=router, %Snapshot{data: data}) do
         processes = 
             data
             |> Enum.map(fn 
                 %{id: id, queue: []} -> 
-                    Proc.new(id, nil, queue: [])
+                    Proc.new(id, nil, queue: [], type: module)
 
                 %{id: id, queue: queue} -> 
                     pid = start_process(router, id, 0)
-                    Proc.new(id, pid, queue: queue)
+                    Proc.new(id, pid, queue: queue, type: module)
             end)
 
         %Router{router |processes: processes}
@@ -494,9 +499,12 @@ defmodule Signal.Process.Router do
         proc
     end
 
-    defp signal_stop(%Proc{pid: pid, ref: ref}=process) when is_pid(pid) do
+    defp stop_process(%Proc{pid: pid, ref: ref}=process, %Router{}=router) 
+    when is_pid(pid) do
+        pname = Supervisor.process_name({process.type, process.id})
+        router.app
+        |> Supervisor.stop_child(pname)
         Process.demonitor(ref)
-        GenServer.cast(pid, :stop)
         process
     end
 

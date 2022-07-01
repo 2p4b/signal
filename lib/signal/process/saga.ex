@@ -48,12 +48,10 @@ defmodule Signal.Process.Saga do
         |> GenServer.call(:position, 5000)
     end
 
-
     @impl true
     def handle_call(:position, _from, %Saga{version: version}=saga) do
         {:reply, version, saga}
     end
-
 
     @impl true
     def handle_info(:load, %Saga{}=saga) do
@@ -118,12 +116,6 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast(:stop, %Saga{}=saga) do
-        stop_process(saga)
-        {:noreply, saga}
-    end
-
-    @impl true
     def handle_cast({:init, index}, %Saga{}=saga) when is_number(index) do
         %Saga{id: id, module: module, ack: ack, version: version} = saga
         saga = 
@@ -155,7 +147,7 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast({action, %Event{}=event}, %Saga{status: :running}=saga) 
+    def handle_cast({action, %Event{}=event}, %Saga{}=saga) 
     when action in [:apply, :start] do
 
         %Event{type: type}=event
