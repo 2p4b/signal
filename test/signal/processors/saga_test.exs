@@ -141,13 +141,13 @@ defmodule Signal.Processor.SagaTest do
             Process.send(pid, event, [])
         end
 
-        def apply(%AccountOpened{pid: pid}=ev, %ActivityNotifier{}=act) do
+        def apply(%AccountOpened{pid: pid}=ev, _,  %ActivityNotifier{}=act) do
             state = %ActivityNotifier{act | pid: pid}
             acknowledge(state, ev)
             {:ok, state}
         end
 
-        def apply(%Deposited{}=ev, %ActivityNotifier{amount: amt}=act) do
+        def apply(%Deposited{}=ev, _,  %ActivityNotifier{amount: amt}=act) do
             acknowledge(act, ev)
             amount = ev.amount + amt
             if amount == 9000 do
@@ -158,12 +158,12 @@ defmodule Signal.Processor.SagaTest do
             end
         end
 
-        def apply(%AccountClosed{}=ev, %ActivityNotifier{}=act) do
+        def apply(%AccountClosed{}=ev, _,  %ActivityNotifier{}=act) do
             acknowledge(act, ev)
             {:shutdown, act}
         end
 
-        def error(%Deposite{}, _error, %ActivityNotifier{}=acc) do
+        def error(%Deposite{}, _error, _,  %ActivityNotifier{}=acc) do
             {:ok, acc}
         end
 

@@ -106,6 +106,7 @@ defmodule Signal.Process.Saga do
                 params = %{
                     error: error,
                     event: Event.payload(event),
+                    metadata: Event.metadata(event)
                 }
                 reply = Kernel.apply(module, :error, [command, params, state]) 
                 handle_reply(saga, event, reply)
@@ -155,7 +156,9 @@ defmodule Signal.Process.Saga do
 
         log(saga, "applying: #{inspect(type)}")
 
-        reply = Kernel.apply(module, :apply, [Event.payload(event), state])
+        metadata = Event.metadata(event)
+
+        reply = Kernel.apply(module, :apply, [Event.payload(event), metadata, state])
 
         handle_reply(saga, event, reply)
     end
