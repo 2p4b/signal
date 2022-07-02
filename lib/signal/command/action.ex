@@ -3,7 +3,6 @@ defmodule Signal.Command.Action do
     alias Signal.Task
     alias Signal.Command.Action
 
-
     defstruct [
         :app,
         :params,
@@ -16,7 +15,6 @@ defmodule Signal.Command.Action do
         :causation_id,
         :correlation_id,
     ]
-
 
     def from(%Task{command: command, app: app, assigns: params}=task) do
 

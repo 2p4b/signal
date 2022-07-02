@@ -38,8 +38,14 @@ defmodule Signal.Command  do
                 defimpl Signal.Stream, for: __MODULE__ do
                     @field field
                     @stream_module stream_mod
-                    def stream(command, _res) do 
-                        {Map.get(command, @field), @stream_module}
+                    if is_atom(@field) do
+                        def stream(command, _res) do 
+                            {Map.get(command, @field), @stream_module}
+                        end
+                    else
+                        def stream(_command, _res) do 
+                            {@field, @stream_module}
+                        end
                     end
                 end
             end
