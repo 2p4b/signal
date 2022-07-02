@@ -348,7 +348,7 @@ defmodule Signal.Aggregates.Aggregate do
         [Aggregate Stopped] #{type} 
         source: #{source}
         version: #{vsn}
-        reason: #{reason}
+        reason: #{inspect(reason)}
         """
         Logger.info(info)
         reason

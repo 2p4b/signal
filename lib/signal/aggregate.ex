@@ -13,7 +13,7 @@ defmodule Signal.Aggregate do
     defmacro __before_compile__(_env) do
 
         quote generated: true, location: :keep do
-            if Module.defines?(__MODULE__, {:apply, 3}, :def) do
+            if (Module.defines?(__MODULE__, {:apply, 3}, :def) or @apply_strict === false) do
                 with module <- @module do
                     defimpl Signal.Stream.Reducer do
                         @pmodule module
