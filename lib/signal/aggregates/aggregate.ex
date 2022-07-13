@@ -171,7 +171,7 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     def state(aggregate,  opts \\ []) do
-        timeout = Keyword.get(opts, :timeout, 5000)
+        timeout = Keyword.get(opts, :timeout, 10000)
         GenServer.call(aggregate, {:state, opts}, timeout)
     end
 
