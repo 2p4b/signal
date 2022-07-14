@@ -101,7 +101,7 @@ defmodule Signal.Process.Saga do
         ]
         log(saga, "dispatch: #{command.__struct__}")
         case execute(command, saga, opts) do
-            %Result{}->
+            {:ok, %Result{}}->
                 {:noreply, acknowledge(saga, number, :running)}
 
             {:error, error}->

@@ -88,6 +88,7 @@ defmodule Signal.Command.Dispatcher do
         else
             struct(Result, opts)
         end
+        |> Result.ok()
     end
 
     defp finalize({:error, reason}, %SigTask{}) do
