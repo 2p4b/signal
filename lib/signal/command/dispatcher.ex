@@ -108,7 +108,6 @@ defmodule Signal.Command.Dispatcher do
     end
 
     def handle_crash({:error, :threw, {thrown, stacktrace}}) do
-        IO.inspect(stacktrace)
         throw(thrown)
     end
 

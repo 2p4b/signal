@@ -1,5 +1,6 @@
 defmodule Signal.Transaction do
     defstruct [
+        uuid: nil,
         staged: [],
         handles: [],
         snapshots: [],
@@ -15,6 +16,7 @@ defmodule Signal.Transaction do
         handles = Keyword.get(opts, :handles, [])
         snapshots = Keyword.get(opts, :snapshots, [])
         %Signal.Transaction{
+            uuid: UUID.uuid4(),
             staged: staged,
             handles: handles,
             snapshots:  snapshots
