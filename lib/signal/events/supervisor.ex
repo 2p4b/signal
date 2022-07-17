@@ -18,11 +18,11 @@ defmodule Signal.Events.Supervisor do
     def prepare_producer(application, {id, type}=stream) 
     when is_atom(type) and is_binary(id) do
         case Registry.lookup(registry(application), id) do
-            [{_pid, ^id}] ->
-                via_tuple(application, {id, id})            
+            [{_pid, _id}] ->
+                via_tuple(application, {id, stream})            
 
             [] ->
-                via_name = via_tuple(application, {id, id})
+                via_name = via_tuple(application, {id, stream})
 
                 application
                 |> producer_args(stream, via_name)
@@ -33,12 +33,10 @@ defmodule Signal.Events.Supervisor do
     end
 
     defp producer_args(app, stream, via_name) do
-        {app_module, _name} = app
         [
             app: app,
             name: via_name,
             stream: stream, 
-            store: Kernel.apply(app_module, :store, [])
         ]
     end
 
