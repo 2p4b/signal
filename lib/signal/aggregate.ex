@@ -50,6 +50,10 @@ defmodule Signal.Aggregate do
         {:hibernate, aggregate}
     end
 
+    def continue(aggregate) do
+        {:ok, aggregate}
+    end
+
 end
 
 

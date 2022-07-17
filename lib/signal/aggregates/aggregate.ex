@@ -294,14 +294,28 @@ defmodule Signal.Aggregates.Aggregate do
         aggregate
     end
 
-    defp snapshot(%Aggregate{app: app, version: version, stream: stream}=aggregate) do
+    defp snapshot(%Aggregate{}=aggregate) do
+        %Aggregate{
+            app: app, 
+            state: state,
+            stream: stream,
+            version: version
+        } = aggregate
+
         {application, _tenant} = app
-        {stream_id, _id} = stream
+        {stream_id, _type} = stream
         snapshot = %Snapshot{
             id: stream_id,
             data: encode(aggregate),
             version: version,
         }
+
+        info = """
+        [Aggregate] #{state.__struct__} 
+        stream: #{stream_id}
+        snapshot: #{version}
+        """
+        Logger.info(info)
         application.record(snapshot)
         aggregate
     end
