@@ -82,10 +82,9 @@ defmodule Signal.Process.Saga do
     when is_struct(command) do
         %Saga{state: state, module: module} = saga
         %Metadata{
-            number: number, 
             uuid: uuid, 
-            correlation_id: 
-            correlation_id
+            number: number, 
+            correlation_id: correlation_id
         } = Event.metadata(event)
 
         snapshots = 
