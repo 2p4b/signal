@@ -220,6 +220,11 @@ defmodule Signal.Process.Router do
             {:noreply, router}
         else
 
+            prestatus = 
+                processes
+                |> Enum.at(index)
+                |> Map.get(:status)
+
             process = 
                 processes
                 |> Enum.at(index)
@@ -234,7 +239,14 @@ defmodule Signal.Process.Router do
                 processes
                 |> List.replace_at(index, process)
 
-            {:noreply, log_state(router, processes)}
+            case prestatus do
+                :sleeping ->
+                    {:noreply, %Router{router| processes: processes}}
+
+                _ ->
+                    {:noreply, log_state(router, processes)}
+            end
+
         end
     end
 
@@ -336,7 +348,6 @@ defmodule Signal.Process.Router do
     end
 
     def handle_event(%Event{}=event, %Router{}=router) do
-
         %{module: module, processes: processes}= router
 
         reply = Kernel.apply(module, :handle, [Event.payload(event)])
