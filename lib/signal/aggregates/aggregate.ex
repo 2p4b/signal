@@ -176,7 +176,11 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     defp apply_event(%Aggregate{}=aggregate, %Event{number: number}=event) do
-        %Aggregate{version: version, state: state, stream: {stream_id, _} } = aggregate
+        %Aggregate{
+            version: version, 
+            state: state, 
+        } = aggregate
+
         case event do
             %Event{position: position} when position == (version + 1) ->
 
@@ -184,15 +188,12 @@ defmodule Signal.Aggregates.Aggregate do
                 
                 event_payload = Event.payload(event)
 
-                state_type = state.__struct__
-
                 info = """
-                [Aggregate] #{state_type} 
-                stream: #{stream_id}
                 applying: #{event.type}
-                version: #{event.position}
+                position: #{event.position}
+                number: #{event.number}
                 """
-                Logger.info(info)
+                log(info, aggregate)
 
                 case Reducer.apply(state, metadata, event_payload) do
                     {action, state} when action in [:ok, :sleep, :hibernate] ->
@@ -277,27 +278,21 @@ defmodule Signal.Aggregates.Aggregate do
     defp acknowledge(%Aggregate{}=aggregate, %Event{number: number}) do
         %Aggregate{
             app: app, 
-            state: state,
-            stream: {stream_id, _}, 
             subscription: %{handle: handle}
         } = aggregate
 
         {application, tenant} = app
         application.acknowledge(handle, number, [tenant: tenant])
-        info = """
-        [Aggregate] #{state.__struct__} 
-        stream: #{stream_id}
-        acknowleded: #{number}
-        version: #{aggregate.version}
-        """
-        Logger.info(info)
+
+        "acknowleded: #{number}"
+        |> log(aggregate)
+
         aggregate
     end
 
     defp snapshot(%Aggregate{}=aggregate) do
         %Aggregate{
             app: app, 
-            state: state,
             stream: stream,
             version: version
         } = aggregate
@@ -310,12 +305,9 @@ defmodule Signal.Aggregates.Aggregate do
         |> Snapshot.new(data, version: version)
         |> application.record()
 
-        info = """
-        [Aggregate] #{state.__struct__} 
-        stream: #{stream_id}
-        snapshot: #{version}
-        """
-        Logger.info(info)
+        "snapshot: #{version}"
+        |> log(aggregate)
+
         aggregate
     end
 
@@ -356,15 +348,27 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
-    def terminate(reason, %Aggregate{stream: {source, type}, version: vsn}) do
-        info = """
-        [Aggregate Stopped] #{type} 
-        source: #{source}
-        version: #{vsn}
-        reason: #{inspect(reason)}
-        """
-        Logger.info(info)
+    def terminate(reason, %Aggregate{}=aggregate) do
+        "reason: #{inspect(reason)}"
+        |> log(aggregate)
         reason
+    end
+
+    def log(info, %Aggregate{}=aggregate) do
+        %Aggregate{
+            version: version, 
+            state: %{__struct__: state_type}, 
+            stream: {stream_id, _stream_type} 
+        } = aggregate
+
+        text = """
+
+        [Aggregate] #{state_type} 
+        stream: #{stream_id}
+        version: #{version}
+        #{info}
+        """
+        Logger.info(text)
     end
 
 end
