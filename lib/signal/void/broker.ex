@@ -49,7 +49,7 @@ defmodule Signal.Void.Broker do
         if is_nil(subscription) do
             subscription = create_subscription(store, handle, pid, opts)
             GenServer.reply(from, {:ok, subscription})
-            position = subscription.from
+            position = subscription.ack
 
             subscriptions =
                 Repo.events()
@@ -125,7 +125,7 @@ defmodule Signal.Void.Broker do
         sub
     end
 
-    defp push_event(%{from: position}=sub, %{number: number})
+    defp push_event(%{ack: position}=sub, %{number: number})
     when is_integer(position) and position > number do
         sub
     end
@@ -160,15 +160,29 @@ defmodule Signal.Void.Broker do
 
 
     defp create_subscription(%Broker{cursor: cursor}, handle, id, opts) do
-        from = Keyword.get(opts, :from, cursor)
+        ack = 
+            case Keyword.get(opts, :start) do
+                nil ->
+                    cursor
+
+                :current ->
+                    cursor
+
+                value when is_number(value) and value >= 0 ->
+                            value
+                _ ->
+                    raise """
+                    Subscription ack must be (0 > value < :infinity)
+                    or atom :resume
+                    """
+            end
         topics = Keyword.get(opts, :topics, [])
         stream = Keyword.get(opts, :stream, nil)
         track = Keyword.get(opts, :track, false)
         %{
             id: id,
-            ack: from,
-            syn: from,
-            from: from,
+            ack: ack,
+            syn: ack,
             track: track,
             handle: handle,
             stream: stream,

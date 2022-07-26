@@ -21,7 +21,7 @@ defmodule Signal.Void.Store do
 
     @impl true
     def index(_app) do
-        GenServer.call(__MODULE__, {:state, :cursor}, 5000)
+        GenServer.call(Repo, {:state, :cursor}, 5000)
     end
 
     @impl true

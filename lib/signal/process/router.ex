@@ -17,30 +17,23 @@ defmodule Signal.Process.Router do
         defstruct [:id, :pid, :ack, :syn, :ref, :type, :status, queue: []]
 
         def new(id, pid, opts \\ []) 
-        def new(id, pid, opts) when is_nil(pid) do
-            syn = Keyword.get(opts, :syn, 0)
-            ack = Keyword.get(opts, :ack, 0)
-            type = Keyword.get(opts, :type)
-            queue = Keyword.get(opts, :queue, [])
-            status = Keyword.get(opts, :ack, :sleeping)
-            struct(__MODULE__, [
-                id: id, 
-                ref: nil, 
-                pid: nil, 
-                syn: syn,
-                ack: ack, 
-                type: type,
-                queue: queue,
-                status: status
-            ])
-        end
-
-        def new(id, pid, opts) when is_pid(pid) and is_map(opts) do
+        def new(id, pid, opts) when is_map(opts) do
             new(id, pid, Map.to_list(opts))
         end
 
-        def new(id, pid, opts) when is_pid(pid) and is_list(opts) do
-            ref = Process.monitor(pid)
+        def new(id, pid, opts) do
+            {ref, pid} = 
+                cond do
+                    is_pid(pid) ->
+                        {Process.monitor(pid), pid}
+
+                    is_nil(pid) ->
+                        {nil, nil}
+
+                    true ->
+                        {nil, nil}
+                end
+
             syn = Keyword.get(opts, :syn, 0)
             ack = Keyword.get(opts, :ack, 0)
             type = Keyword.get(opts, :type)
@@ -128,12 +121,12 @@ defmodule Signal.Process.Router do
 
     def handle_boot(%Router{}=router) do
 
-        snapshot = router_snapshot(router)
+        {processes, ack} = router_snapshot(router)
 
         router = 
             router
-            |> load_processes(snapshot)
-            |> subscribe_router(snapshot)
+            |> load_processes(processes)
+            |> subscribe_router(ack)
 
         {:noreply, router}
     end
@@ -244,7 +237,7 @@ defmodule Signal.Process.Router do
                     {:noreply, %Router{router| processes: processes}}
 
                 _ ->
-                    {:noreply, log_state(router, processes)}
+                    {:noreply, save_state(router, processes)}
             end
 
         end
@@ -294,7 +287,7 @@ defmodule Signal.Process.Router do
                         List.replace_at(processes, index, process)
                 end
 
-            {:noreply, log_state(router, processes)}
+            {:noreply, save_state(router, processes)}
         end
     end
 
@@ -330,7 +323,8 @@ defmodule Signal.Process.Router do
             processes = 
                 processes
                 |> Enum.filter(fn %{id: sid} ->  sid != id end)
-            {:noreply, log_state(router, processes)}
+
+            {:noreply, save_state(router, processes)}
         end
     end
 
@@ -350,7 +344,21 @@ defmodule Signal.Process.Router do
     def handle_event(%Event{}=event, %Router{}=router) do
         %{module: module, processes: processes}= router
 
-        reply = Kernel.apply(module, :handle, [Event.payload(event)])
+        reply = 
+            case Kernel.apply(module, :handle, [Event.payload(event)]) do
+                {action, id} when (action in [:start, :apply]) and is_binary(id) ->
+                    {action, id}
+
+                :skip ->
+                    {:skip, event.number}
+
+                _ ->
+                    raise """
+                    process #{inspect(module)}.handle/1
+                            expected return type of 
+                            {:start, String.t()} | {:apply, String.t()} | skip
+                    """
+            end
 
         {action, id} = reply
 
@@ -408,10 +416,10 @@ defmodule Signal.Process.Router do
 
             router = acknowledge(router, event)
 
-            {:noreply, log_state(router, processes)}
+            {:noreply, save_state(router, processes)}
         else
             router = acknowledge(router, event)
-            {:noreply, log_state(router, processes)}
+            {:noreply, save_state(router, processes)}
         end
     end
 
@@ -449,7 +457,7 @@ defmodule Signal.Process.Router do
         end
     end
 
-    defp log_state(%Router{}=router, processes) do
+    defp save_state(%Router{}=router, processes) do
 
         %Router{
             app: {application, tenant},
@@ -460,7 +468,7 @@ defmodule Signal.Process.Router do
         data = dump_processes(processes)
 
         name
-        |> Snapshot.new(data, [version: ack])
+        |> Snapshot.new(%{ack: ack, processes: data})
         |> application.record([tenant: tenant])
 
         %Router{router| processes: processes}
@@ -488,7 +496,7 @@ defmodule Signal.Process.Router do
         end)
     end
 
-    defp load_processes(%Router{module: module}=router, %Snapshot{data: data}) do
+    defp load_processes(%Router{module: module}=router, data) do
         processes = 
             data
             |> Enum.map(fn 
@@ -526,10 +534,10 @@ defmodule Signal.Process.Router do
         process
     end
 
-    defp subscribe_router(%Router{}=router, %Snapshot{version: version}) do
+    defp subscribe_router(%Router{}=router, start) do
         %Router{app: {application, tenant}, name: name, topics: topics}=router
 
-        subopts = [topics: topics, start: version, tenant: tenant]
+        subopts = [topics: topics, start: start, tenant: tenant]
 
         {:ok, sub} = application.subscribe(name, subopts)
 
@@ -540,16 +548,17 @@ defmodule Signal.Process.Router do
         %Router{app: {application, tenant}, name: name}=router
 
         case application.snapshot(name, tenant: tenant) do
-            nil ->
-                %Snapshot{data: [], id: name, version: 0}
+            %Snapshot{data: %{processes: processes, ack: ack}}-> 
+                {processes, ack}
 
-            snapshot -> 
-                snapshot
+            _ ->
+                {[], :current}
         end
     end
 
     def log(%Router{module: module}, info) do
         info = """ 
+
         [ROUTER]: #{inspect(module)}
         #{info}
         """

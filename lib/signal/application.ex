@@ -78,6 +78,11 @@ defmodule Signal.Application do
 
             defdelegate acknowledge(handle, number, opts \\ []), to: @store
 
+            def process_alive?({process, id}, _opts \\ []) 
+            when is_atom(process) and is_binary(id) do
+                GenServer.call(process, {:alive, id}, 5000)
+            end
+
             defp supervisor_args(type, name) do
                 [name: Signal.Application.supervisor({__MODULE__, name}, type)]
             end
@@ -86,10 +91,10 @@ defmodule Signal.Application do
                 [keys: :unique, name: Signal.Application.registry({__MODULE__, name}, type)]
             end
 
-            def aggregate(type, id, opts \\ []) do
+            def aggregate(id, type, opts \\ []) do
                 tenant = Keyword.get(opts, :tenant, __MODULE__)
                 {__MODULE__, tenant}
-                |> Signal.Aggregates.Supervisor.prepare_aggregate({type, id})
+                |> Signal.Aggregates.Supervisor.prepare_aggregate({id, type})
                 |> Signal.Aggregates.Aggregate.state(opts)
             end
 

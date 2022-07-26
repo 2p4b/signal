@@ -9,12 +9,15 @@ defmodule Signal.Projector do
         app = Keyword.get(opts, :application)
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
+        start = Keyword.get(opts, :start, :current)
         quote do
             use GenServer
             alias Signal.Projector
             alias Signal.Events.Event
 
             @app unquote(app)
+
+            @signal_start unquote(start)
 
             @name (if unquote(name) do 
                 unquote(name) 
@@ -31,7 +34,12 @@ defmodule Signal.Projector do
             Starts a new execution queue.
             """
             def start_link(opts) do
-                opts = [application: @app, topics: @topics, name: @name] ++ opts 
+                opts = [
+                    application: @app, 
+                    topics: @topics, 
+                    name: @name, 
+                    start: @signal_start
+                ] ++ opts 
                 GenServer.start_link(__MODULE__, opts, name: __MODULE__)
             end
 
@@ -53,17 +61,23 @@ defmodule Signal.Projector do
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
         application = Keyword.get(opts, :application)
+        start = Keyword.get(opts, :start, :current)
         tenant = Keyword.get(opts, :tenant, application)
         app = {application, tenant}
-        {:ok, sub} = subscribe(app, name, topics)
+        sub_opts = [
+            start: start,
+            topics: topics, 
+            tenant: tenant,
+        ]
+        {:ok, sub} = subscribe(app, name, sub_opts)
         params = [name: name, app: app, module: module, subscription: sub]
         {:ok, struct(__MODULE__, params)} 
     end
 
-    def subscribe(app, name, topics) do
-        {application, tenant} = app
+    def subscribe(app, name, opts) do
+        {application, _tenant} = app
         Enum.find_value(1..5, fn _x -> 
-            case application.subscribe(name, topics: topics, tenant: tenant) do
+            case application.subscribe(name, opts) do
                 {:ok, subscription} ->
                     {:ok, subscription}
                 _ ->

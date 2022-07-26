@@ -14,7 +14,7 @@ defmodule Signal.Aggregates.Aggregate do
         :state, 
         :stream, 
         :subscription,
-        index: 0, 
+        ack: 0, 
         version: 0,
         awaiting: [],
     ]
@@ -80,8 +80,8 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
-    def handle_info(%Event{number: number}, %Aggregate{index: index}=aggregate) 
-    when number <= index do
+    def handle_info(%Event{number: number}, %Aggregate{ack: ack}=aggregate) 
+    when number <= ack do
         {:noreply, aggregate}
     end
 
@@ -198,8 +198,8 @@ defmodule Signal.Aggregates.Aggregate do
                     {action, state} when action in [:ok, :sleep, :hibernate] ->
                          aggregate = 
                             %Aggregate{aggregate | 
+                                ack: number,
                                 state: state,
-                                index: number,
                                 version: position
                             }
                         {action, aggregate}
@@ -208,8 +208,8 @@ defmodule Signal.Aggregates.Aggregate do
                     {:snapshot, state} ->
                         aggregate = 
                             %Aggregate{aggregate | 
+                                ack: number,
                                 state: state,
-                                index: number,
                                 version: position
                             }
                             |> snapshot()
@@ -219,8 +219,8 @@ defmodule Signal.Aggregates.Aggregate do
                     {:snapshot, state, action} ->
                         aggregate = 
                             %Aggregate{aggregate | 
+                                ack: number,
                                 state: state,
-                                index: number,
                                 version: position
                             }
                             |> snapshot()
@@ -230,8 +230,8 @@ defmodule Signal.Aggregates.Aggregate do
                     {:stop, state} ->
                         aggregate = 
                             %Aggregate{aggregate | 
+                                ack: number,
                                 state: state,
-                                index: number,
                                 version: position
                             }
 
@@ -240,8 +240,8 @@ defmodule Signal.Aggregates.Aggregate do
                     {:stop, reason, state} ->
                         aggregate = 
                             %Aggregate{aggregate | 
+                                ack: number,
                                 state: state,
-                                index: number,
                                 version: position
                             }
 
@@ -304,11 +304,11 @@ defmodule Signal.Aggregates.Aggregate do
 
         {application, _tenant} = app
         {stream_id, _type} = stream
-        snapshot = %Snapshot{
-            id: stream_id,
-            data: encode(aggregate),
-            version: version,
-        }
+        data = encode(aggregate)
+
+        stream_id
+        |> Snapshot.new(data, version: version)
+        |> application.record()
 
         info = """
         [Aggregate] #{state.__struct__} 
@@ -316,7 +316,6 @@ defmodule Signal.Aggregates.Aggregate do
         snapshot: #{version}
         """
         Logger.info(info)
-        application.record(snapshot)
         aggregate
     end
 
@@ -325,7 +324,7 @@ defmodule Signal.Aggregates.Aggregate do
         case data do
             %{index: index, state: payload} ->
                 %Aggregate{aggr | 
-                    index: index,
+                    ack: index,
                     version: version, 
                     state: Codec.load(state, payload), 
                 }
@@ -335,17 +334,17 @@ defmodule Signal.Aggregates.Aggregate do
         end
     end
 
-    def encode(%Aggregate{index: index, state: state}) do
+    def encode(%Aggregate{ack: index, state: state}) do
         %{
             index: index,
             state: Codec.encode(state)
         }
     end
 
-    defp listen(%Aggregate{app: app, stream: {stream_id, _}, index: index}=aggr) do
+    defp listen(%Aggregate{app: app, stream: {stream_id, _}, ack: ack}=aggr) do
         {application, _tenant} = app
         {:ok, subscription} = application.subscribe([
-            start: index,
+            start: ack,
             track: false, 
             stream: stream_id, 
         ])

@@ -78,16 +78,12 @@ defmodule Signal.Process.Manager do
                 Router.handle_alive(id, router)
             end
 
-            def alive?(id) do
-                GenServer.call(__MODULE__, {:alive, id}, 5000)
-            end
-
         end
     end
 
     defmacro __before_compile__(_env) do
         quote generated: true do
-            def handle(_event), do: {:skip, nil}
+            def handle(_event), do: :skip
         end
     end
 end

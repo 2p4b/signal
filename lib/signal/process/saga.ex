@@ -62,12 +62,20 @@ defmodule Signal.Process.Saga do
 
         {version, state} =
             case application.snapshot(identity(saga), tenant: tenant) do
-                nil -> 
-                    initial_state = Kernel.apply(module, :init, [id])
+                %{data: %{data: data, ack: ack}}->
+                    state = 
+                        module
+                        |> struct([])
+                        |> Codec.load(data)
+
+                    {ack, state}
+
+                _ -> 
+                    initial_state = 
+                        module
+                        |> Kernel.apply(:init, [id])
+
                     {0, initial_state} 
-                %{version: version, data: data}->
-                    state = Codec.load(struct(module, []), data)
-                    {version, state}
             end
 
         log(saga, "starting from: #{version}")
@@ -89,8 +97,7 @@ defmodule Signal.Process.Saga do
 
         snapshots = 
             saga
-            |> identity()
-            |> Snapshot.new(Codec.encode(state), version: number)
+            |> snapshot(number)
             |> List.wrap()
 
         opts = [
@@ -175,10 +182,10 @@ defmodule Signal.Process.Saga do
         %Saga{saga | ack: number, status: status}
     end
 
-    defp checkpoint(%Saga{app: app}=saga) do
+    defp checkpoint(%Saga{app: app, ack: ack}=saga) do
         {application, tenant}  = app
         saga
-        |> snapshot()
+        |> snapshot(ack)
         |> application.record([tenant: tenant])
         saga
     end
@@ -195,10 +202,10 @@ defmodule Signal.Process.Saga do
         {id, Signal.Helper.module_to_string(module)}
     end
 
-    defp snapshot(%Saga{state: state, ack: number}=saga) do
+    defp snapshot(%Saga{state: state}=saga, ack) do
         saga
         |> identity()
-        |> Snapshot.new(Codec.encode(state), version: number)
+        |> Snapshot.new(%{data: Codec.encode(state), ack: ack}, version: 1)
     end
 
     defp log(%Saga{module: module, id: id}, info) do

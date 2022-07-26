@@ -148,4 +148,9 @@ defmodule Signal.Void.Repo do
         %Repo{store | streams: streams, cursor: cursor, events: events}
     end
 
+    @impl true
+    def terminate(_reason, _state) do
+        :ok
+    end
+
 end
