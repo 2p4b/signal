@@ -236,7 +236,7 @@ defmodule Signal.Aggregates.Aggregate do
                                 version: position
                             }
 
-                        {:stop, nil, aggregate}
+                        {:stop, :normal, aggregate}
 
                     {:stop, reason, state} ->
                         aggregate = 
@@ -341,10 +341,6 @@ defmodule Signal.Aggregates.Aggregate do
             stream: stream_id, 
         ])
         %Aggregate{aggr| subscription: subscription}
-    end
-
-    @impl true
-    def terminate(nil, _state) do
     end
 
     @impl true

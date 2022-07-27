@@ -168,6 +168,9 @@ defmodule Signal.Void.Broker do
                 :current ->
                     cursor
 
+                :genesis ->
+                     0
+
                 value when is_number(value) and value >= 0 ->
                             value
                 _ ->
