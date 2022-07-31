@@ -7,7 +7,7 @@ defmodule Signal.Processor.SagaTest do
 
         use Signal.Aggregate
 
-        blueprint do
+        schema do
             field :number,  :string,   default: "123"
             field :balance, :number,  default: 0
         end
@@ -24,7 +24,7 @@ defmodule Signal.Processor.SagaTest do
             topic: "user.deposited",
             stream: {Accounts, :account}
 
-        blueprint do
+        schema do
             field :account, :string,    default: "123"
             field :amount,  :number,    default: 0
         end
@@ -35,8 +35,8 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Event,
             stream: {Accounts, :account}
 
-        blueprint do
-            field :pid,     :number
+        schema do
+            field :pid,     :any
             field :account, :string,   default: "123"
         end
     end
@@ -45,7 +45,7 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Event,
             stream: {Accounts, :account}
 
-        blueprint do
+        schema do
             field :account, :string,   default: "123"
         end
     end
@@ -55,8 +55,8 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Command,
             stream: {Accounts, :account}
 
-        blueprint do
-            field :pid,     :number
+        schema do
+            field :pid,     :any
             field :account, :string,   default: "123"
         end
 
@@ -70,7 +70,7 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Command,
             stream: {Accounts, :account}
 
-        blueprint do
+        schema do
             field :account,     :string,    default: "123"
             field :amount,      :number,    default: 0
         end
@@ -84,7 +84,7 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Command,
             stream: {Accounts, :account}
 
-        blueprint do
+        schema do
             field :account,     :string,   default: "123"
         end
 
@@ -115,7 +115,7 @@ defmodule Signal.Processor.SagaTest do
 
     defmodule ActivityNotifier do
 
-        use Signal.Process.Manager,
+        use Signal.Process,
             application: TestApp,
             topics: [AccountOpened, "user.deposited", AccountClosed]
 

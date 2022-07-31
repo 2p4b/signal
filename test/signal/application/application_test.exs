@@ -5,7 +5,7 @@ defmodule Signal.ApplicationTest do
 
     defmodule Command do
         use Signal.Command
-        blueprint do
+        schema do
             field :any, :string, default: nil
         end
     end

@@ -12,7 +12,7 @@ defmodule Signal.Events.AggregateTest do
     defmodule Accounts do
         use Signal.Aggregate
 
-        blueprint do
+        schema do
             field :number,      :number,    default: "123"
             field :balance,     :number,    default: 0
         end
@@ -23,7 +23,7 @@ defmodule Signal.Events.AggregateTest do
         use Signal.Command,
             stream: {Accounts, :account}
 
-        blueprint do
+        schema do
             field :account,     :string,   default: "123"
             field :amount,      :string,    default: 0
         end
@@ -33,7 +33,7 @@ defmodule Signal.Events.AggregateTest do
         use Signal.Event,
             stream: {Accounts, :account}
 
-        blueprint do
+        schema do
             field :account, :string,    default: "123"
             field :amount,  :number,    default: 0
         end

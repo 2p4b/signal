@@ -17,7 +17,7 @@ defmodule Signal.Processor.HandlerTest do
 
         use Blueprint.Struct
 
-        blueprint do
+        schema do
             field :number,      :string,    default: "123"
             field :balance,     :number,    default: 0
         end
@@ -29,7 +29,7 @@ defmodule Signal.Processor.HandlerTest do
         use Signal.Event,
             stream: {Accounts, :account}
 
-        blueprint do
+        schema do
             field :account, :string,    default: "123"
             field :amount,  :number,    default: 0
         end
@@ -41,7 +41,7 @@ defmodule Signal.Processor.HandlerTest do
         use Signal.Command,
             stream: {Accounts, :account}
 
-        blueprint do
+        schema do
             field :account, :string,    default: "123"
             field :amount,  :number,    default: 0
         end

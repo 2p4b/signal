@@ -13,7 +13,7 @@ defmodule Signal.Events.ProducerTest do
     defmodule Aggregate do
         use Signal.Aggregate
 
-        blueprint do
+        schema do
             field :id,      :string,   default: ""
             field :uuid,    :string,   default: ""
         end
@@ -28,7 +28,7 @@ defmodule Signal.Events.ProducerTest do
         use Signal.Event,
             stream: {Aggregate, :uuid}
 
-        blueprint do
+        schema do
             field :id,      :string,   default: "event.id"
             field :uuid,    :string,   default: "stream.one"
         end
@@ -38,7 +38,7 @@ defmodule Signal.Events.ProducerTest do
         use Signal.Event,
             stream: {Aggregate, :uuid}
 
-        blueprint do
+        schema do
             field :id,      :string,   default: "event.id"
             field :uuid,    :string,   default: "stream.two"
         end
@@ -48,7 +48,7 @@ defmodule Signal.Events.ProducerTest do
         use Signal.Event,
             stream: {Aggregate, :uuid}
 
-        blueprint do
+        schema do
             field :id,      :string,   default: "event.id"
             field :uuid,    :string,   default: "stream.two"
         end
@@ -59,7 +59,7 @@ defmodule Signal.Events.ProducerTest do
         use Signal.Command,
             stream: {Aggregate, :uuid}
 
-        blueprint do
+        schema do
             field :id,      :string,   default: "command.id"
             field :uuid,    :string,   default: "command.uuid"
         end

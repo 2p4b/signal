@@ -7,7 +7,7 @@ defmodule Signal.Command.RouterTest do
 
         defmodule PipeCommand do
             use Signal.Command
-            blueprint do
+            schema do
                 field :one, :number
                 field :two, :number
             end
@@ -16,7 +16,7 @@ defmodule Signal.Command.RouterTest do
         defmodule PipelineCommand do
             use Signal.Command
 
-            blueprint do
+            schema do
                 field :uuid,        :string
                 field :one,         :number
                 field :two,         :number
