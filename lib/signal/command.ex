@@ -34,20 +34,10 @@ defmodule Signal.Command  do
                 end
             end
 
-            with {stream_mod, field} <- Module.get_attribute(__MODULE__,:stream_opts) do
-                defimpl Signal.Stream, for: __MODULE__ do
-                    @field field
-                    @stream_module stream_mod
-                    if is_atom(@field) do
-                        def stream(command, _res) do 
-                            {Map.get(command, @field), @stream_module}
-                        end
-                    else
-                        def stream(_command, _res) do 
-                            {@field, @stream_module}
-                        end
-                    end
-                end
+            with stream_opts when is_tuple(stream_opts) 
+                 <- Module.get_attribute(__MODULE__,:stream_opts) do
+                require Signal.Impl.Stream
+                Signal.Impl.Stream.impl(stream_opts)
             end
 
             handler_impled = Module.defines?(__MODULE__, {:handle, 3}, :def)

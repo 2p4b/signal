@@ -13,7 +13,6 @@ defmodule Signal.Stream.Event do
 
         schema enforce: true do
             field :uuid,            String.t()
-            field :type,            String.t()
             field :topic,           String.t()
             field :stream,          String.t()
             field :position,        integer()
@@ -29,8 +28,7 @@ defmodule Signal.Stream.Event do
         field :uuid,            String.t()
         field :topic,           String.t()
         field :stream,          String.t()
-        field :data,            map()
-        field :type,            String.t()
+        field :payload,         map()
         field :position,        integer()
         field :number,          integer(),  default: nil
         field :causation_id,    String.t()
@@ -38,30 +36,27 @@ defmodule Signal.Stream.Event do
         field :timestamp,       term()
     end
 
-    def encode(%{__struct__: type}=payload) when is_struct(payload) do
-        {Helper.module_to_string(type), Codec.encode(payload)}
-    end
+    def payload(%Event{payload: payload, topic: topic}) do
+        module = Helper.string_to_module(topic)
 
-    def payload(%Event{data: data, type: type}) do
-        module = Helper.string_to_module(type)
+        try do
+            {:ok, event_payload} =
+                module
+                |> struct([])
+                |> Codec.load(payload)
+            event_payload
+        rescue
+            UndefinedFunctionError ->
+                msg = """
+                Could not create event instance: #{topic}
+                fallback to map instance
+                """
+                Logger.error(msg)
+                %{__struct__: module}
 
-        event_instance = 
-            try do
-                struct(module, [])
-            rescue
-                UndefinedFunctionError ->
-                    msg = """
-                    Could not create event instance: #{type}
-                    fallback to map instance
-                    """
-                    Logger.error(msg)
-                    %{__struct__: module}
-
-                exception ->
-                    reraise(exception, __STACKTRACE__)
-            end
-            
-        Codec.load(event_instance, data)
+            exception ->
+                reraise(exception, __STACKTRACE__)
+        end
     end
 
     def metadata(%Event{}=event) do

@@ -1,19 +1,22 @@
 defmodule Signal.Helper do
 
+    def stream_tuple(module, id, opts \\ []) when is_atom(module) do
+        case Keyword.fetch(opts, :prefix) do
+            {:ok, prefix} ->
+                  stream_id = 
+                      [prefix, id] 
+                      |> Enum.join() 
+                      |> String.trim()
+                  {stream_id, module}
+            _ ->
+                  {id, module}
+        end
+    end
+
     def module_to_string(module) when is_atom(module) do
-        string =
-            module
-            |> Atom.to_string()
-
-        case string do
-            "Elixir."<>_rest->
-                string
-                |> String.split(".")
-                |> (fn [_elixir | name] -> name end).()
-                |> Enum.join(".")
-
-            str ->
-                str
+        case Atom.to_string(module) do
+            "Elixir."<> name -> name
+            name -> name
         end
     end
 

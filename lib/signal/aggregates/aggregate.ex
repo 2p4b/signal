@@ -189,7 +189,7 @@ defmodule Signal.Aggregates.Aggregate do
                 event_payload = Event.payload(event)
 
                 info = """
-                applying: #{event.type}
+                applying: #{event.topic}
                 position: #{event.position}
                 number: #{event.number}
                 """
@@ -299,10 +299,10 @@ defmodule Signal.Aggregates.Aggregate do
 
         {application, _tenant} = app
         {stream_id, _type} = stream
-        data = encode(aggregate)
+        payload = encode(aggregate)
 
         stream_id
-        |> Snapshot.new(data, version: version)
+        |> Snapshot.new(payload, version: version)
         |> application.record()
 
         "snapshot: #{version}"
@@ -312,13 +312,14 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     def load(%Aggregate{state: state}=aggr, %Snapshot{}=snapshot) do
-        %Snapshot{version: version, data: data}=snapshot
-        case data do
-            %{index: index, state: payload} ->
+        %Snapshot{version: version, payload: payload}=snapshot
+        case payload do
+            %{"index" => index, "state" => payload} ->
+                {:ok, aggregate_state} = Codec.load(state, payload)
                 %Aggregate{aggr | 
                     ack: index,
+                    state: aggregate_state, 
                     version: version, 
-                    state: Codec.load(state, payload), 
                 }
 
             _ ->
@@ -327,10 +328,8 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     def encode(%Aggregate{ack: index, state: state}) do
-        %{
-            index: index,
-            state: Codec.encode(state)
-        }
+        {:ok, data} = Codec.encode(state)
+        %{"index" => index, "state" => data}
     end
 
     defp listen(%Aggregate{app: app, stream: {stream_id, _}, ack: ack}=aggr) do
@@ -359,7 +358,7 @@ defmodule Signal.Aggregates.Aggregate do
 
         text = """
 
-        [Aggregate] #{state_type} 
+        [AGGREGATE] #{state_type} 
         stream: #{stream_id}
         version: #{version}
         #{info}

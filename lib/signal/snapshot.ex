@@ -1,16 +1,16 @@
 defmodule Signal.Snapshot do
     alias Signal.Snapshot
-    defstruct [:uuid, :id, :version, :data, type: nil]
+    defstruct [:uuid, :id, :version, :payload, type: nil]
 
     def new(id, data, opts \\ [])
 
-    def new({id, type}, data, opts) when is_binary(id) do
+    def new({id, type}, payload, opts) when is_binary(id) do
         vsn = Keyword.get(opts, :version, 1)
         %Snapshot{
             id: id,
             uuid: uuid(id, type, vsn),
             type: type,
-            data: data,
+            payload: payload,
             version: vsn
         }
     end

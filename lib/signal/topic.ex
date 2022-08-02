@@ -8,11 +8,9 @@ defprotocol Signal.Topic do
 end
 
 defimpl Signal.Topic, for: Any do
-
     def topic(%{__struct__: type}) when is_atom(type) do
         Signal.Helper.module_to_string(type)
     end
-
 end
 
 

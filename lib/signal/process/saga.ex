@@ -62,8 +62,8 @@ defmodule Signal.Process.Saga do
 
         {version, state} =
             case application.snapshot(identity(saga), tenant: tenant) do
-                %{data: %{data: data, ack: ack}}->
-                    state = 
+                %{payload: %{"data" => data, "ack" => ack}}->
+                    {:ok, state} = 
                         module
                         |> struct([])
                         |> Codec.load(data)
@@ -159,10 +159,10 @@ defmodule Signal.Process.Saga do
     def handle_cast({action, %Event{}=event}, %Saga{}=saga) 
     when action in [:apply, :start] do
 
-        %Event{type: type}=event
+        %Event{topic: topic}=event
         %Saga{module: module, state: state} = saga
 
-        log(saga, "applying: #{inspect(type)}")
+        log(saga, "applying: #{inspect(topic)}")
 
         metadata = Event.metadata(event)
 
@@ -203,9 +203,13 @@ defmodule Signal.Process.Saga do
     end
 
     defp snapshot(%Saga{state: state}=saga, ack) do
+        {:ok, data} = Codec.encode(state)
+
+        payload = %{"data" => data, "ack" => ack}
+
         saga
         |> identity()
-        |> Snapshot.new(%{data: Codec.encode(state), ack: ack}, version: 1)
+        |> Snapshot.new(payload, version: 1)
     end
 
     defp log(%Saga{module: module, id: id}, info) do

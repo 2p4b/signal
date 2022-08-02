@@ -70,7 +70,6 @@ defmodule Signal.Command.Dispatcher do
                         app
                         |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
                         |> Signal.Aggregates.Aggregate.state(state_opts)
-
                     end, [shutdown: :brutal_kill])
                 end)
                 |> Task.yield_many(timeout(await))
@@ -107,7 +106,7 @@ defmodule Signal.Command.Dispatcher do
         reraise(raised, stacktrace)
     end
 
-    def handle_crash({:error, :threw, {thrown, stacktrace}}) do
+    def handle_crash({:error, :threw, {thrown, _stacktrace}}) do
         throw(thrown)
     end
 

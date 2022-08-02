@@ -206,7 +206,7 @@ defmodule Signal.Events.Producer do
     end
 
     defp calibrate(%Producer{app: app, stream: {stream_id, _}}=prod) do
-        {application, _name} = app
+        {application, _tenant} = app
         case application.stream_position(stream_id) do
             nil ->
                 %Producer{prod | position: 0}

@@ -127,7 +127,7 @@ defmodule Signal.Handler do
 
         info = """
         [HANDLER] #{module} 
-        processing: #{event.type}
+        processing: #{event.topic}
         topic: #{event.topic}
         number: #{event.number}
         """

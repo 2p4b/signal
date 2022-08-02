@@ -7,7 +7,7 @@ defmodule Signal.Event do
             @module __MODULE__
             @before_compile unquote(__MODULE__)
             @topic Keyword.fetch(unquote(opts), :topic)
-            @stream Keyword.get(unquote(opts), :stream)
+            @stream_opts Keyword.get(unquote(opts), :stream)
         end
     end
 
@@ -28,20 +28,10 @@ defmodule Signal.Event do
                 end
             end
 
-            with {module, key} <- Module.get_attribute(__MODULE__, :stream) do
-                defimpl Signal.Stream, for: __MODULE__ do
-                    @field key
-                    @stream_module module
-                    if is_atom(@field) do
-                        def stream(command, _res) do 
-                            {Map.get(command, @field), @stream_module}
-                        end
-                    else
-                        def stream(command, _res) do 
-                            {@field, @stream_module}
-                        end
-                    end
-                end
+            with stream_opts when is_tuple(stream_opts) 
+                 <- Module.get_attribute(__MODULE__, :stream_opts) do
+                require Signal.Impl.Stream
+                Signal.Impl.Stream.impl(stream_opts)
             end
 
         end

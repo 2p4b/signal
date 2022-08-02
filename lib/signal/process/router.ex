@@ -367,7 +367,7 @@ defmodule Signal.Process.Router do
             |> Enum.find_index(&(Map.get(&1, :id) == id))
 
         log(router, """
-            routing: #{event.type}
+            routing: #{event.topic}
             number: #{event.number}
             handle: #{inspect(reply)}
             """ )
@@ -392,7 +392,7 @@ defmodule Signal.Process.Router do
         if proc do
 
             log(router, """
-                routing: #{event.type}
+                routing: #{event.topic}
                 number: #{event.number}
                 process: #{proc.id} pid: #{inspect(proc.pid)}
                 """ )
@@ -468,7 +468,7 @@ defmodule Signal.Process.Router do
         data = dump_processes(processes)
 
         name
-        |> Snapshot.new(%{ack: ack, processes: data})
+        |> Snapshot.new(%{"ack" => ack, "processes" => data})
         |> application.record([tenant: tenant])
 
         %Router{router| processes: processes}
@@ -488,10 +488,10 @@ defmodule Signal.Process.Router do
         processes
         |> Enum.map(fn %Proc{id: id, ack: ack, queue: queue, status: status} -> 
             %{
-                id: id, 
-                ack: ack, 
-                queue: Enum.uniq(queue),
-                status: Atom.to_string(status)
+                "id" => id, 
+                "ack" => ack, 
+                "queue" => Enum.uniq(queue),
+                "status" => Atom.to_string(status)
             }
         end)
     end
@@ -500,10 +500,10 @@ defmodule Signal.Process.Router do
         processes = 
             data
             |> Enum.map(fn 
-                %{id: id, queue: []} -> 
+                %{"id" => id, "queue" => []} -> 
                     Proc.new(id, nil, queue: [], type: module)
 
-                %{id: id, queue: queue} -> 
+                %{"id" => id, "queue" => queue} -> 
                     pid = start_process(router, id, 0)
                     Proc.new(id, pid, queue: queue, type: module)
             end)
@@ -548,7 +548,7 @@ defmodule Signal.Process.Router do
         %Router{app: {application, tenant}, name: name}=router
 
         case application.snapshot(name, tenant: tenant) do
-            %Snapshot{data: %{processes: processes, ack: ack}}-> 
+            %Snapshot{payload: %{"processes" => processes, "ack" => ack}}-> 
                 {processes, ack}
 
             _ ->
@@ -559,7 +559,8 @@ defmodule Signal.Process.Router do
     def log(%Router{module: module}, info) do
         info = """ 
 
-        [ROUTER]: #{inspect(module)}
+        [ROUTER]
+        #{inspect(module)}
         #{info}
         """
         Logger.info(info)
