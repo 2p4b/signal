@@ -100,7 +100,7 @@ defmodule Signal.Void.Broker do
     def handle_cast({:broadcast, %{number: number}=event}, %Broker{}=store) do
         info = """
 
-        [BROKER] published #{inspect(event.type)}
+        [BROKER] published #{inspect(event.topic)}
         """
         Logger.info(info)
         subs = Enum.map(store.subscriptions, fn sub -> 

@@ -106,7 +106,7 @@ defmodule Signal.Events.ProducerTest do
             assert length(first.events) == 1
 
             #stream.two events count
-            assert Kernel.hd(first.events) |> Map.get(:type) == Signal.Helper.module_to_string(EventOne)
+            assert Kernel.hd(first.events) |> Map.get(:topic) == Signal.Helper.module_to_string(EventOne)
 
             assert match?(%History{
                 stream: "stream.two",
@@ -115,7 +115,7 @@ defmodule Signal.Events.ProducerTest do
 
             assert length(second.events) == 2
             #stream.two events count
-            assert Kernel.hd(second.events) |> Map.get(:type) == Signal.Helper.module_to_string(EventTwo)
+            assert Kernel.hd(second.events) |> Map.get(:topic) == Signal.Helper.module_to_string(EventTwo)
         end
 
     end

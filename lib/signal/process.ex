@@ -9,6 +9,7 @@ defmodule Signal.Process do
         quote location: :keep do
 
             use GenServer
+            use Blueprint.Struct
             alias Signal.Helper
             alias Signal.Stream.Event
             alias Signal.Process.Router

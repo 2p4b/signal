@@ -8,7 +8,7 @@ defmodule Signal.Processor.SagaTest do
         use Signal.Aggregate
 
         schema do
-            field :number,  :string,   default: "123"
+            field :number,  :string,  default: "123"
             field :balance, :number,  default: 0
         end
 
@@ -21,7 +21,6 @@ defmodule Signal.Processor.SagaTest do
     defmodule Deposited do
 
         use Signal.Event,
-            topic: "user.deposited",
             stream: {Accounts, :account}
 
         schema do
@@ -117,9 +116,13 @@ defmodule Signal.Processor.SagaTest do
 
         use Signal.Process,
             application: TestApp,
-            topics: [AccountOpened, "user.deposited", AccountClosed]
+            topics: [AccountOpened, Deposited, AccountClosed]
 
-        defstruct [:account, :amount, :pid]
+        schema do
+            field :account,   :string
+            field :amount,    :number  
+            field :pid,       :any
+        end
 
         def init(id) do
             struct(__MODULE__, [account: id, amount: 0])
