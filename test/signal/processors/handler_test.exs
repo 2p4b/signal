@@ -116,10 +116,10 @@ defmodule Signal.Processor.HandlerTest do
             |> Transaction.new()
 
             TestApp.publish(staged1, [])
-            assert_receive(%Deposited{ amount: 5000 })
+            assert_receive(%Deposited{ amount: 5000 }, 1000)
 
             TestApp.publish(staged2, [])
-            assert_receive(%Deposited{ amount: 4000 })
+            assert_receive(%Deposited{ amount: 4000 }, 1000)
             Process.sleep(1000)
         end
 

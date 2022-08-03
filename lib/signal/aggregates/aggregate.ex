@@ -24,7 +24,7 @@ defmodule Signal.Aggregates.Aggregate do
     """
     def start_link(opts) do
         name = Keyword.get(opts, :name)
-        GenServer.start_link(__MODULE__, opts, name: name)
+        GenServer.start_link(__MODULE__, opts, name: name, hibernate_after: 60 * 60 * 1000)
     end
 
     @impl true

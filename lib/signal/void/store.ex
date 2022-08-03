@@ -4,6 +4,7 @@ defmodule Signal.Void.Store do
     alias Signal.Snapshot
     alias Signal.Void.Repo
     alias Signal.Void.Broker
+    alias Signal.Transaction
     require Logger
 
     @behaviour Signal.Store
@@ -26,8 +27,8 @@ defmodule Signal.Void.Store do
 
     @impl true
     def publish(staged, _opts \\ [])
-    def publish(staged, _opts) when is_list(staged) do
-        case GenServer.call(Repo, {:publish, staged}, 5000) do
+    def publish(%Transaction{}=transaction, _opts) do
+        case GenServer.call(Repo, {:publish, transaction}, 5000) do
             {:ok, events} ->
                 Enum.map(events, fn event -> 
                     GenServer.cast(Broker, {:broadcast, event})

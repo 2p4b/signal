@@ -25,13 +25,19 @@ defmodule Signal.Void.Repo do
     end
 
     @impl true
-    def handle_call({:publish, transactions}, _from, %Repo{cursor: prev}=store) do
+    def handle_call({:publish, transaction}, from, %Repo{cursor: prev}=store) do
         store = 
-            transactions
-            |> Enum.reduce([], fn tran, acc -> acc ++ tran.staged  end)
+            transaction.staged
             |> Enum.reduce(store, &(handle_publish(&2, &1)))
         %{events: events} = store
         events = Enum.slice(events, prev, length(events))
+
+        {:reply, _, store} =
+            transaction.snapshots
+            |> Enum.reduce({:reply, :ok, store}, fn snaphot, {_, _, store} -> 
+               handle_call({:record, snaphot}, from, store)
+            end)
+
         {:reply, {:ok, events}, store}
     end
 
