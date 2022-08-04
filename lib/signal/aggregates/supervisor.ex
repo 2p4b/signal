@@ -32,7 +32,7 @@ defmodule Signal.Aggregates.Supervisor do
         end
     end
 
-    def process_name({id, type}) when is_atom(type) and is_binary(id) do
+    def process_name({id, _type}) when is_binary(id) do
         id
     end
 

@@ -21,9 +21,12 @@ defmodule Signal.Aggregate do
 
         quote generated: true, location: :keep do
 
-            defimpl Signal.Aggregate.Config do
-                def config(_) do
-                    [timeout: @timeout]
+            with timeout <- @timeout do
+                defimpl Signal.Aggregate.Config do
+                    @timeout timeout
+                    def config(_) do
+                        [timeout: @timeout]
+                    end
                 end
             end
 
@@ -46,29 +49,32 @@ defmodule Signal.Aggregate do
         end
     end
 
-    def snapshot(aggregate, action \\ nil)
-    def snapshot(aggregate, nil) when is_struct(aggregate) do
+    def snapshot(aggregate, action \\  nil)
+    def snapshot(aggregate, nil) do
         {:snapshot, aggregate}
     end
-
-    def snapshot(aggregate, action) 
-    when is_struct(aggregate) and action in [:hibernate, :sleep] do
-        {:snapshot, aggregate, action}
+    def snapshot(aggregate, :sleep) do
+        {:snapshot, aggregate, :sleep}
+    end
+    def snapshot(aggregate, [timeout: timeout]) when is_number(timeout) do
+        {:snapshot, aggregate, timeout}
     end
 
-    def sleep(aggregate) do
+    def sleep(aggregate, action \\  nil)
+    def sleep(aggregate, nil) do
         {:sleep, aggregate}
     end
-
-    def hibernate(aggregate) do
-        {:hibernate, aggregate}
+    def sleep(aggregate, [timeout: timeout]) when is_number(timeout) do
+        {:sleep, aggregate, timeout}
     end
 
-    def continue(aggregate) do
+    def continue(aggregate, action \\  nil)
+    def continue(aggregate, nil) do
         {:ok, aggregate}
+    end
+    def continue(aggregate, [timeout: timeout]) when is_number(timeout) do
+        {:ok, aggregate, timeout}
     end
 
 end
-
-
 

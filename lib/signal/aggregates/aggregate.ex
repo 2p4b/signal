@@ -1,5 +1,5 @@
 defmodule Signal.Aggregates.Aggregate do
-    use GenServer
+    use GenServer, restart: :transient
     alias Signal.Codec
     alias Signal.Timer
     alias Signal.Snapshot
@@ -25,8 +25,11 @@ defmodule Signal.Aggregates.Aggregate do
     Starts a new execution queue.
     """
     def start_link(opts) do
-        name = Keyword.get(opts, :name)
-        GenServer.start_link(__MODULE__, opts, name: name, hibernate_after: Timer.min(60))
+        aggregate_opts = [
+            name: Keyword.get(opts, :name), 
+            hibernate_after: Timer.min(60)
+        ]
+        GenServer.start_link(__MODULE__, opts, aggregate_opts)
     end
 
     @impl true
@@ -45,10 +48,13 @@ defmodule Signal.Aggregates.Aggregate do
 
         red = Keyword.get(opts, :version, aggregate.version)
         if ver >= red do
-            {:reply, state, aggregate} 
+            {:reply, state, aggregate, aggregate.timeout} 
         else
             ref = Process.monitor(elem(from, 0))
-            {:noreply, %Aggregate{aggregate | awaiting: waiting ++ [{from, ref, red}]} }
+            aggregate = %Aggregate{aggregate | 
+                awaiting: waiting ++ [{from, ref, red}]
+            }
+            {:noreply, aggregate, aggregate.timeout }
         end
     end
 
@@ -61,10 +67,10 @@ defmodule Signal.Aggregates.Aggregate do
         } = aggregate
 
         if vsn >= red do
-            {:reply, state, aggregate} 
+            {:reply, state, aggregate, aggregate.timeout} 
         else
             ref = Process.monitor(elem(from, 0))
-            {:noreply, %Aggregate{aggregate | awaiting: waiting ++ [{from, ref, red}]} }
+            {:noreply, %Aggregate{aggregate | awaiting: waiting ++ [{from, ref, red}]}, aggregate.timeout }
         end
     end
 
@@ -83,13 +89,13 @@ defmodule Signal.Aggregates.Aggregate do
                 snapshot ->
                     load(aggregate, snapshot)
             end
-        {:noreply, listen(aggregate)}
+        {:noreply, listen(aggregate), aggregate.timeout}
     end
 
     @impl true
     def handle_info(%Event{number: number}, %Aggregate{ack: ack}=aggregate) 
     when number <= ack do
-        {:noreply, aggregate}
+        {:noreply, aggregate, aggregate.timeout}
     end
 
     @impl true
@@ -100,22 +106,7 @@ defmodule Signal.Aggregates.Aggregate do
                     aggregate
                     |> acknowledge(event)
                     |> reply_waiters()
-                {:noreply, aggregate, Timer.seconds(5)} 
-
-            {:sleep, %Aggregate{}=aggregate} ->
-
-                aggregate =
-                    aggregate
-                    |> acknowledge(event)
-                    |> reply_waiters()
-
-                case aggregate.awaiting  do
-                    [] ->
-                        {:stop, :sleep, aggregate} 
-                    _ ->
-                        # NO Sleep if there are waiters
-                        {:noreply, aggregate}
-                end
+                {:noreply, aggregate, aggregate.timeout} 
 
             {:hibernate, %Aggregate{}=aggregate} ->
                 aggregate =
@@ -138,7 +129,16 @@ defmodule Signal.Aggregates.Aggregate do
 
     @impl true
     def handle_info(:timeout, %Aggregate{}=aggregate) do
-        {:stop, :normal, aggregate}
+        case aggregate.awaiting  do
+            [] ->
+                app = aggregate.app
+                name  = Signal.Aggregates.Supervisor.process_name(aggregate.stream)
+                Signal.Aggregates.Supervisor.unregister_child(app, name)
+                {:stop, :normal, aggregate}
+            _ ->
+                # NO Sleep if there are waiters
+                {:noreply, aggregate, aggregate.timeout}
+        end
     end
 
     @impl true
@@ -153,7 +153,7 @@ defmodule Signal.Aggregates.Aggregate do
                     true
                 end
             end)
-        {:noreply, %Aggregate{aggregate | awaiting: awaiting}}
+        {:noreply, %Aggregate{aggregate | awaiting: awaiting}, aggregate.timeout}
     end
 
     defp reply_waiters(%Aggregate{}=aggregate) do
@@ -203,14 +203,24 @@ defmodule Signal.Aggregates.Aggregate do
                 log(info, aggregate)
 
                 case Reducer.apply(state, metadata, event_payload) do
-                    {action, state} when action in [:ok, :sleep, :hibernate] ->
+                    {:ok, state}  ->
                          aggregate = 
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
                                 version: position
                             }
-                        {action, aggregate}
+                        {:ok, aggregate}
+
+                    {:ok, state, timeout} when is_number(timeout)  ->
+                         aggregate = 
+                            %Aggregate{aggregate | 
+                                ack: number,
+                                state: state,
+                                timeout: timeout,
+                                version: position
+                            }
+                        {:ok, aggregate}
 
 
                     {:snapshot, state} ->
@@ -224,7 +234,7 @@ defmodule Signal.Aggregates.Aggregate do
 
                         {:ok, aggregate}
 
-                    {:snapshot, state, action} ->
+                    {:snapshot, state, :sleep} ->
                         aggregate = 
                             %Aggregate{aggregate | 
                                 ack: number,
@@ -233,9 +243,21 @@ defmodule Signal.Aggregates.Aggregate do
                             }
                             |> snapshot()
 
-                        {action, aggregate}
+                        {:hibernate, aggregate}
 
-                    {:stop, state} ->
+                    {:snapshot, state, timeout} when is_number(timeout) ->
+                        aggregate = 
+                            %Aggregate{aggregate | 
+                                ack: number,
+                                state: state,
+                                timeout: timeout,
+                                version: position
+                            }
+                            |> snapshot()
+
+                        {:ok, aggregate}
+
+                    {:sleep, state} ->
                         aggregate = 
                             %Aggregate{aggregate | 
                                 ack: number,
@@ -243,17 +265,18 @@ defmodule Signal.Aggregates.Aggregate do
                                 version: position
                             }
 
-                        {:stop, :normal, aggregate}
+                        {:hibernate, aggregate}
 
-                    {:stop, reason, state} ->
+                    {:sleep, state, timeout} when is_number(timeout) ->
                         aggregate = 
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
+                                timeout: timeout,
                                 version: position
                             }
 
-                        {:stop, reason, aggregate}
+                        {:hibernate, aggregate}
 
                     {:error, error} ->
                         {:error, error}
