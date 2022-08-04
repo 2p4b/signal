@@ -1,6 +1,7 @@
 defmodule Signal.Aggregates.Aggregate do
     use GenServer
     alias Signal.Codec
+    alias Signal.Timer
     alias Signal.Snapshot
     alias Signal.Stream.Event
     alias Signal.Stream.Reducer
@@ -12,6 +13,7 @@ defmodule Signal.Aggregates.Aggregate do
         :app, 
         :store,
         :state, 
+        :timeout,
         :stream, 
         :subscription,
         ack: 0, 
@@ -24,18 +26,23 @@ defmodule Signal.Aggregates.Aggregate do
     """
     def start_link(opts) do
         name = Keyword.get(opts, :name)
-        GenServer.start_link(__MODULE__, opts, name: name, hibernate_after: 60 * 60 * 1000)
+        GenServer.start_link(__MODULE__, opts, name: name, hibernate_after: Timer.min(60))
     end
 
     @impl true
     def init(opts) do
         Process.send(self(), :init, [])
-        {:ok, struct(__MODULE__, opts )}
+        {:ok, struct(__MODULE__, opts), Timer.hours(1)}
     end
 
     @impl true
     def handle_call({:state, opts}, from, %Aggregate{}=aggregate) do
-        %Aggregate{version: ver, awaiting: waiting, state: state}=aggregate
+        %Aggregate{
+            state: state,
+            version: ver, 
+            awaiting: waiting, 
+        } = aggregate
+
         red = Keyword.get(opts, :version, aggregate.version)
         if ver >= red do
             {:reply, state, aggregate} 
@@ -48,9 +55,9 @@ defmodule Signal.Aggregates.Aggregate do
     @impl true
     def handle_call({:await, red}, from, %Aggregate{}=aggregate) do
         %Aggregate{
+            state: state,
             version: vsn, 
             awaiting: waiting, 
-            state: state
         } = aggregate
 
         if vsn >= red do
@@ -93,7 +100,7 @@ defmodule Signal.Aggregates.Aggregate do
                     aggregate
                     |> acknowledge(event)
                     |> reply_waiters()
-                {:noreply, aggregate} 
+                {:noreply, aggregate, Timer.seconds(5)} 
 
             {:sleep, %Aggregate{}=aggregate} ->
 
@@ -344,7 +351,7 @@ defmodule Signal.Aggregates.Aggregate do
 
     @impl true
     def terminate(reason, %Aggregate{}=aggregate) do
-        "reason: #{inspect(reason)}"
+        "shutdown: #{inspect(reason)}"
         |> log(aggregate)
         reason
     end

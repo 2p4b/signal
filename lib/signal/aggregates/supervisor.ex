@@ -40,14 +40,17 @@ defmodule Signal.Aggregates.Supervisor do
         {:via, _reg, {_mreg, _pname, stream}} = via_name
         {app_module, _app_name} = app
         {id, aggregate} = stream
+        state = struct!(aggregate, [])
+        config = Signal.Aggregate.Config.config(state) 
         [
             id: id,
             name: via_name,
-            state: struct!(aggregate, []),
+            state: state,
             stream: stream,
             store: Kernel.apply(app_module, :store, []),
             app: app,
         ] 
+        |> Enum.concat(config)
     end
 
 end

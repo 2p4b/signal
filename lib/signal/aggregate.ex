@@ -1,10 +1,17 @@
 defmodule Signal.Aggregate do
 
+    defprotocol Config do
+        @spec config(t) :: Keyword.t()
+        def config(type)
+    end
+
     defmacro __using__(opts) do
         strict = Keyword.get(opts, :strict, false)
+        timeout = Keyword.get(opts, :timeout, Signal.Timer.seconds(5))
         quote do
             use Blueprint.Struct
             @module __MODULE__
+            @timeout unquote(timeout)
             @apply_strict unquote(strict)
             @before_compile unquote(__MODULE__)
         end
@@ -13,6 +20,13 @@ defmodule Signal.Aggregate do
     defmacro __before_compile__(_env) do
 
         quote generated: true, location: :keep do
+
+            defimpl Signal.Aggregate.Config do
+                def config(_) do
+                    [timeout: @timeout]
+                end
+            end
+
             if (Module.defines?(__MODULE__, {:apply, 3}, :def) or @apply_strict === false) do
                 with module <- @module do
                     defimpl Signal.Stream.Reducer do
