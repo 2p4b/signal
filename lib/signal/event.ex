@@ -28,6 +28,17 @@ defmodule Signal.Event do
                 end
             end
 
+            if Module.defines?(__MODULE__, {:apply, 3}, :def) do
+                with module <- @module do
+                    defimpl Signal.Stream.Reducer do
+                        @pmodule module
+                        def apply(event, meta, agg) do 
+                            Kernel.apply(@pmodule, :apply, [event, meta, agg])
+                        end
+                    end
+                end
+            end
+
             with stream_opts when is_tuple(stream_opts) 
                  <- Module.get_attribute(__MODULE__, :stream_opts) do
                 require Signal.Impl.Stream

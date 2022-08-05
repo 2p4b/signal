@@ -1,10 +1,11 @@
 defmodule Signal.Execution.Queue do
-    use GenServer
+    use GenServer, restart: :transient
 
+    alias Signal.Timer
     alias Signal.Execution.Queue
     alias Signal.Command.Handler
 
-    defstruct [:application, :id, type: :default, timeout: :infinity]
+    defstruct [:application, :id, type: :default, timeout: (5 * 1000)]
 
     @doc """
     Starts a new execution queue.
@@ -21,7 +22,16 @@ defmodule Signal.Execution.Queue do
 
     @impl true
     def handle_call({:execute, command, assigns, opts}, _from, %Queue{}=state) do
-        {:reply, execute(command, assigns, opts), state}
+        {:reply, execute(command, assigns, opts), state, state.timeout}
+    end
+
+    @impl true
+    def terminate(reason, state) do
+        Map.from_struct(state)
+        |> Map.to_list()
+        |> Enum.concat([shutdown: reason])
+        |> Signal.Logger.info(label: :queue)
+        :shutdown
     end
 
     def handle(app, command, assigns, opts \\ []) do
@@ -48,7 +58,14 @@ defmodule Signal.Execution.Queue do
 
     def execute(command, assigns, _opts \\ []) do
         try do
-            Handler.execute(command, assigns)
+            {elapsed, results} = Timer.apply(Handler, :execute, [command, assigns])
+            [
+                command: command.__struct__, 
+                queue: Signal.Queue.queue(command), 
+                time: elapsed
+            ]
+            |> Signal.Logger.info(label: :queue)
+            results
         rescue
             raised -> {:error, {:reraise, raised}}
         catch

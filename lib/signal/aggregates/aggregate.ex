@@ -202,7 +202,16 @@ defmodule Signal.Aggregates.Aggregate do
                 """
                 log(info, aggregate)
 
-                case Reducer.apply(state, metadata, event_payload) do
+                apply_args = 
+                    case Reducer.impl_for(event_payload) do
+                        nil ->
+                            [state, metadata, event_payload]
+
+                        _impl ->
+                            [event_payload, metadata, state]
+                    end
+
+                case Kernel.apply(Reducer, :apply, apply_args) do
                     {:ok, state}  ->
                          aggregate = 
                             %Aggregate{aggregate | 

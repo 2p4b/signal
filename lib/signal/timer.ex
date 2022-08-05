@@ -20,4 +20,15 @@ defmodule Signal.Timer do
         value * hours(24)
     end
 
+    def apply(module, method, args \\ nil) 
+    def apply(func, args, _args) 
+    when is_function(func) and is_list(args) do
+        :timer.tc(func, args)
+    end
+
+    def apply(module, method, args) 
+    when is_atom(module) and is_atom(method) and is_list(args) do
+        :timer.tc(module, method, args)
+    end
+
 end

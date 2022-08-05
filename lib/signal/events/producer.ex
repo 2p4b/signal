@@ -1,7 +1,8 @@
 defmodule Signal.Events.Producer do
-    use GenServer
+    use GenServer, restart: :transient
 
     alias Signal.Multi
+    alias Signal.Timer
     alias Signal.Result
     alias Signal.Events
     alias Signal.Transaction
@@ -31,6 +32,11 @@ defmodule Signal.Events.Producer do
     @impl true
     def handle_info(:init, %Producer{}=state) do
         {:noreply, calibrate(state)}
+    end
+
+    @impl true
+    def handle_info(:timeout, %Producer{}=state) do
+        {:stop, :normal, state}
     end
 
     @impl true
@@ -69,13 +75,13 @@ defmodule Signal.Events.Producer do
         # Halt until the task is resolved
         case Task.yield(channel, :infinity) do
             {:ok, {:ok, ^version}} ->
-                {:noreply, %Producer{state | position: version}}
+                {:noreply, %Producer{state | position: version}, Timer.seconds(5)}
 
             {:ok, {:rollback, _}} ->
-                {:noreply, calibrate(state)}
+                {:noreply, calibrate(state), Timer.seconds(5)}
 
              _ ->
-                {:noreply, calibrate(state)}
+                {:noreply, calibrate(state), Timer.seconds(5)}
         end
     end
 
@@ -132,7 +138,7 @@ defmodule Signal.Events.Producer do
                     {:reply, {:error, reason}, producer}
             end
         else
-            {:reply, event_streams, producer}
+            {:reply, event_streams, producer, Timer.seconds(5)}
         end
     end
 
@@ -320,5 +326,13 @@ defmodule Signal.Events.Producer do
         end)
     end
 
+    @impl true
+    def terminate(reason, state) do
+        Map.from_struct(state)
+        |> Map.to_list()
+        |> Enum.concat([shutdown: reason])
+        |> Signal.Logger.info(label: :producer)
+        :shutdown
+    end
 
 end
