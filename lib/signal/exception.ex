@@ -22,9 +22,9 @@ defmodule Signal.Exception do
             stream MUST
                 - Be a tuple
                 - Have a size of 2 (tuple_size/1)
-                - Have first element in tuple an atom (Aggregate module) 
+                - First element a string for the stream id
+                - Second element in tuple an atom (Aggregate module) 
                   which also represents the stream type
-                - Second element a string for the stream id
             """
         end
     end
