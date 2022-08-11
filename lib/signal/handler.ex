@@ -1,8 +1,8 @@
 defmodule Signal.Handler do
 
     alias Signal.Handler
+    alias Signal.Logger
     alias Signal.Stream.Event
-    require Logger
 
     defstruct [:app, :state, :module, :subscription]
 
@@ -12,7 +12,7 @@ defmodule Signal.Handler do
         topics = Keyword.get(opts, :topics)
         start = Keyword.get(opts, :start, :current)
         quote do
-            use GenServer
+            use GenServer, restart: :transient
             alias Signal.Handler
             alias Signal.Stream.Event
 
@@ -125,13 +125,13 @@ defmodule Signal.Handler do
         } = handler
         {application, tenant} = app
 
-        info = """
-        [HANDLER] #{module} 
-        processing: #{event.topic}
-        topic: #{event.topic}
-        number: #{event.number}
-        """
-        Logger.info(info)
+        [
+          processing: event.topic,
+          topic: event.topic,
+          number: event.number,
+        ]
+        |> Logger.info(info, label: :handler)
+
         args = [Event.payload(event), Event.metadata(event), state]
 
         response =

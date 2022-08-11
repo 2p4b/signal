@@ -1,5 +1,6 @@
 defmodule Signal.Projector do
 
+    alias Signal.Logger
     alias Signal.Projector
     alias Signal.Stream.Event
 
@@ -94,10 +95,24 @@ defmodule Signal.Projector do
             subscription: %{handle: handle}
         } = projector
         {application, tenant} = app
+
+        [
+          projector: module,
+          projecting: event.topic,
+          number: event.number,
+        ]
+        |> Logger.info(info, label: :projector)
+
         args = [Event.payload(event), Event.metadata(event)]
         response = Kernel.apply(module, :project, args)
-        application.acknowledge(handle, number, tenant: tenant)
-        handle_response(projector, response)
+        case handle_response(projector, response) do
+            {:noreply, handler} ->
+                application.acknowledge(handle, number, tenant: tenant)
+                {:noreply, handler}
+
+            response ->            
+                response
+        end
     end
 
     def handle_response(%Projector{}=handler, response) do
@@ -108,8 +123,8 @@ defmodule Signal.Projector do
             {:stop, reason} ->
                 {:stop, reason, handler}
 
-            :hibernate ->
-                {:noreply, handler, :hibernate}
+            {:error, reason} ->
+                {:stop, reason, handler}
 
             _resp ->
                 {:noreply, handler}

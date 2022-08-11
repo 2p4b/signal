@@ -1,5 +1,5 @@
 defmodule Signal.Process.Saga do
-    use GenServer
+    use GenServer, restart: :transient
 
     alias Signal.Codec
     alias Signal.Result
