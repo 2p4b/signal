@@ -101,7 +101,7 @@ defmodule Signal.Projector do
           projecting: event.topic,
           number: event.number,
         ]
-        |> Logger.info(info, label: :projector)
+        |> Logger.info(label: :projector)
 
         args = [Event.payload(event), Event.metadata(event)]
         response = Kernel.apply(module, :project, args)

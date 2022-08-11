@@ -126,11 +126,12 @@ defmodule Signal.Handler do
         {application, tenant} = app
 
         [
-          processing: event.topic,
-          topic: event.topic,
-          number: event.number,
+            handler: module,
+            processing: event.topic,
+            topic: event.topic,
+            number: event.number,
         ]
-        |> Logger.info(info, label: :handler)
+        |> Logger.info(label: :handler)
 
         args = [Event.payload(event), Event.metadata(event), state]
 
