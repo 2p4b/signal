@@ -291,7 +291,7 @@ defmodule Signal.Events.Producer do
                 constructable!(stream)
 
             stream ->
-                raise(Signal.Exception.InvalidStreamError, [stream: stream])
+                raise(Signal.Exception.InvalidStreamError, [stream: stream, signal: event])
         end
     end
 

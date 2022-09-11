@@ -1,7 +1,16 @@
 defmodule Signal.Exception do
 
     defmodule InvalidStreamError do
-        defexception [:stream, :message]
+        defexception [:stream, :signal, :message]
+
+        @impl true
+        def message(%{signal: signal}=error) when is_struct(signal) do
+            """
+
+            #{inspect(signal)}
+            #{error |> Map.delete(:signal) |> message()}
+            """
+        end
 
         @impl true
         def message(%{stream: stream, message: msg}) when is_binary(msg) do
