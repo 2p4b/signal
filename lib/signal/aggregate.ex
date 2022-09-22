@@ -1,8 +1,17 @@
 defmodule Signal.Aggregate do
 
     defprotocol Config do
+
+        @fallback_to_any true
         @spec config(t) :: Keyword.t()
         def config(type)
+
+    end
+
+    defimpl Config, for: Any do
+        def config(_type) do
+            [timeout: Signal.Timer.seconds(5)]
+        end
     end
 
     defmacro __using__(opts) do
