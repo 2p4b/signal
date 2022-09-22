@@ -16,7 +16,7 @@ defmodule Signal.Command.DispatchTest do
 
     defmodule Accounts do
 
-        use Blueprint.Struct
+        use Signal.Struct
 
         schema do
             field :number,      :string,    default: "123"

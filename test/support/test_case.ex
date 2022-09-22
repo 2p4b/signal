@@ -13,6 +13,19 @@ defmodule Signal.TestCase do
                 assert stream = Signal.Stream.stream(payload)
             end
 
+            defp assert_emitted(event, events) 
+            when is_struct(event) and is_list(events) do
+                case Enum.find(events, &match?(&1, event)) do
+                    nil ->
+                        assert false, """
+                        Event #{inspect(event)}
+                        not found
+                        """
+                    _ ->
+                        {:ok, event}
+                end
+            end
+
             # assert that the expected events are returned when the given commands
             # have been executed
             defp assert_events(command, expected_events) 
@@ -24,6 +37,8 @@ defmodule Signal.TestCase do
             when is_struct(command) and is_list(expected_events) do
                 events =
                     case handle_command(command) do
+                        nil ->
+                            []
 
                         {:ok, events} when is_list(events) ->
                             events
@@ -46,17 +61,8 @@ defmodule Signal.TestCase do
 
                 if is_list(events) do
                     expected_events
-                    |> Enum.with_index()
-                    |> Enum.each(fn {event, index} -> 
-                        expected = Enum.at(events, index)
-                        if expected do 
-                            assert event == expected
-                        else
-                            assert match?(event, nil), """
-                            Expected #{inspect(event)}
-                            but got none
-                            """
-                        end
+                    |> Enum.each(fn event -> 
+                        assert_emitted(event, events)
                     end)
                 else
                     message  = """
