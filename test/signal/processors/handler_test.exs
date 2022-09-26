@@ -1,10 +1,8 @@
 defmodule Signal.Processor.HandlerTest do
     use ExUnit.Case, async: true
 
-    alias Signal.Handler
     alias Signal.Void.Store
     alias Signal.Transaction
-    alias Signal.Stream.Event
     alias Signal.Events.Stage
 
     defmodule TestApp do
