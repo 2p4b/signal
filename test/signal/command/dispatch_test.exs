@@ -108,7 +108,7 @@ defmodule Signal.Command.DispatchTest do
             {:ok, result} = Signal.Command.Dispatcher.dispatch(task)
 
             assert match?(%Result{
-                aggregates: [ %Accounts{ number: "123", balance: 5000 } ],
+                aggregates: [%Accounts{number: "123", balance: 5000}],
                 assigns: %{},
                 result: nil,
             }, result)

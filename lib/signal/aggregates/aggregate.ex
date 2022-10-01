@@ -43,19 +43,38 @@ defmodule Signal.Aggregates.Aggregate do
         %Aggregate{
             state: state,
             version: ver, 
+            timeout: timeout,
             awaiting: waiting, 
         } = aggregate
 
         red = Keyword.get(opts, :version, aggregate.version)
         if ver >= red do
-            {:reply, state, aggregate, aggregate.timeout} 
+            {:reply, state, aggregate, timeout} 
         else
             ref = Process.monitor(elem(from, 0))
             aggregate = %Aggregate{aggregate | 
                 awaiting: waiting ++ [{from, ref, red}]
             }
-            {:noreply, aggregate, aggregate.timeout }
+            {:noreply, aggregate, timeout}
         end
+    end
+
+    @impl true
+    def handle_call({:revise, {version, state}}, _from, %Aggregate{}=aggregate) do
+        %Aggregate{version: ver, timeout: timeout} = aggregate
+
+        %Aggregate{} = 
+            %Aggregate{aggregate | version: version, state: state} 
+            |> snapshot()
+
+        aggregate = 
+            if version == ver do
+                %Aggregate{aggregate| state: state}
+            else
+                aggregate
+            end
+
+        {:reply, {:ok, {version, state}}, aggregate, timeout} 
     end
 
     @impl true
@@ -180,6 +199,11 @@ defmodule Signal.Aggregates.Aggregate do
     def state(aggregate,  opts \\ []) do
         timeout = Keyword.get(opts, :timeout, 10000)
         GenServer.call(aggregate, {:state, opts}, timeout)
+    end
+
+    def revise(aggregate, {version, state},  opts \\ []) do
+        timeout = Keyword.get(opts, :timeout, 10000)
+        GenServer.call(aggregate, {:revise, {version, state}}, timeout)
     end
 
     defp apply_event(%Aggregate{}=aggregate, %Event{number: number}=event) do

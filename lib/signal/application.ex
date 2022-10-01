@@ -66,21 +66,35 @@ defmodule Signal.Application do
 
             defdelegate unsubscribe(handle, opts), to: @store
 
-            defdelegate publish(staged, opts \\ []), to: @store
+            defdelegate publish(staged, opts\\[]), to: @store
 
-            defdelegate stream_position(stream, opts \\ []), to: @store
+            defdelegate stream_position(stream, opts\\[]), to: @store
 
-            defdelegate snapshot(iden, opts \\ []), to: @store
+            defdelegate snapshot(iden, opts\\[]), to: @store
 
-            defdelegate purge(iden, opts \\ []), to: @store
+            defdelegate purge(iden, opts\\[]), to: @store
 
-            defdelegate record(snapshot, opts \\ []), to: @store
+            defdelegate record(snapshot, opts\\[]), to: @store
 
-            defdelegate acknowledge(handle, number, opts \\ []), to: @store
+            defdelegate acknowledge(handle, number, opts\\[]), to: @store
 
-            def process_alive?({process, id}, _opts \\ []) 
+            def process_alive?(process, id, _opts\\[]) 
             when is_atom(process) and is_binary(id) do
                 GenServer.call(process, {:alive, id}, 5000)
+            end
+
+            def aggregate(stream, opts\\[]) do
+                tenant = Keyword.get(opts, :tenant, __MODULE__)
+                {__MODULE__, tenant}
+                |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
+                |> Signal.Aggregates.Aggregate.state(opts)
+            end
+
+            def revise_aggregate(stream, {version, state}, opts\\[]) do
+                tenant = Keyword.get(opts, :tenant, __MODULE__)
+                {__MODULE__, tenant}
+                |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
+                |> Signal.Aggregates.Aggregate.revise({version, state}, opts)
             end
 
             defp supervisor_args(type, name) do
@@ -89,13 +103,6 @@ defmodule Signal.Application do
 
             defp registry_args(type, name) do
                 [keys: :unique, name: Signal.Application.registry({__MODULE__, name}, type)]
-            end
-
-            def aggregate(id, type, opts \\ []) do
-                tenant = Keyword.get(opts, :tenant, __MODULE__)
-                {__MODULE__, tenant}
-                |> Signal.Aggregates.Supervisor.prepare_aggregate({id, type})
-                |> Signal.Aggregates.Aggregate.state(opts)
             end
 
         end

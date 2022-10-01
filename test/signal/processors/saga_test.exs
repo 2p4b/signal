@@ -206,7 +206,7 @@ defmodule Signal.Processor.SagaTest do
             assert_receive(%AccountClosed{}, 1000)
 
             Process.sleep(500)
-            refute TestApp.process_alive?({ActivityNotifier, "123"})
+            refute TestApp.process_alive?(ActivityNotifier, "123")
         end
 
     end
