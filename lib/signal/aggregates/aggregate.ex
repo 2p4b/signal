@@ -209,6 +209,7 @@ defmodule Signal.Aggregates.Aggregate do
     defp apply_event(%Aggregate{}=aggregate, %Event{number: number}=event) do
         %Aggregate{
             version: version, 
+            stream: {_, stream_type},
             state: state, 
         } = aggregate
 
@@ -236,6 +237,15 @@ defmodule Signal.Aggregates.Aggregate do
                     end
 
                 case Kernel.apply(Reducer, :apply, apply_args) do
+                    %{__struct__: type}=state when is_atom(type) and type == stream_type ->
+                         aggregate = 
+                            %Aggregate{aggregate | 
+                                ack: number,
+                                state: state,
+                                version: position
+                            }
+                        {:ok, aggregate}
+
                     {:ok, state}  ->
                          aggregate = 
                             %Aggregate{aggregate | 
