@@ -328,7 +328,6 @@ defmodule Signal.Aggregates.Aggregate do
 
 
             _ -> 
-                IO.inspect({event, aggregate})
                 {:error, :out_of_order, event}
         end
     end
