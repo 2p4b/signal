@@ -328,6 +328,7 @@ defmodule Signal.Aggregates.Aggregate do
 
 
             _ -> 
+                IO.inspect({event, aggregate})
                 {:error, :out_of_order, event}
         end
     end
@@ -405,12 +406,12 @@ defmodule Signal.Aggregates.Aggregate do
         %{"index" => index, "state" => data}
     end
 
-    defp listen(%Aggregate{app: app, stream: {stream_id, _}, ack: ack}=aggr) do
+    defp listen(%Aggregate{app: app, stream: stream, ack: ack}=aggr) do
         {application, _tenant} = app
         {:ok, subscription} = application.subscribe([
             start: ack,
             track: false, 
-            stream: stream_id, 
+            streams: stream |> List.wrap(), 
         ])
         %Aggregate{aggr| subscription: subscription}
     end

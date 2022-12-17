@@ -14,7 +14,7 @@ defmodule Signal.Command.DispatchTest do
         queue :default, timeout: 5000, retries: 0
     end
 
-    defmodule Accounts do
+    defmodule Account do
 
         use Blueprint.Struct
 
@@ -27,7 +27,7 @@ defmodule Signal.Command.DispatchTest do
     defmodule Deposited do
 
         use Signal.Event,
-            stream: {Accounts, :account}
+            stream: {Account, :account}
 
         schema do
             field :account, :string,   default: ""
@@ -39,22 +39,22 @@ defmodule Signal.Command.DispatchTest do
     defmodule Deposite do
 
         use Signal.Command,
-            stream: {Accounts, :account}
+            stream: {Account, :account}
 
         schema do
             field :account, :string,    default: "123"
             field :amount,  :number,    default: 0
         end
 
-        def handle(%Deposite{}=deposite, _params, %Accounts{number: "123", balance: 0}) do
+        def handle(%Deposite{}=deposite, _params, %Account{number: "123", balance: 0}) do
             Deposited.from(deposite)
         end
 
     end
 
-    defimpl Signal.Stream.Reducer, for: Accounts do
-        def apply(%Accounts{balance: balance}=account, _meta, %Deposited{amount: amt}) do
-            {:ok, %Accounts{ account | balance: balance + amt }}
+    defimpl Signal.Stream.Reducer, for: Account do
+        def apply(%Account{balance: balance}=account, _meta, %Deposited{amount: amt}) do
+            {:ok, %Account{ account | balance: balance + amt }}
         end
     end
 
@@ -108,7 +108,7 @@ defmodule Signal.Command.DispatchTest do
             {:ok, result} = Signal.Command.Dispatcher.dispatch(task)
 
             assert match?(%Result{
-                aggregates: [%Accounts{number: "123", balance: 5000}],
+                aggregates: [%Account{number: "123", balance: 5000}],
                 assigns: %{},
                 result: nil,
             }, result)

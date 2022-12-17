@@ -130,8 +130,8 @@ defmodule Signal.Void.Broker do
         sub
     end
 
-    defp push_event(%{stream: s_stream}=sub, %{stream: e_stream})
-    when not(is_nil(s_stream)) and  s_stream !=  e_stream do
+    defp push_event(%{streams: [{s_stream_id, _}]}=sub, %{stream_id: e_stream_id})
+    when not(is_nil(s_stream_id)) and  s_stream_id != e_stream_id do
         sub
     end
 
@@ -180,7 +180,7 @@ defmodule Signal.Void.Broker do
                     """
             end
         topics = Keyword.get(opts, :topics, [])
-        stream = Keyword.get(opts, :stream, nil)
+        streams = Keyword.get(opts, :streams, []) |> List.wrap()
         track = Keyword.get(opts, :track, false)
         %{
             id: id,
@@ -188,8 +188,8 @@ defmodule Signal.Void.Broker do
             syn: ack,
             track: track,
             handle: handle,
-            stream: stream,
             topics: topics,
+            streams: streams,
         }
     end
 

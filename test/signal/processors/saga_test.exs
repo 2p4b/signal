@@ -3,16 +3,16 @@ defmodule Signal.Processor.SagaTest do
 
     alias Signal.Void.Store
 
-    defmodule Accounts do
+    defmodule Account do
 
         use Signal.Aggregate
 
         schema do
-            field :number,  :string,  default: "123"
+            field :number,  :string,  default: "saga.123"
             field :balance, :number,  default: 0
         end
 
-        def apply(_event, _meta, %Accounts{}=act) do
+        def apply(_event, _meta, %Account{}=act) do
             {:ok, act}
         end
 
@@ -21,10 +21,10 @@ defmodule Signal.Processor.SagaTest do
     defmodule Deposited do
 
         use Signal.Event,
-            stream: {Accounts, :account}
+            stream: {Account, :account}
 
         schema do
-            field :account, :string,    default: "123"
+            field :account, :string,    default: "saga.123"
             field :amount,  :number,    default: 0
         end
 
@@ -32,34 +32,34 @@ defmodule Signal.Processor.SagaTest do
 
     defmodule AccountOpened do
         use Signal.Event,
-            stream: {Accounts, :account}
+            stream: {Account, :account}
 
         schema do
             field :pid,     :any
-            field :account, :string,   default: "123"
+            field :account, :string,   default: "saga.123"
         end
     end
 
     defmodule AccountClosed do
         use Signal.Event,
-            stream: {Accounts, :account}
+            stream: {Account, :account}
 
         schema do
-            field :account, :string,   default: "123"
+            field :account, :string,   default: "saga.123"
         end
     end
 
     defmodule OpenAccount do
 
         use Signal.Command,
-            stream: {Accounts, :account}
+            stream: {Account, :account}
 
         schema do
             field :pid,     :any
-            field :account, :string,   default: "123"
+            field :account, :string,   default: "saga.123"
         end
 
-        def handle(%OpenAccount{}=cmd, _params, %Accounts{}) do
+        def handle(%OpenAccount{}=cmd, _params, %Account{}) do
             AccountOpened.from(cmd)
         end
     end
@@ -67,27 +67,27 @@ defmodule Signal.Processor.SagaTest do
     defmodule Deposite do
 
         use Signal.Command,
-            stream: {Accounts, :account}
+            stream: {Account, :account}
 
         schema do
-            field :account,     :string,    default: "123"
+            field :account,     :string,    default: "saga.123"
             field :amount,      :number,    default: 0
         end
 
-        def handle(%Deposite{}=deposite, _params, %Accounts{}) do
+        def handle(%Deposite{}=deposite, _params, %Account{}) do
             Deposited.from(deposite)
         end
     end
 
     defmodule CloseAccount do
         use Signal.Command,
-            stream: {Accounts, :account}
+            stream: {Account, :account}
 
         schema do
-            field :account,     :string,   default: "123"
+            field :account,     :string,   default: "saga.123"
         end
 
-        def handle(%CloseAccount{}=cmd, _params, %Accounts{}) do
+        def handle(%CloseAccount{}=cmd, _params, %Account{}) do
             AccountClosed.from(cmd)
         end
     end
@@ -154,7 +154,7 @@ defmodule Signal.Processor.SagaTest do
             acknowledge(act, ev)
             amount = ev.amount + amt
             if amount == 9000 do
-                bonus = %Deposite{account: "123", amount: 1000}
+                bonus = %Deposite{account: "saga.123", amount: 1000}
                 {:dispatch, bonus , %ActivityNotifier{act | amount: amount} }
             else
                 {:ok, %ActivityNotifier{act | amount: amount} }
@@ -183,16 +183,16 @@ defmodule Signal.Processor.SagaTest do
         :ok
     end
 
-    describe "Process" do
+    describe "Saga" do
 
-        @tag :process
+        @tag :saga
         test "process should start stop and continue" do
 
             TestApp.dispatch(OpenAccount.new([pid: self()]), app: :saga)
 
             TestApp.dispatch(Deposite.new([amount: 5000]), app: :saga)
 
-            assert_receive(%AccountOpened{account: "123"}, 1000)
+            assert_receive(%AccountOpened{account: "saga.123"}, 1000)
 
             assert_receive(%Deposited{amount: 5000}, 1000)
 
@@ -206,7 +206,7 @@ defmodule Signal.Processor.SagaTest do
             assert_receive(%AccountClosed{}, 1000)
 
             Process.sleep(500)
-            refute TestApp.process_alive?(ActivityNotifier, "123")
+            refute TestApp.process_alive?(ActivityNotifier, "saga.123")
         end
 
     end

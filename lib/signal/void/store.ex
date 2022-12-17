@@ -91,10 +91,10 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
-    def stream_position(stream, _opts \\ []) when is_binary(stream) do
+    def stream_position(stream_id, _opts \\ []) when is_binary(stream_id) do
         %{position: position} =
             GenServer.call(Repo, {:state, :events}, 5000)
-            |> Enum.filter(&(Map.get(&1, :stream) == stream))
+            |> Enum.filter(&(Map.get(&1, :stream_id) == stream_id))
             |> Enum.max_by(&(Map.get(&1, :number)), fn -> %{position: 0} end)
         position
     end

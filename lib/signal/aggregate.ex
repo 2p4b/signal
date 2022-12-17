@@ -55,6 +55,7 @@ defmodule Signal.Aggregate do
                     {:ok, state}
                 end
             end
+
         end
     end
 

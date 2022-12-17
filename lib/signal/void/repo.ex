@@ -116,7 +116,8 @@ defmodule Signal.Void.Repo do
         %{streams: streams, cursor: cursor} = store
         %{stream: stream, events: events, version: version} = staged
 
-        store_stream = Map.get(streams, stream, %{
+        {stream_id, _} = stream
+        store_stream = Map.get(streams, stream_id, %{
             id: UUID.uuid4(),
             position: 0,
         })
@@ -133,9 +134,9 @@ defmodule Signal.Void.Repo do
                 position = position + 1
                 event = %Event{
                     uuid: UUID.uuid4(),
-                    stream: stream,
                     number: number,
                     position: position,
+                    stream_id: stream_id,
                     payload: event.payload,
                     topic: event.topic, 
                     timestamp: event.timestamp,
@@ -149,7 +150,7 @@ defmodule Signal.Void.Repo do
 
         events = store.events ++ events
 
-        streams = Map.put(streams, stream, Map.put(store_stream, :position, version))
+        streams = Map.put(streams, stream_id, Map.put(store_stream, :position, version))
         %Repo{store | streams: streams, cursor: cursor, events: events}
     end
 

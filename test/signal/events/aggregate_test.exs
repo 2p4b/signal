@@ -9,8 +9,9 @@ defmodule Signal.Events.AggregateTest do
             store: Store
     end
 
-    defmodule Accounts do
-        use Signal.Aggregate
+    defmodule Account do
+        use Signal.Aggregate,
+            strict: true
 
         schema do
             field :number,      :number,    default: "123"
@@ -21,7 +22,7 @@ defmodule Signal.Events.AggregateTest do
 
     defmodule Deposite do
         use Signal.Command,
-            stream: {Accounts, :account}
+            stream: {Account, :account}
 
         schema do
             field :account,     :string,   default: "123"
@@ -31,7 +32,7 @@ defmodule Signal.Events.AggregateTest do
 
     defmodule Deposited do
         use Signal.Event,
-            stream: {Accounts, :account}
+            stream: {Account, :account}
 
         schema do
             field :account, :string,    default: "123"
@@ -40,10 +41,10 @@ defmodule Signal.Events.AggregateTest do
     end
 
 
-    defimpl Signal.Stream.Reducer, for: Accounts do
+    defimpl Signal.Stream.Reducer, for: Account do
 
-        def apply(%Accounts{balance: balance}=account, _meta, %Deposited{amount: amount}) do
-            {:ok, %Accounts{ account | balance: balance + amount }}
+        def apply(%Account{balance: balance}=account, _meta, %Deposited{amount: amount}) do
+            {:ok, %Account{ account | balance: balance + amount }}
         end
 
     end
@@ -77,7 +78,7 @@ defmodule Signal.Events.AggregateTest do
 
             state = Signal.Aggregates.Aggregate.state(aggregate)
 
-            assert match?(%Accounts{number: "123"}, state)
+            assert match?(%Account{number: "123"}, state)
 
             event1 =
                 struct(Event, [])
@@ -100,7 +101,7 @@ defmodule Signal.Events.AggregateTest do
 
             account = Signal.Aggregates.Aggregate.state(aggregate)
 
-            assert match?(%Accounts{number: "123", balance: 2}, account)
+            assert match?(%Account{number: "123", balance: 2}, account)
 
             deposited = Deposited.new([amount: 3])
 
@@ -120,7 +121,7 @@ defmodule Signal.Events.AggregateTest do
 
             account = Task.await(task, :infinity)
 
-            assert match?(%Accounts{number: "123", balance: 5}, account)
+            assert match?(%Account{number: "123", balance: 5}, account)
         end
     end
 

@@ -113,10 +113,8 @@ defmodule Signal.Events.Producer do
                         :ok ->
                             confirm_staged(staged)
 
-                            {stream_id, _} = stream
-
                             position = Enum.find_value(staged, position, fn
-                                %{stream: ^stream_id, version: version} ->
+                                %{stream: ^stream, version: version} ->
                                     version
                                 _ -> false
                             end)
@@ -193,7 +191,6 @@ defmodule Signal.Events.Producer do
 
     def stage_events(%Producer{position: index, stream: stream}, action, events, stage)
     when is_list(events) and is_integer(index) and is_pid(stage) do
-        {stream_id, _} = stream
         {events, version} =
             Enum.map_reduce(events, index, fn event, index ->
                 opts = [
@@ -203,7 +200,7 @@ defmodule Signal.Events.Producer do
                 event = Event.new(event, opts)
                 {event, index + 1}
             end)
-        %Stage{events: events, version: version, stream: stream_id, stage: stage}
+        %Stage{events: events, version: version, stream: stream, stage: stage}
     end
 
     def process(%Action{stream: stream, app: app}=action) do

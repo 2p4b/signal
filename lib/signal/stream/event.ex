@@ -1,5 +1,4 @@
 defmodule Signal.Stream.Event do
-    use Timex
     use Signal.Type
     require Logger
 
@@ -14,9 +13,9 @@ defmodule Signal.Stream.Event do
         schema enforce: true do
             field :uuid,            String.t()
             field :topic,           String.t()
-            field :stream,          String.t()
-            field :position,        integer()
             field :number,          integer()
+            field :position,        integer()
+            field :stream_id,       String.t()
             field :causation_id,    String.t()
             field :correlation_id,  String.t()
             field :timestamp,       term()
@@ -27,10 +26,10 @@ defmodule Signal.Stream.Event do
     schema enforce: true do
         field :uuid,            String.t()
         field :topic,           String.t()
-        field :stream,          String.t()
-        field :payload,         map()
+        field :number,          integer()
         field :position,        integer()
-        field :number,          integer(),  default: nil
+        field :payload,         map()
+        field :stream_id,       String.t()
         field :causation_id,    String.t()
         field :correlation_id,  String.t()
         field :timestamp,       term()

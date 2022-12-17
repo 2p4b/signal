@@ -99,7 +99,7 @@ defmodule Signal.Events.ProducerTest do
             [%History{}=first, %History{}=second] = histories
 
             assert match?(%History{
-                stream: "stream.one",
+                stream: {"stream.one", Aggregate},
                 version: 1,
             },  first)
 
@@ -109,7 +109,7 @@ defmodule Signal.Events.ProducerTest do
             assert Kernel.hd(first.events) |> Map.get(:topic) == Signal.Helper.module_to_string(EventOne)
 
             assert match?(%History{
-                stream: "stream.two",
+                stream: {"stream.two", Aggregate},
                 version: 2,
             }, second)
 
