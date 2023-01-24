@@ -1,8 +1,9 @@
 defmodule Signal.Projector do
 
+    alias Signal.Event
     alias Signal.Logger
     alias Signal.Projector
-    alias Signal.Stream.Event
+    alias Signal.Event.Broker
 
     defstruct [:app, :name, :module, :subscription]
 
@@ -13,8 +14,8 @@ defmodule Signal.Projector do
         start = Keyword.get(opts, :start, :current)
         quote do
             use GenServer
+            alias Signal.Event
             alias Signal.Projector
-            alias Signal.Events.Event
 
             @app unquote(app)
 
@@ -78,7 +79,7 @@ defmodule Signal.Projector do
     def subscribe(app, name, opts) do
         {application, _tenant} = app
         Enum.find_value(1..5, fn _x -> 
-            case application.subscribe(name, opts) do
+            case Broker.subscribe(application, name, opts) do
                 {:ok, subscription} ->
                     {:ok, subscription}
                 _ ->
@@ -94,7 +95,7 @@ defmodule Signal.Projector do
             module: module, 
             subscription: %{handle: handle}
         } = projector
-        {application, tenant} = app
+        {application, _tenant} = app
 
         [
           projector: module,
@@ -107,7 +108,8 @@ defmodule Signal.Projector do
         response = Kernel.apply(module, :project, args)
         case handle_response(projector, response) do
             {:noreply, handler} ->
-                application.acknowledge(handle, number, tenant: tenant)
+                application
+                |> Broker.acknowledge(handle, number)
                 {:noreply, handler}
 
             response ->            

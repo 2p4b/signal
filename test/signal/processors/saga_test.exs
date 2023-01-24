@@ -104,12 +104,10 @@ defmodule Signal.Processor.SagaTest do
     end
 
     defmodule TestApp do
-
         use Signal.Application,
             store: Store
 
         router Router
-
     end
 
     defmodule ActivityNotifier do
@@ -178,8 +176,8 @@ defmodule Signal.Processor.SagaTest do
     end
 
     setup do
-        {:ok, _pid} = start_supervised({TestApp, name: :saga})
-        {:ok, _pid} = start_supervised({ActivityNotifier, app: :saga})
+        {:ok, _pid} = start_supervised(TestApp)
+        {:ok, _pid} = start_supervised(ActivityNotifier)
         :ok
     end
 
@@ -188,20 +186,20 @@ defmodule Signal.Processor.SagaTest do
         @tag :saga
         test "process should start stop and continue" do
 
-            TestApp.dispatch(OpenAccount.new([pid: self()]), app: :saga)
+            TestApp.dispatch(OpenAccount.new([pid: self()]))
 
-            TestApp.dispatch(Deposite.new([amount: 5000]), app: :saga)
+            TestApp.dispatch(Deposite.new([amount: 5000]))
 
             assert_receive(%AccountOpened{account: "saga.123"}, 1000)
 
             assert_receive(%Deposited{amount: 5000}, 1000)
 
-            TestApp.dispatch(Deposite.new([amount: 4000]), app: :saga)
+            TestApp.dispatch(Deposite.new([amount: 4000]))
 
             assert_receive(%Deposited{amount: 4000}, 1000)
             assert_receive(%Deposited{amount: 1000}, 1000)
 
-            TestApp.dispatch(CloseAccount.new([]), app: :saga, await: true)
+            TestApp.dispatch(CloseAccount.new([]), await: true)
 
             assert_receive(%AccountClosed{}, 1000)
 

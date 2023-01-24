@@ -2,7 +2,7 @@ defmodule Signal.Events.AggregateTest do
     use ExUnit.Case
 
     alias Signal.Void.Store
-    alias Signal.Stream.Event
+    alias Signal.Event
 
     defmodule TestApp do
         use Signal.Application,
@@ -85,14 +85,14 @@ defmodule Signal.Events.AggregateTest do
                 |> Map.put(:topic, Signal.Topic.topic(deposited))
                 |> Map.put(:payload, Map.from_struct(deposited))
                 |> Map.put(:number, 1)
-                |> Map.put(:position, 1)
+                |> Map.put(:index, 1)
 
             event2 =
                 struct(Event, [])
                 |> Map.put(:topic, Signal.Topic.topic(deposited))
                 |> Map.put(:payload, Map.from_struct(deposited))
                 |> Map.put(:number, 2)
-                |> Map.put(:position, 2)
+                |> Map.put(:index, 2)
 
 
             Signal.Aggregates.Aggregate.apply(aggregate, event1)
@@ -110,7 +110,7 @@ defmodule Signal.Events.AggregateTest do
                 |> Map.put(:topic, Signal.Topic.topic(deposited))
                 |> Map.put(:payload, Map.from_struct(deposited))
                 |> Map.put(:number, 3)
-                |> Map.put(:position, 3)
+                |> Map.put(:index, 3)
 
             task =
                 Task.async(fn ->

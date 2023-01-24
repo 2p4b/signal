@@ -36,6 +36,7 @@ defmodule Signal.MixProject do
             {:jason, "~> 1.0"},
             {:timex, "~> 3.7.6"},
             {:telemetry, "~> 0.4"},
+            {:ex_machina, "2.6.0"},
             {:blueprint, in_umbrella: true},
         ]
     end

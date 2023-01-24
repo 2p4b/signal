@@ -3,9 +3,8 @@ defmodule Signal.Void.Repo do
     use GenServer
     alias Signal.Snapshot
     alias Signal.Void.Repo
-    alias Signal.Stream.Event
 
-    defstruct [cursor: 0, events: [], snapshots: %{}, streams: %{}]
+    defstruct [cursor: 0, events: [], snapshots: %{}, streams: %{}, handlers: %{}]
 
     @doc """
     Starts in memory store.
@@ -25,12 +24,18 @@ defmodule Signal.Void.Repo do
     end
 
     @impl true
-    def handle_call({:publish, transaction}, from, %Repo{cursor: prev}=store) do
+    def handle_call({:get_event, number}, _from, %Repo{}=store) do
+        event = 
+            store.events
+            |> Enum.find(&(Map.get(&1, :number) == number))
+        {:reply, event, store} 
+    end
+
+    @impl true
+    def handle_call({:commit, transaction}, from, %Repo{}=store) do
         store = 
             transaction.staged
             |> Enum.reduce(store, &(handle_publish(&2, &1)))
-        %{events: events} = store
-        events = Enum.slice(events, prev, length(events))
 
         {:reply, _, store} =
             transaction.snapshots
@@ -38,7 +43,7 @@ defmodule Signal.Void.Repo do
                handle_call({:record, snaphot}, from, store)
             end)
 
-        {:reply, {:ok, events}, store}
+        {:reply, :ok, store}
     end
 
     @impl true
@@ -54,6 +59,18 @@ defmodule Signal.Void.Repo do
         snapshots = Map.put(snapshots, id, versions)
 
         {:reply, {:ok, id}, %Repo{store | snapshots: snapshots} }
+    end
+
+    @impl true
+    def handle_call({:handler_acknowledge, handler, number, _opts}, _from, %Repo{}=store) do
+        %Repo{handlers: handlers} = store
+        handlers = Map.put(handlers, handler, number)
+        {:reply, {:ok, number}, %Repo{store | handlers: handlers} }
+    end
+
+    @impl true
+    def handle_call({:handler_position, handler, _opts}, _from, %Repo{}=store) do
+        {:reply, Map.get(store.handlers, handler), store} 
     end
 
     @impl true
@@ -75,78 +92,105 @@ defmodule Signal.Void.Repo do
         {:reply, snapshot, store}
     end
 
-    def cursor() do
+    def get_cursor() do
         GenServer.call(__MODULE__, {:state, :cursor}, 5000)
     end
 
-    def events() do
+    def list_events(opts \\ []) do
+        rrange = Keyword.get(opts, :range, [])
+        topics = Keyword.get(opts, :topics, [])
+        streams = Keyword.get(opts, :streams, [])
+        range =
+            case Signal.Store.Helper.range(rrange) do
+                [lower, upper, :asc] ->
+                    Range.new(lower, cast_max(upper))
+                [lower, upper, :desc] ->
+                    Range.new(cast_max(upper), lower)
+            end
+
         GenServer.call(__MODULE__, {:state, :events}, 5000)
+        |> Enum.filter(fn event -> 
+                event.number in range and Signal.Store.Helper.event_is_valid?(event, streams, topics)
+        end)
     end
 
-    def event(number) do
-        events()
-        |> Enum.find(&(Map.get(&1, :number) == number))
+    def get_event(number) do
+        GenServer.call(__MODULE__, {:get_event, number}, 5000)
     end
 
-    def publish(staged) when is_list(staged) do
-        GenServer.call(__MODULE__, {:publish, staged}, 5000)
+    defp cast_max(max) do
+        if is_integer(max) do 
+            max 
+        else 
+            get_cursor() 
+        end
     end
 
-    def purge(snap, opts) when is_tuple(snap) and is_list(opts) do
+    def read_events(callback, opts \\ []) do
+        rrange = Keyword.get(opts, :range, [])
+        topics = Keyword.get(opts, :topics, [])
+        streams = Keyword.get(opts, :streams, [])
+        range =
+            case Signal.Store.Helper.range(rrange) do
+                [lower, upper, :asc] ->
+                    Range.new(lower, cast_max(upper))
+                [lower, upper, :desc] ->
+                    Range.new(cast_max(upper), lower)
+            end
+        range
+        |> Enum.find_value(fn number -> 
+            event = get_event(number)
+            if event do
+                if Signal.Store.Helper.event_is_valid?(event, streams, topics) do
+                    case callback.(event) do
+                        :stop -> true
+                        _ -> false
+                    end
+                end
+            else
+                true
+            end
+        end)
+        :ok
+    end
+
+    def delete_snapshot(snap, opts) do
         GenServer.call(__MODULE__, {:purge, snap, opts}, 5000)
     end
 
-    def record(%Snapshot{}=snapshot, _opts) do
+    def record_snapshot(%Snapshot{}=snapshot, _opts) do
         GenServer.call(__MODULE__, {:record, snapshot}, 500)
     end
 
-    def snapshot(iden, opts) do
+    def get_snapshot(iden, opts) do
         GenServer.call(__MODULE__, {:snapshot, iden, opts}, 500)
     end
 
+    def handler_position(handler, opts\\[]) do
+        GenServer.call(__MODULE__, {:handler_position, handler, opts}, 500)
+    end
+
+    def handler_acknowledge(handler, number, opts\\[]) do
+        GenServer.call(__MODULE__, {:handler_acknowledge, handler, number, opts}, 500)
+    end
+
     def stream_position(stream, _opts \\ []) when is_tuple(stream) do
-        %{position: position} =
+        %{index: position} =
             GenServer.call(__MODULE__, {:state, :events}, 5000)
             |> Enum.filter(&(Map.get(&1, :stream) == stream))
-            |> Enum.max_by(&(Map.get(&1, :number)), fn -> %{position: 0} end)
+            |> Enum.max_by(&(Map.get(&1, :number)), fn -> %{index: 0} end)
         position
     end
 
     defp handle_publish(%Repo{}=store, staged) do
         %{streams: streams, cursor: cursor} = store
-        %{stream: stream, events: events, version: version} = staged
+        %{stream: stream, events: events, position: version} = staged
 
         {stream_id, _} = stream
         store_stream = Map.get(streams, stream_id, %{
-            id: UUID.uuid4(),
+            id: stream_id,
             position: 0,
         })
-
-        %{position: position} = store_stream
-
-        version = if is_nil(version), do: position, else: version
-
-        initial = {[], position, cursor}
-
-        preped = 
-            Enum.reduce(events, initial, fn event, {events, position, number} -> 
-                number = number + 1
-                position = position + 1
-                event = %Event{
-                    uuid: UUID.uuid4(),
-                    number: number,
-                    position: position,
-                    stream_id: stream_id,
-                    payload: event.payload,
-                    topic: event.topic, 
-                    timestamp: event.timestamp,
-                    causation_id: event.causation_id,
-                    correlation_id: event.correlation_id,
-                }
-                {events ++ List.wrap(event), position, number}
-            end)
-
-        {events, ^version, cursor} = preped 
 
         events = store.events ++ events
 

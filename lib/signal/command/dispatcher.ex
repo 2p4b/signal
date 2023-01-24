@@ -1,10 +1,10 @@
 defmodule Signal.Command.Dispatcher do
 
     alias Signal.Result
-    alias Signal.Events.Event
+    alias Signal.Stream.Event
     alias Signal.Stream.History
     alias Signal.Command.Action
-    alias Signal.Events.Producer
+    alias Signal.Stream.Producer
     alias Signal.Execution.Queue
     alias Signal.Task, as: SigTask
 
@@ -20,7 +20,8 @@ defmodule Signal.Command.Dispatcher do
     end
 
     def process(%SigTask{}=task) do
-        case Producer.process(Action.from(task)) do
+        action = Action.from(task)
+        case Producer.process(action) do
             {:ok, result} ->
                 {:ok, result}
 
@@ -61,9 +62,13 @@ defmodule Signal.Command.Dispatcher do
         if await do
             aggregates = 
                 histories
-                |> Enum.map(fn %History{events: [sample | _], version: version} -> 
-                    state_opts = [version: version, timeout: :infinity]
-                    stream = Event.payload(sample) |> Signal.Stream.stream()
+                |> Enum.map(fn %History{events: [sample | _], position: position} -> 
+                    state_opts = [position: position, timeout: :infinity]
+                    stream =
+                        sample
+                        |> Event.payload() 
+                        |> Signal.Stream.stream()
+
                     app
                     |> Signal.Application.supervisor(Task)
                     |> Task.Supervisor.async_nolink(fn -> 

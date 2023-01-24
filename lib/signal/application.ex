@@ -31,12 +31,14 @@ defmodule Signal.Application do
                 default_args = [app: app, store: @store]
 
                 children = [
+                    { Signal.Store.Writer, [app: __MODULE__, store: @store]},
                     { Task.Supervisor, supervisor_args(Task, name)},
                     { Signal.Registry.Supervisor, default_args},
                     { Signal.Aggregates.Supervisor, default_args },
                     { Signal.Execution.Supervisor, default_args },
                     { Signal.Process.Supervisor, default_args },
-                    { Signal.Events.Supervisor, default_args },
+                    { Signal.Event.Supervisor, default_args },
+                    { Signal.Stream.Supervisor, default_args },
                 ]
                 opts = [strategy: :one_for_one, name: Signal.Application.name({__MODULE__, name}, Supervisor)]
                 Supervisor.init(children, opts)
@@ -44,39 +46,18 @@ defmodule Signal.Application do
 
             def store(), do: @store
 
-            defdelegate event(number, opts \\ []), to: @store
-
-            def subscribe(opts) when is_list(opts) do
-                self()
-                |> Signal.Application.handle_from_pid()
-                |> subscribe(opts ++ [track: false])
+            def get_event(number, _opts \\ []) do
+                __MODULE__
+                |> Signal.Store.Adapter.get_event(number)
             end
 
-            def subscribe(handle) when is_binary(handle) do
-                subscribe(handle, [track: true])
+            def commit(transaction, opts \\ []) do
+                Signal.Store.Writer.commit(__MODULE__, transaction, opts)
             end
-
-            defdelegate subscribe(handle, opts), to: @store
-
-            def unsubscribe(opts \\ []) do
-                self()
-                |> Signal.Application.handle_from_pid()
-                |> unsubscribe(opts)
-            end
-
-            defdelegate unsubscribe(handle, opts), to: @store
-
-            defdelegate publish(staged, opts\\[]), to: @store
 
             defdelegate stream_position(stream, opts\\[]), to: @store
 
-            defdelegate snapshot(iden, opts\\[]), to: @store
-
-            defdelegate purge(iden, opts\\[]), to: @store
-
-            defdelegate record(snapshot, opts\\[]), to: @store
-
-            defdelegate acknowledge(handle, number, opts\\[]), to: @store
+            defdelegate get_snapshot(iden, opts\\[]), to: @store
 
             def process_alive?(process, id, _opts\\[]) 
             when is_atom(process) and is_binary(id) do
@@ -136,7 +117,6 @@ defmodule Signal.Application do
             Module.concat([module, name, value])
         end
     end
-
 
     def registry_application(registry) when is_atom(registry) do
         registry

@@ -1,9 +1,10 @@
 defmodule Signal.Process.Router do
 
+    alias Signal.Event
     alias Signal.Snapshot
     alias Signal.Snapshot
+    alias Signal.Event.Broker
     alias Signal.Process.Saga
-    alias Signal.Stream.Event
     alias Signal.Process.Router
     alias Signal.Process.Supervisor
 
@@ -433,8 +434,8 @@ defmodule Signal.Process.Router do
                 nil
 
             %{queue: [number|_]} ->
-                {application, tenant} = router.app
-                event = application.event(number, tenant: tenant)
+                {application, _tenant} = router.app
+                event = Signal.Store.Adapter.get_event(application, number)
                 Process.send(self(), event, [])
         end
 
@@ -444,12 +445,13 @@ defmodule Signal.Process.Router do
     defp acknowledge(%Router{}=router, %Event{}=event) do
         %Event{number: number} = event
         %Router{
-            app: {application, tenant}, 
+            app: {application, _tenant}, 
             subscription: sub 
         } = router
 
         if number > sub.ack  do
-            application.acknowledge(sub.handle, number, tenant: tenant)
+            application
+            |> Broker.acknowledge(sub.handle, number)
             log(router, "acknowledged: #{number}")
             %Router{router| subscription: Map.put(sub, :ack, number)}
         else
@@ -460,17 +462,19 @@ defmodule Signal.Process.Router do
     defp save_state(%Router{}=router, processes) do
 
         %Router{
-            app: {application, tenant},
+            app: {application, _tenant},
             name: name, 
             subscription: %{ack: ack}
         } = router
 
         data = dump_processes(processes)
 
-        name
-        |> Snapshot.new(%{"ack" => ack, "processes" => data})
-        |> application.record([tenant: tenant])
+        snapshot = 
+            name
+            |> Snapshot.new(%{"ack" => ack, "processes" => data})
 
+        application
+        |> Signal.Store.Adapter.record_snapshot(snapshot)
         %Router{router| processes: processes}
     end
 
@@ -535,19 +539,21 @@ defmodule Signal.Process.Router do
     end
 
     defp subscribe_router(%Router{}=router, start) do
-        %Router{app: {application, tenant}, name: name, topics: topics}=router
+        %Router{app: {application, _tenant}, name: name, topics: topics}=router
 
-        subopts = [topics: topics, start: start, tenant: tenant]
+        subopts = [topics: topics, start: start]
 
-        {:ok, sub} = application.subscribe(name, subopts)
+        {:ok, sub} = 
+            application
+            |> Broker.subscribe(name, subopts)
 
         %Router{router | subscription: sub}
     end
 
     defp router_snapshot(%Router{}=router) do
-        %Router{app: {application, tenant}, name: name}=router
+        %Router{app: {app, _tenant}, name: name}=router
 
-        case application.snapshot(name, tenant: tenant) do
+        case Signal.Store.Adapter.get_snapshot(app, name) do
             %Snapshot{payload: %{"processes" => processes, "ack" => ack}}-> 
                 {processes, ack}
 

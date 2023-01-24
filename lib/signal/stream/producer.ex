@@ -1,25 +1,25 @@
-defmodule Signal.Events.Producer do
+defmodule Signal.Stream.Producer do
     use GenServer, restart: :transient
 
     alias Signal.Multi
     alias Signal.Timer
     alias Signal.Result
-    alias Signal.Events
     alias Signal.Transaction
-    alias Signal.Events.Event
-    alias Signal.Events.Stage
+    alias Signal.Stream.Event
+    alias Signal.Stream.Stage
+    alias Signal.Store.Writer
     alias Signal.Stream.History
     alias Signal.Command.Action
     alias Signal.Command.Handler
-    alias Signal.Events.Producer
+    alias Signal.Stream.Producer
 
-    defstruct [:app, :stream, position: 0]
+    defstruct [:app, :stream, index: 0]
 
     @doc """
     Starts a new execution queue.
     """
     def start_link(opts) do
-        name = Keyword.get(opts, :name)
+        name = Keyword.get(opts, :name, __MODULE__)
         GenServer.start_link(__MODULE__, opts, name: name)
     end
 
@@ -40,8 +40,8 @@ defmodule Signal.Events.Producer do
     end
 
     @impl true
-    def handle_call(:cursor, _from, %Producer{ position: cursor}=state) do
-        {:reply, cursor, state}
+    def handle_call(:cursor, _from, %Producer{index: index}=state) do
+        {:reply, index, state}
     end
 
     @impl true
@@ -55,8 +55,8 @@ defmodule Signal.Events.Producer do
             |> Signal.Application.supervisor(Task)
             |> Task.Supervisor.async_nolink(fn ->
                 receive do
-                    {:ok, version} ->
-                        {:ok, version}
+                    {:ok, index} ->
+                        {:ok, index}
 
                     {:rollback, reason} ->
                         {:rollback, reason}
@@ -68,14 +68,14 @@ defmodule Signal.Events.Producer do
 
         stage = stage_events(state, action, events, channel.pid)
 
-        %Stage{version: version} = stage
+        %Stage{position: position} = stage
 
         GenServer.reply(from, stage)
 
         # Halt until the task is resolved
         case Task.yield(channel, :infinity) do
-            {:ok, {:ok, ^version}} ->
-                {:noreply, %Producer{state | position: version}, Timer.seconds(5)}
+            {:ok, {:ok, ^position}} ->
+                {:noreply, %Producer{state | index: position}, Timer.seconds(5)}
 
             {:ok, {:rollback, _}} ->
                 {:noreply, calibrate(state), Timer.seconds(5)}
@@ -88,7 +88,7 @@ defmodule Signal.Events.Producer do
     @impl true
     def handle_call({:process, %Action{}=action}, _from, %Producer{}=producer) do
 
-        %{stream: stream, app: app, position: position} = producer
+        %Producer{stream: stream, app: app} = producer
 
         %Action{
             result: result,
@@ -109,13 +109,16 @@ defmodule Signal.Events.Producer do
             case stage_event_streams(producer, action, event_streams) do
                 {:ok, staged} ->
                     transaction = Transaction.new(staged, snapshots: snapshots)
-                    case app_module.publish(transaction, [tenant: tenant]) do
+                    case Writer.commit(app_module, transaction, [tenant: tenant]) do
                         :ok ->
                             confirm_staged(staged)
 
-                            position = Enum.find_value(staged, position, fn
-                                %{stream: ^stream, version: version} ->
-                                    version
+                            # Get stream index and if the producer
+                            # generated no event for its own stream (very unlikely)
+                            # then restore producer stream index
+                            index = Enum.find_value(staged, producer.index, fn
+                                %{stream: ^stream, position: position} ->
+                                    position
                                 _ -> false
                             end)
 
@@ -123,7 +126,7 @@ defmodule Signal.Events.Producer do
                                 struct(History, Map.from_struct(staged_stream))
                             end)
 
-                            state = %Producer{producer| position: position}
+                            state = %Producer{producer| index: index}
 
                             {:reply, {:ok, histories}, state}
 
@@ -159,7 +162,7 @@ defmodule Signal.Events.Producer do
                     # Process event steams in parallel
                     Task.Supervisor.async_nolink(task_supervisor, fn ->
                         app
-                        |> Signal.Events.Supervisor.prepare_producer(stream)
+                        |> Signal.Stream.Supervisor.prepare_producer(stream)
                         |> stage_events(action, events)
                     end)
 
@@ -189,41 +192,45 @@ defmodule Signal.Events.Producer do
         GenServer.call(producer, {:stage, action, events})
     end
 
-    def stage_events(%Producer{position: index, stream: stream}, action, events, stage)
+    def stage_events(%Producer{index: index, stream: stream}, action, events, stage)
     when is_list(events) and is_integer(index) and is_pid(stage) do
-        {events, version} =
+        {stream_id, _}  = stream
+        {events, position} =
             Enum.map_reduce(events, index, fn event, index ->
-                opts = [
+                index = index + 1
+                params = [
+                    index: index,
+                    stream_id: stream_id,
                     causation_id: action.causation_id,
                     correlation_id: action.correlation_id,
                 ]
-                event = Event.new(event, opts)
-                {event, index + 1}
+                event = Event.new(event, params)
+                {event, index}
             end)
-        %Stage{events: events, version: version, stream: stream, stage: stage}
+        %Stage{events: events, position: position, stream: stream, stage: stage}
     end
 
     def process(%Action{stream: stream, app: app}=action) do
-        Events.Supervisor.prepare_producer(app, stream)
+        Signal.Stream.Supervisor.prepare_producer(app, stream)
         |> GenServer.call({:process, action}, :infinity)
     end
 
     defp calibrate(%Producer{app: app, stream: {stream_id, _}}=prod) do
         {application, _tenant} = app
-        case application.stream_position(stream_id) do
+        case Signal.Store.Adapter.stream_position(application, stream_id) do
             nil ->
-                %Producer{prod | position: 0}
+                %Producer{prod | index: 0}
 
-            position ->
-                %Producer{prod | position: position}
+             index->
+                %Producer{prod | index: index}
         end
     end
 
     defp aggregate_state(%Producer{}=producer, sync) do
-        %Producer{ app: app, stream: stream, position: position} = producer
+        %Producer{ app: app, stream: stream, index: index} = producer
         state_opts =
             if sync do
-                [version: position, timeout: :infinity]
+                [index: index, timeout: :infinity]
             else
                 []
             end
@@ -241,13 +248,13 @@ defmodule Signal.Events.Producer do
                     events
 
                 {:ok, event} when is_struct(event) ->
-                    [event]
+                    List.wrap(event)
 
                 {:ok, event} when is_list(event) ->
                     event
 
                 event when is_struct(event) ->
-                    [event]
+                    List.wrap(event)
 
                 event when is_list(event) ->
                     event
@@ -303,8 +310,8 @@ defmodule Signal.Events.Producer do
     end
 
     defp confirm_staged(staged) do
-        Enum.each(staged, fn %Stage{version: version, stage: stage}->
-            Process.send(stage, {:ok, version}, [])
+        Enum.each(staged, fn %Stage{position: position, stage: stage}->
+            Process.send(stage, {:ok, position}, [])
         end)
     end
 

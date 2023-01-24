@@ -18,7 +18,7 @@ defmodule Signal.Command.Action do
 
     def from(%Task{command: command, app: app, assigns: params}=task) do
 
-        stream = Signal.Stream.stream(command, params)
+        stream = Signal.Stream.stream(command)
 
         struct(Action, [
             app: app,

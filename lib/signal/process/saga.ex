@@ -1,13 +1,13 @@
 defmodule Signal.Process.Saga do
     use GenServer, restart: :transient
 
+    alias Signal.Event
     alias Signal.Codec
     alias Signal.Result
     alias Signal.Snapshot
     alias Signal.Process.Saga
-    alias Signal.Stream.Event
+    alias Signal.Event.Metadata
     alias Signal.Process.Supervisor
-    alias Signal.Stream.Event.Metadata
 
     require Logger
 
@@ -58,10 +58,12 @@ defmodule Signal.Process.Saga do
 
         %Saga{app: app, module: module, id: id}=saga
 
-        {application, tenant} = app
+        {application, _tenant} = app
+
+        snapshot_id = identity(saga)
 
         {version, state} =
-            case application.snapshot(identity(saga), tenant: tenant) do
+            case Signal.Store.Adapter.get_snapshot(application, snapshot_id) do
                 %{payload: %{"data" => data, "ack" => ack}}->
                     {:ok, state} = 
                         module
@@ -172,8 +174,7 @@ defmodule Signal.Process.Saga do
     end
 
     defp execute(command, %Saga{app: app}, opts) do
-        {application, tenant}  = app
-        opts = Keyword.merge(opts, [app: tenant])
+        {application, _tenant}  = app
         Kernel.apply(application, :dispatch, [command, opts])
     end
 
@@ -183,18 +184,28 @@ defmodule Signal.Process.Saga do
     end
 
     defp checkpoint(%Saga{app: app, ack: ack}=saga) do
-        {application, tenant}  = app
-        saga
-        |> snapshot(ack)
-        |> application.record([tenant: tenant])
+        {application, _tenant}  = app
+
+        snapshot  =
+            saga
+            |> snapshot(ack)
+
+        application
+        |> Signal.Store.Adapter.record_snapshot(snapshot)
+
         saga
     end
 
     defp shutdown(%Saga{app: app}=saga) do
-        {application, tenant}  = app
-        saga
-        |> identity()
-        |> application.purge([tenant: tenant])
+        {application, _tenant}  = app
+
+        snapshot_id = 
+            saga
+            |> identity()
+
+        application
+        |> Signal.Store.Adapter.delete_snapshot(snapshot_id)
+
         saga
     end
 

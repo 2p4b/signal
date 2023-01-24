@@ -91,7 +91,7 @@ defmodule Signal.Command.DispatchTest do
 
             [%History{}=history] = histories
             assert length(history.events) == 1
-            assert history.version == 1
+            assert history.position == 1
         end
 
         @tag :dispatcher

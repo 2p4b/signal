@@ -11,7 +11,7 @@ defmodule Signal.Process do
             use GenServer
             use Blueprint.Struct
             alias Signal.Helper
-            alias Signal.Stream.Event
+            alias Signal.Event
             alias Signal.Process.Router
             @before_compile unquote(__MODULE__)
 

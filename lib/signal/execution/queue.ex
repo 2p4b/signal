@@ -2,8 +2,8 @@ defmodule Signal.Execution.Queue do
     use GenServer, restart: :transient
 
     alias Signal.Timer
-    alias Signal.Execution.Queue
     alias Signal.Command.Handler
+    alias Signal.Execution.Queue
 
     defstruct [:application, :id, type: :default, timeout: (5 * 1000)]
 

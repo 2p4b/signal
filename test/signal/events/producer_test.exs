@@ -3,7 +3,7 @@ defmodule Signal.Events.ProducerTest do
 
     alias Signal.Void.Store
     alias Signal.Stream.History
-    alias Signal.Events.Producer
+    alias Signal.Stream.Producer
 
     defmodule TestApp do
         use Signal.Application,
@@ -100,7 +100,7 @@ defmodule Signal.Events.ProducerTest do
 
             assert match?(%History{
                 stream: {"stream.one", Aggregate},
-                version: 1,
+                position: 1,
             },  first)
 
             assert length(first.events) == 1
@@ -110,7 +110,7 @@ defmodule Signal.Events.ProducerTest do
 
             assert match?(%History{
                 stream: {"stream.two", Aggregate},
-                version: 2,
+                position: 2,
             }, second)
 
             assert length(second.events) == 2

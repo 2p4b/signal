@@ -1,6 +1,7 @@
 defmodule Signal.Transaction do
     defstruct [
         uuid: nil,
+        cursor: 0,
         staged: [],
         handles: [],
         snapshots: [],

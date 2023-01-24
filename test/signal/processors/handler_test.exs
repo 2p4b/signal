@@ -3,27 +3,23 @@ defmodule Signal.Processor.HandlerTest do
 
     alias Signal.Void.Store
     alias Signal.Transaction
-    alias Signal.Events.Stage
+    alias Signal.Stream.Stage
 
     defmodule TestApp do
-
         use Signal.Application,
             store: Store
     end
 
     defmodule Accounts do
-
         use Blueprint.Struct
 
         schema do
             field :number,      :string,    default: "123"
             field :balance,     :number,    default: 0
         end
-
     end
 
     defmodule Deposited do
-
         use Signal.Event,
             stream: {Accounts, :account}
 
@@ -35,7 +31,6 @@ defmodule Signal.Processor.HandlerTest do
 
 
     defmodule Deposite do
-
         use Signal.Command,
             stream: {Accounts, :account}
 
@@ -58,8 +53,8 @@ defmodule Signal.Processor.HandlerTest do
             {:ok, sub}
         end
 
-        def handle_call(:intercept, {pid, _ref}, state) do
-            {:reply, state, pid}
+        def handle_call(:intercept, {pid, _ref}, _state) do
+            {:reply, :ok, pid}
         end
 
         def handle_event(event, _meta, pid) do
@@ -89,19 +84,19 @@ defmodule Signal.Processor.HandlerTest do
 
             deposited2 = Deposited.new([amount: 4000])
 
-            GenServer.call(TestHandler, :intercept)
+            :ok = GenServer.call(TestHandler, :intercept)
 
             stream = Signal.Stream.stream(deposited)
 
-            event1 = Signal.Events.Event.new(deposited, [])
+            event1 = Signal.Stream.Event.new(deposited, [index: 1])
 
-            event2 = Signal.Events.Event.new(deposited2, [])
+            event2 = Signal.Stream.Event.new(deposited2, [index: 2])
 
             staged1 = %Stage{
                 stage: self(),
                 stream: stream,
                 events: [event1],
-                version: 1,
+                position: event1.index,
             }
             |> Transaction.new()
 
@@ -109,16 +104,15 @@ defmodule Signal.Processor.HandlerTest do
                 stage: self(),
                 stream: stream,
                 events: [event2],
-                version: 2,
+                position: event2.index,
             }
             |> Transaction.new()
 
-            TestApp.publish(staged1, [])
+            assert :ok == Signal.Store.Writer.commit(TestApp, staged1, [])
             assert_receive(%Deposited{ amount: 5000 }, 1000)
 
-            TestApp.publish(staged2, [])
+            assert :ok == Signal.Store.Writer.commit(TestApp, staged2, [])
             assert_receive(%Deposited{ amount: 4000 }, 1000)
-            Process.sleep(1000)
         end
 
     end

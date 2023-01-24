@@ -2,8 +2,8 @@ defmodule Signal.Aggregates.Aggregate do
     use GenServer, restart: :transient
     alias Signal.Codec
     alias Signal.Timer
+    alias Signal.Event
     alias Signal.Snapshot
-    alias Signal.Stream.Event
     alias Signal.Stream.Reducer
     alias Signal.Aggregates.Aggregate
     require Logger
@@ -96,18 +96,21 @@ defmodule Signal.Aggregates.Aggregate do
     @impl true
     def handle_info(:init, %Aggregate{}=aggregate) do
         %Aggregate{
-            app: {application, tenant}, 
+            app: {application, _tenant}, 
             stream: {stream_id, _}
         } = aggregate
 
-        aggregate = 
-            case application.snapshot(stream_id, tenant: tenant) do
-                nil -> 
-                    aggregate
+        record = 
+            application
+            |> Signal.Store.Adapter.get_snapshot(stream_id)
 
-                snapshot ->
-                    load(aggregate, snapshot)
+        aggregate = 
+            if is_nil(record) do
+                aggregate
+            else
+                load(aggregate, record)
             end
+
         {:noreply, listen(aggregate), aggregate.timeout}
     end
 
@@ -214,7 +217,7 @@ defmodule Signal.Aggregates.Aggregate do
         } = aggregate
 
         case event do
-            %Event{position: position} when position == (version + 1) ->
+            %Event{index: index} when index == (version + 1) ->
 
                 metadata = Event.metadata(event)
                 
@@ -222,7 +225,7 @@ defmodule Signal.Aggregates.Aggregate do
 
                 info = """
                 applying: #{event.topic}
-                position: #{event.position}
+                index:    #{event.index}
                 number: #{event.number}
                 """
                 log(info, aggregate)
@@ -242,7 +245,7 @@ defmodule Signal.Aggregates.Aggregate do
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
-                                version: position
+                                version: index
                             }
                         {:ok, aggregate}
 
@@ -251,7 +254,7 @@ defmodule Signal.Aggregates.Aggregate do
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
-                                version: position
+                                version: index
                             }
                         {:ok, aggregate}
 
@@ -261,7 +264,7 @@ defmodule Signal.Aggregates.Aggregate do
                                 ack: number,
                                 state: state,
                                 timeout: timeout,
-                                version: position
+                                version: index
                             }
                         {:ok, aggregate}
 
@@ -271,7 +274,7 @@ defmodule Signal.Aggregates.Aggregate do
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
-                                version: position
+                                version: index
                             }
                             |> snapshot()
 
@@ -282,7 +285,7 @@ defmodule Signal.Aggregates.Aggregate do
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
-                                version: position
+                                version: index
                             }
                             |> snapshot()
 
@@ -294,7 +297,7 @@ defmodule Signal.Aggregates.Aggregate do
                                 ack: number,
                                 state: state,
                                 timeout: timeout,
-                                version: position
+                                version: index
                             }
                             |> snapshot()
 
@@ -305,7 +308,7 @@ defmodule Signal.Aggregates.Aggregate do
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
-                                version: position
+                                version: index
                             }
 
                         {:hibernate, aggregate}
@@ -316,7 +319,7 @@ defmodule Signal.Aggregates.Aggregate do
                                 ack: number,
                                 state: state,
                                 timeout: timeout,
-                                version: position
+                                version: index
                             }
 
                         {:hibernate, aggregate}
@@ -354,8 +357,10 @@ defmodule Signal.Aggregates.Aggregate do
             subscription: %{handle: handle}
         } = aggregate
 
-        {application, tenant} = app
-        application.acknowledge(handle, number, [tenant: tenant])
+        {application, _tenant} = app
+
+        application
+        |> Signal.Store.Adapter.handler_acknowledge(handle, number)
 
         "acknowleded: #{number}"
         |> log(aggregate)
@@ -374,9 +379,11 @@ defmodule Signal.Aggregates.Aggregate do
         {stream_id, _type} = stream
         payload = encode(aggregate)
 
-        stream_id
-        |> Snapshot.new(payload, version: version)
-        |> application.record()
+        snapshot = 
+            stream_id
+            |> Snapshot.new(payload, version: version)
+
+        Signal.Store.Adapter.record_snapshot(application, snapshot)
 
         "snapshot: #{version}"
         |> log(aggregate)
@@ -407,11 +414,15 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp listen(%Aggregate{app: app, stream: stream, ack: ack}=aggr) do
         {application, _tenant} = app
-        {:ok, subscription} = application.subscribe([
+        {_id, stream_type} = stream
+        opts = [
             start: ack,
             track: false, 
             streams: stream |> List.wrap(), 
-        ])
+        ]
+        {:ok, subscription} = 
+            application
+            |> Signal.Event.Broker.subscribe(stream_type, opts)
         %Aggregate{aggr| subscription: subscription}
     end
 

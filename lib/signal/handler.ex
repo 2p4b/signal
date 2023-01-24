@@ -1,8 +1,8 @@
 defmodule Signal.Handler do
 
-    alias Signal.Handler
+    alias Signal.Event
     alias Signal.Logger
-    alias Signal.Stream.Event
+    alias Signal.Handler
 
     defstruct [:app, :state, :module, :subscription]
 
@@ -13,8 +13,8 @@ defmodule Signal.Handler do
         start = Keyword.get(opts, :start, :current)
         quote do
             use GenServer, restart: :transient
+            alias Signal.Event
             alias Signal.Handler
-            alias Signal.Stream.Event
 
             @app unquote(app)
 
@@ -104,7 +104,7 @@ defmodule Signal.Handler do
         {application, tenant} = app
         opts = [topics: topics, tenant: tenant, start: start]
         Enum.find_value(1..5, fn _x -> 
-            case application.subscribe(name, opts) do
+            case Signal.Event.Broker.subscribe(application, name, opts) do
                 {:ok, subscription} ->
                     {:ok, subscription}
                 _ ->
@@ -123,7 +123,7 @@ defmodule Signal.Handler do
             state: state, 
             subscription: %{handle: handle}
         } = handler
-        {application, tenant} = app
+        {application, _tenant} = app
 
         [
             handler: module,
@@ -144,12 +144,14 @@ defmodule Signal.Handler do
                     error
 
                 response when not is_tuple(response) ->
-                    application.acknowledge(handle, number, tenant: tenant)
+                    application
+                    |> Signal.Event.Broker.acknowledge(handle, number)
                     {:noreply, response}
 
 
                response -> 
-                    application.acknowledge(handle, number, tenant: tenant)
+                    application
+                    |> Signal.Event.Broker.acknowledge(handle, number)
                     response
             end
 

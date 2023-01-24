@@ -3,9 +3,7 @@ defmodule Signal.Void.Store do
 
     alias Signal.Snapshot
     alias Signal.Void.Repo
-    alias Signal.Void.Broker
     alias Signal.Transaction
-    require Logger
 
     @behaviour Signal.Store
 
@@ -15,79 +13,60 @@ defmodule Signal.Void.Store do
 
     @impl true
     def init(_init_arg) do
-        children = [Repo, Broker]
+        children = [Repo]
         opts = [strategy: :one_for_one, name: __MODULE__]
         Supervisor.init(children, opts)
     end
 
     @impl true
-    def index(_app) do
+    def get_cursor(_opts) do
         GenServer.call(Repo, {:state, :cursor}, 5000)
     end
 
     @impl true
-    def publish(staged, _opts \\ [])
-    def publish(%Transaction{}=transaction, _opts) do
-        case GenServer.call(Repo, {:publish, transaction}, 5000) do
-            {:ok, events} ->
-                Enum.map(events, fn event -> 
-                    GenServer.cast(Broker, {:broadcast, event})
-                end)
-                :ok
-
-            error ->
-                error
-        end
-    end
-
-    def publish(staged, opts) do
-        List.wrap(staged)
-        |> publish(opts)
+    def commit_transaction(transaction, opts \\ [])
+    def commit_transaction(%Transaction{}=transaction, _opts) do
+        GenServer.call(Repo, {:commit, transaction}, 5000)
     end
 
     @impl true
-    def purge(snap, opts \\ []) do
-        Repo.purge(snap, opts)
+    def get_event(number, _opts \\ []) do
+        Repo.get_event(number)
     end
 
     @impl true
-    def event(number, _opts \\ []) do
-        Repo.event(number)
+    def handler_position(handle, _opts \\ []) do
+        Repo.handler_position(handle)
     end
 
     @impl true
-    def subscribe(handle, opts) when is_list(opts) and is_atom(handle) do
-        subscribe(Atom.to_string(handle), opts)
+    def handler_acknowledge(handle, number, _opts \\ []) do
+        Repo.handler_acknowledge(handle, number)
     end
 
     @impl true
-    def subscribe(handle, opts) when is_list(opts) and is_binary(handle) do
-        Broker.subscribe(handle, opts)
+    def record_snapshot(%Snapshot{}=snapshot, opts) do
+        Repo.record_snapshot(snapshot, opts)
     end
 
     @impl true
-    def unsubscribe(handle, opts \\ []) do
-        Broker.unsubscribe(handle, opts)
+    def delete_snapshot(id, opts \\ []) do
+        Repo.delete_snapshot(id, opts)
     end
 
     @impl true
-    def subscription(handle, _opts \\ []) do
-        Broker.subscription(handle)
+    def get_snapshot(id, opts) do
+        Repo.get_snapshot(id, opts)
     end
 
     @impl true
-    def acknowledge(handle, number, _opts \\ []) do
-        Broker.acknowledge(handle, number)
+    def read_events(reader, opts) do
+        Repo.read_events(reader, opts)
     end
 
     @impl true
-    def record(%Snapshot{}=snapshot, opts) do
-        Repo.record(snapshot, opts)
-    end
-
-    @impl true
-    def snapshot(iden, opts) do
-        Repo.snapshot(iden, opts)
+    def list_events(opts) do
+        Repo.list_events(opts)
     end
 
     @impl true

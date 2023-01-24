@@ -21,14 +21,14 @@ defmodule Signal.Command.QueueTest do
 
     describe "Queue" do
 
-        @tag :queue
-        test "should have options" do
+        @tag :qtimeout
+        test "should have timeout options" do
             assert 500 == TestApplication.queue(:thread) |> Keyword.get(:timeout)
             assert :infinity == TestApplication.queue(:default) |> Keyword.get(:timeout)
         end
 
-        @tag :queue
-        test "should start" do
+        @tag :prepare_queue
+        test "prepare_queue/3" do
 
             id = "thread"
             type = :thread
@@ -41,7 +41,6 @@ defmodule Signal.Command.QueueTest do
             assert tuple_size(queue) == 3
             assert elem(queue, 2) |> elem(1) == id
             assert elem(queue, 2) |> elem(2) == type
-
         end
 
     end

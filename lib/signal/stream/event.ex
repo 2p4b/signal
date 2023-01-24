@@ -1,66 +1,45 @@
 defmodule Signal.Stream.Event do
     use Signal.Type
-    require Logger
 
     alias Signal.Codec
     alias Signal.Helper
     alias Signal.Stream.Event
 
-    defmodule Metadata do
-
-        use Signal.Type
-
-        schema enforce: true do
-            field :uuid,            String.t()
-            field :topic,           String.t()
-            field :number,          integer()
-            field :position,        integer()
-            field :stream_id,       String.t()
-            field :causation_id,    String.t()
-            field :correlation_id,  String.t()
-            field :timestamp,       term()
-        end
-
-    end
-
     schema enforce: true do
         field :uuid,            String.t()
         field :topic,           String.t()
-        field :number,          integer()
-        field :position,        integer()
-        field :payload,         map()
         field :stream_id,       String.t()
-        field :causation_id,    String.t()
-        field :correlation_id,  String.t()
+        field :index,           integer(),      default: 0
+        field :payload,         map()
         field :timestamp,       term()
+        field :causation_id,    String.t(),     default: nil
+        field :correlation_id,  String.t(),     default: nil
     end
 
-    def payload(%Event{payload: payload, topic: topic}) do
-        module = Helper.string_to_module(topic)
-
-        try do
-            {:ok, event_payload} =
-                module
-                |> struct([])
-                |> Codec.load(payload)
-            event_payload
-        rescue
-            UndefinedFunctionError ->
-                msg = """
-                Could not create event instance: #{topic}
-                fallback to map instance
-                """
-                Logger.error(msg)
-                %{__struct__: module}
-
-            exception ->
-                reraise(exception, __STACKTRACE__)
-        end
+    def new(data, opts) when is_struct(data) and is_list(opts) do
+        {:ok, payload} = Codec.encode(data)
+        uuid = UUID.uuid4()
+        opts
+        |> Keyword.put(:payload, payload)
+        |> Keyword.put_new(:uuid, uuid)
+        |> Keyword.put_new(:causation_id, uuid)
+        |> Keyword.put_new(:correlation_id, uuid)
+        |> Keyword.put_new_lazy(:topic, fn -> 
+            Signal.Topic.topic(data)
+        end)
+        |> Keyword.put_new_lazy(:timestamp, fn -> 
+            DateTime.utc_now()
+        end)
+        |> Keyword.put_new_lazy(:stream_id, fn -> 
+            Signal.Stream.id(data)
+        end)
+        |> new()
     end
 
-    def metadata(%Event{}=event) do
-        Metadata.from(event)
+    def payload(%Event{}=event) do
+        Signal.Event
+        |> struct(Map.from_struct(event))
+        |> Signal.Event.payload()
     end
 
 end
-

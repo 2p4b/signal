@@ -1,16 +1,13 @@
 defmodule Signal.Stream.Supervisor do
-
     use DynamicSupervisor
-    use Signal.Superviser, registry: Broker
-
-    alias Signal.Helper
+    use Signal.Superviser, registry: Producer
 
     def start_link(init_arg) do
-        DynamicSupervisor.start_link(__MODULE__, init_arg, name: name(init_arg))
+        DynamicSupervisor.start_link(__MODULE__, init_arg, name: name(init_arg) )
     end
 
     def start_child(args) when is_list(args) do
-        DynamicSupervisor.start_child(name(args), {Signal.Stream.Broker, args})
+        DynamicSupervisor.start_child(name(args), {Signal.Stream.Producer, args})
     end
 
     @impl true
@@ -18,29 +15,31 @@ defmodule Signal.Stream.Supervisor do
         DynamicSupervisor.init(strategy: :one_for_one)
     end
 
-    def prepare_broker(app, name) when is_tuple(app) and is_atom(name) do
-        prepare_broker(app, Helper.module_to_string(name))
-    end
-
-    def prepare_broker(app, name) when is_binary(name) do
-        case Registry.lookup(registry(app), name) do
-            [{_pid, _name}] ->
-                via_tuple(app, {name, nil})            
+    def prepare_producer(application, {id, type}=stream) 
+    when is_atom(type) and is_binary(id) do
+        case Registry.lookup(registry(application), id) do
+            [{_pid, _id}] ->
+                via_tuple(application, {id, stream})            
 
             [] ->
-                via_name =  via_tuple(app, {name, nil})
+                via_name = via_tuple(application, {id, stream})
 
-                app
-                |> broker_args(via_name)
+                application
+                |> producer_args(stream, via_name)
                 |> start_child()
 
-                prepare_broker(app, name)
+                prepare_producer(application, stream)
         end
     end
 
-    defp broker_args(app, {_, _, {_, type, _app}}=name) do
-        [name: name, app: app, type: Helper.string_to_module(type)]
+    defp producer_args(app, stream, via_name) do
+        [
+            app: app,
+            name: via_name,
+            stream: stream, 
+        ]
     end
 
 end
+
 

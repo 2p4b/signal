@@ -5,6 +5,10 @@ defmodule Signal.Superviser do
 
             @registry unquote(registry)
 
+            defp name(module) when is_atom(module) do
+                Module.concat([module, __MODULE__])
+            end
+
             defp name({module, app_name}) do
                 if module == app_name do
                     Module.concat([module, __MODULE__])
@@ -21,6 +25,10 @@ defmodule Signal.Superviser do
 
                 defp via_tuple(application, {id, value}) when is_binary(id) do
                     {:via, Registry, {registry(application), id, value}}
+                end
+
+                defp registry(app) when is_atom(app) do
+                    registry({app, app})
                 end
 
                 defp registry({_module, _name}=app) do

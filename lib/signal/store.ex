@@ -1,40 +1,32 @@
 defmodule Signal.Store do
 
-    @type app :: {module::atom, name::atom}
-
-    @type stream :: {id::binary, module::atom}
-
-    @type iden  :: {atom() | binary(), id::binary}
-
-    @type handle :: binary() | list()
-
     @type opts :: list()
-
-    @type enumber :: number()
-
+    
     @type snapshot :: term()
 
-    @callback index(opts) :: integer()
+    @type event :: term()
 
-    @callback event(enumber, opts) :: term() | {:error, reason::term()}
+    #@callback get_event(number::integer, opts::list) :: event
 
-    @callback publish(events::list(), opts) :: :ok | {:error, reason::term()}
+    @callback get_cursor(opts::list) :: integer
 
-    @callback subscribe(handle, opts) :: {:ok, any} | {:error, reason::term()}
+    @callback commit_transaction(transaction::term(), opts) :: :ok
 
-    @callback unsubscribe(handle, opts) :: :ok | {:error, reason::term()}
+    @callback handler_position(handle::binary, opts::list) :: integer()
 
-    @callback subscription(handle, opts) :: term() | {:error, reason::term()}
+    @callback handler_acknowledge(handle::binary, number::integer, opts::list) :: :ok
 
-    @callback stream_position(stream::stream, opts)  :: integer()
+    @callback record_snapshot(snapshot::snapshot, opts::list) :: :ok
 
-    @callback record(snapshot, opts) :: {:ok, integer()} | {:error, reason::term()}
+    @callback delete_snapshot(id::binary, opts::list) :: :ok
 
-    @callback purge(iden, opts) :: :ok | {:error, reason::term()}
+    @callback get_snapshot(iden::binary, opts::list) :: snapshot()
 
-    @callback snapshot(id::binary(), opts) :: term() | nil | {:error, reason::term()}
+    @callback read_events(reader::term, opts::list) :: :ok
 
-    @callback acknowledge(handle, enumber, opts) :: :ok | {:error, reason::term()}
+    @callback list_events(opts::list) :: list()
+
+    @callback stream_position(id::binary, opts::list) :: integer()
 
 end
 

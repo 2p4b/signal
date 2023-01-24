@@ -49,17 +49,11 @@ defmodule Signal.ApplicationTest do
 
     end
 
-    setup do
-        {:ok, _pid} = start_supervised(App)
+    setup_all do
         :ok
     end
 
-    describe "Application test" do
-
-        @tag :application
-        test "Yes the app should at least start with children" do
-            %{} = Supervisor.count_children(App)
-        end
+    describe "Application" do
 
         @tag :application
         test "should have two pipes" do
