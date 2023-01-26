@@ -6,6 +6,8 @@ defmodule Signal.Store do
 
     @type event :: term()
 
+    @type iden :: {id::binary, type::binary} | binary()
+
     #@callback get_event(number::integer, opts::list) :: event
 
     @callback get_cursor(opts::list) :: integer
@@ -18,7 +20,7 @@ defmodule Signal.Store do
 
     @callback record_snapshot(snapshot::snapshot, opts::list) :: :ok
 
-    @callback delete_snapshot(id::binary, opts::list) :: :ok
+    @callback delete_snapshot(iden::binary, opts::list) :: :ok
 
     @callback get_snapshot(iden::binary, opts::list) :: snapshot()
 

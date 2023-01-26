@@ -122,12 +122,12 @@ defmodule Signal.Process.Router do
 
     def handle_boot(%Router{}=router) do
 
-        {processes, ack} = router_snapshot(router)
+        %Signal.Effect{object: object, number: number} = router_effect(router)
 
         router = 
             router
-            |> load_processes(processes)
-            |> subscribe_router(ack)
+            |> load_processes(object)
+            |> subscribe_router(number)
 
         {:noreply, router}
     end
@@ -467,14 +467,16 @@ defmodule Signal.Process.Router do
             subscription: %{ack: ack}
         } = router
 
-        data = dump_processes(processes)
+        object = dump_processes(processes)
 
-        snapshot = 
-            name
-            |> Snapshot.new(%{"ack" => ack, "processes" => data})
+        namespace = "Signal.Process"
+
+        effect = 
+            [id: name, namespace: namespace, object: object, number: ack]
+            |> Signal.Effect.new()
 
         application
-        |> Signal.Store.Adapter.record_snapshot(snapshot)
+        |> Signal.Store.Adapter.save_effect(effect)
         %Router{router| processes: processes}
     end
 
@@ -550,15 +552,20 @@ defmodule Signal.Process.Router do
         %Router{router | subscription: sub}
     end
 
-    defp router_snapshot(%Router{}=router) do
+    defp router_effect(%Router{}=router) do
         %Router{app: {app, _tenant}, name: name}=router
 
-        case Signal.Store.Adapter.get_snapshot(app, name) do
-            %Snapshot{payload: %{"processes" => processes, "ack" => ack}}-> 
-                {processes, ack}
+        case Signal.Store.Adapter.get_effect("Signal.Process", name) do
+            %Signal.Effect{}=effect-> 
+                effect
 
             _ ->
-                {[], :current}
+                %Signal.Effect{
+                    id: name,
+                    namespace: "Signal.Process",
+                    number: Signal.Store.get_cursor(),
+                    object: [],
+                }
         end
     end
 
