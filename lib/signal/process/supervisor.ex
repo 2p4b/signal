@@ -46,6 +46,7 @@ defmodule Signal.Process.Supervisor do
             app: app,
             name: via_name,
             module: module,
+            namespace: Signal.Helper.module_to_string(module),
         ] 
     end
 

@@ -17,6 +17,7 @@ defmodule Signal.Process.Saga do
         :state, 
         :module, 
         ack: 0, 
+        :namespace,
         status: :running,
         version: 0,
     ]
@@ -56,21 +57,19 @@ defmodule Signal.Process.Saga do
     @impl true
     def handle_info(:load, %Saga{}=saga) do
 
-        %Saga{app: app, module: module, id: id}=saga
+        %Saga{app: app, module: module, id: id, namespace: namespace}=saga
 
         {application, _tenant} = app
 
-        snapshot_id = identity(saga)
-
         {version, state} =
-            case Signal.Store.Adapter.get_snapshot(application, snapshot_id) do
-                %{payload: %{"data" => data, "ack" => ack}}->
+            case Signal.Store.Adapter.get_effect(application, namespace, id) do
+                %Signal.Effect{object: object, number: number}->
                     {:ok, state} = 
                         module
                         |> struct([])
                         |> Codec.load(data)
 
-                    {ack, state}
+                    {number, state}
 
                 _ -> 
                     initial_state = 
@@ -97,20 +96,20 @@ defmodule Signal.Process.Saga do
             correlation_id: correlation_id
         } = Event.metadata(event)
 
-        snapshots = 
+        effects = 
             saga
-            |> snapshot(number)
+            |> create_effect(number)
             |> List.wrap()
 
         opts = [
-            snapshots: snapshots,
+            effects: effects,
             causation_id: uuid,
             correlation_id: correlation_id
         ]
         log(saga, "dispatch: #{command.__struct__}")
         case execute(command, saga, opts) do
             {:ok, %Result{}}->
-                {:noreply, acknowledge(saga, number, :running)}
+                {:noreply, acknowledge_event_status(saga, number, :running)}
 
             {:error, error}->
                 params = %{
@@ -178,49 +177,31 @@ defmodule Signal.Process.Saga do
         Kernel.apply(application, :dispatch, [command, opts])
     end
 
-    defp acknowledge(%Saga{id: id, module: router}=saga, number, status) do
+    defp acknowledge_event_status(%Saga{id: id, module: router}=saga, number, status) do
         GenServer.cast(router, {:ack, id, number, status})
         %Saga{saga | ack: number, status: status}
     end
 
-    defp checkpoint(%Saga{app: app, ack: ack}=saga) do
+    defp save_saga_state(%Saga{app: app, ack: ack}=saga) do
         {application, _tenant}  = app
-
-        snapshot  =
-            saga
-            |> snapshot(ack)
-
+        effect = create_effect(saga, ack)
         application
-        |> Signal.Store.Adapter.record_snapshot(snapshot)
+        |> Signal.Store.Adapter.save_effect(effect)
 
         saga
     end
 
-    defp shutdown(%Saga{app: app}=saga) do
+    defp shutdown_saga(%Saga{app: app, namespace: namespace, id: id}=saga) do
         {application, _tenant}  = app
-
-        snapshot_id = 
-            saga
-            |> identity()
-
         application
-        |> Signal.Store.Adapter.delete_snapshot(snapshot_id)
-
+        |> Signal.Store.Adapter.delete_effect(namespace, id)
         saga
     end
 
-    defp identity(%Saga{id: id, module: module}) do
-        {id, Signal.Helper.module_to_string(module)}
-    end
-
-    defp snapshot(%Saga{state: state}=saga, ack) do
-        {:ok, data} = Codec.encode(state)
-
-        payload = %{"data" => data, "ack" => ack}
-
-        saga
-        |> identity()
-        |> Snapshot.new(payload, version: 1)
+    defp create_effect(%Saga{id: id, state: state, namespace: namespace}=saga, ack) do
+        {:ok, object} = Codec.encode(state)
+        [id: id, namespace: namespace, object: object, number: ack]
+        |> Signal.Effect.new()
     end
 
     defp log(%Saga{module: module, id: id}, info) do
@@ -242,15 +223,15 @@ defmodule Signal.Process.Saga do
             {:ok, state} ->
                 saga = 
                     %Saga{ saga | state: state}
-                    |> acknowledge(number, :running)
-                    |> checkpoint()
+                    |> acknowledge_event_status(number, :running)
+                    |> save_saga_state()
                 {:noreply, saga}
 
             {:sleep, state} ->
                 saga = 
                     %Saga{ saga | state: state}
-                    |> acknowledge(number, :sleeping)
-                    |> checkpoint()
+                    |> acknowledge_event_status(number, :sleeping)
+                    |> save_saga_state()
 
                 {:noreply, saga}
 
@@ -258,8 +239,8 @@ defmodule Signal.Process.Saga do
             {:shutdown, state} ->
                 saga =
                     %Saga{ saga | state: state}
-                    |> shutdown()
-                    |> acknowledge(number, :shutdown)
+                    |> shutdown_saga()
+                    |> acknowledge_event_status(number, :shutdown)
 
                 log(saga, "shutdown")
                 {:stop, :shutdown, saga}

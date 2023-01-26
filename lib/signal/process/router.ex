@@ -476,7 +476,7 @@ defmodule Signal.Process.Router do
             |> Signal.Effect.new()
 
         application
-        |> Signal.Store.Adapter.save_effect(effect)
+        |> Signal.Store.Adapter.save_effect(application, effect)
         %Router{router| processes: processes}
     end
 
@@ -555,7 +555,7 @@ defmodule Signal.Process.Router do
     defp router_effect(%Router{}=router) do
         %Router{app: {app, _tenant}, name: name}=router
 
-        case Signal.Store.Adapter.get_effect("Signal.Process", name) do
+        case Signal.Store.Adapter.get_effect(app, "Signal.Process", name) do
             %Signal.Effect{}=effect-> 
                 effect
 
