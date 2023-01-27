@@ -19,8 +19,8 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
-    def get_effect(namespace, id, _opts\\[]) do
-        GenServer.call(Repo, {:get_effect, namespace, id}, 5000)
+    def get_effect(uuid, _opts\\[]) do
+        GenServer.call(Repo, {:get_effect, uuid}, 5000)
     end
 
     @impl true
@@ -29,8 +29,8 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
-    def delete_effect(namespace, id, _opts\\[]) do
-        GenServer.call(Repo, {:delete_effect, namespace, id}, 5000)
+    def delete_effect(uuid, _opts\\[]) do
+        GenServer.call(Repo, {:delete_effect, uuid}, 5000)
     end
 
     @impl true

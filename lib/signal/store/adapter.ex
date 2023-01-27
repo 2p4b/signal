@@ -4,9 +4,9 @@ defmodule Signal.Store.Adapter do
         Kernel.apply(application, :store, [])
     end
 
-    def get_effect(application, namespace, id, opts\\[]) do
+    def get_effect(application, uuid, opts\\[]) do
         store = application_store(application)
-        Kernel.apply(store, :get_effect, [namespace, id, opts])
+        Kernel.apply(store, :get_effect, [uuid, opts])
     end
 
     def save_effect(application, effect, opts\\[]) do
@@ -14,9 +14,9 @@ defmodule Signal.Store.Adapter do
         Kernel.apply(store, :save_effect, [effect, opts])
     end
 
-    def delete_effect(application, namespace, id, opts\\[]) do
+    def delete_effect(application, uuid, opts\\[]) do
         store = application_store(application)
-        Kernel.apply(store, :delete_effect, [namespace, id, opts])
+        Kernel.apply(store, :delete_effect, [uuid, opts])
     end
 
     def commit_transaction(application, transaction, opts\\[]) do

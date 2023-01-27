@@ -9,10 +9,14 @@ defmodule Signal.Effect do
         struct(__MODULE__, Keyword.merge(opts, [uuid: uuid]))
     end
 
-    defp create_uuid(%{namespace: namespace, id: id}) do
+    def uuid(namespace, id) when is_binary(namespace) and is_binary(id) do
         :oid
         |> UUID.uuid5(namespace)
         |> UUID.uuid5(id)
+    end
+
+    defp create_uuid(%{namespace: namespace, id: id}) do
+        uuid(namespace, id)
     end
 
 

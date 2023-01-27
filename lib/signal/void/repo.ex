@@ -1,7 +1,6 @@
 defmodule Signal.Void.Repo do
 
     use GenServer
-    alias Signal.Effect
     alias Signal.Snapshot
     alias Signal.Void.Repo
 
@@ -40,36 +39,19 @@ defmodule Signal.Void.Repo do
     end
 
     @impl true
-    def handle_call({:get_effect, namespace, id}, _from, %Repo{}=repo) do
-        effect = 
-            repo.effects
-            |> Map.get(namespace, %{}) 
-            |> Map.get(id)
-
-        {:reply, effect, repo} 
+    def handle_call({:get_effect, uuid}, _from, %Repo{}=repo) do
+        {:reply, Map.get(repo.effects, uuid), repo} 
     end
 
     @impl true
     def handle_call({:save_effect, effect}, _from, %Repo{}=repo) do
-        %Effect{id: id, namespace: namespace} = effect
-
-        states = 
-            repo.effects
-            |> Map.get(namespace, %{}) 
-            |> Map.put(id, effect)
-
-        effects = Map.put(repo.effects, namespace, states)
+        effects = Map.put(repo.effects, effect.uuid, effect)
         {:reply, :ok, %Repo{repo| effects: effects}} 
     end
 
     @impl true
-    def handle_call({:delete_effect, namespace, id}, _from, %Repo{}=repo) do
-        states = 
-            repo.effects
-            |> Map.get(namespace, %{}) 
-            |> Map.delete(id)
-
-        effects = Map.put(repo.effects, namespace, states)
+    def handle_call({:delete_effect, uuid}, _from, %Repo{}=repo) do
+        effects = Map.delete(repo.effects, uuid)
         {:reply, :ok, %Repo{repo| effects: effects}} 
     end
 
