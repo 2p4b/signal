@@ -1,10 +1,18 @@
 defmodule Signal.Void.Repo do
 
     use GenServer
+    alias Signal.Effect
     alias Signal.Snapshot
     alias Signal.Void.Repo
 
-    defstruct [cursor: 0, events: [], snapshots: %{}, streams: %{}, handlers: %{}]
+    defstruct [
+        cursor: 0, 
+        events: [], 
+        effects: %{}, 
+        streams: %{}, 
+        handlers: %{},
+        snapshots: %{}, 
+    ]
 
     @doc """
     Starts in memory store.
@@ -29,6 +37,40 @@ defmodule Signal.Void.Repo do
             store.events
             |> Enum.find(&(Map.get(&1, :number) == number))
         {:reply, event, store} 
+    end
+
+    @impl true
+    def handle_call({:get_effect, namespace, id}, _from, %Repo{}=repo) do
+        effect = 
+            repo.effects
+            |> Map.get(namespace, %{}) 
+            |> Map.get(id)
+
+        {:reply, effect, repo} 
+    end
+
+    @impl true
+    def handle_call({:save_effect, effect}, _from, %Repo{}=repo) do
+        %Effect{id: id, namespace: namespace} = effect
+
+        states = 
+            repo.effects
+            |> Map.get(namespace, %{}) 
+            |> Map.put(id, effect)
+
+        effects = Map.put(repo.effects, namespace, states)
+        {:reply, :ok, %Repo{repo| effects: effects}} 
+    end
+
+    @impl true
+    def handle_call({:delete_effect, namespace, id}, _from, %Repo{}=repo) do
+        states = 
+            repo.effects
+            |> Map.get(namespace, %{}) 
+            |> Map.delete(id)
+
+        effects = Map.put(repo.effects, namespace, states)
+        {:reply, :ok, %Repo{repo| effects: effects}} 
     end
 
     @impl true

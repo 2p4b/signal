@@ -19,6 +19,21 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
+    def get_effect(namespace, id, _opts\\[]) do
+        GenServer.call(Repo, {:get_effect, namespace, id}, 5000)
+    end
+
+    @impl true
+    def save_effect(effect, _opts\\[]) do
+        GenServer.call(Repo, {:save_effect, effect}, 5000)
+    end
+
+    @impl true
+    def delete_effect(namespace, id, _opts\\[]) do
+        GenServer.call(Repo, {:delete_effect, namespace, id}, 5000)
+    end
+
+    @impl true
     def get_cursor(_opts) do
         GenServer.call(Repo, {:state, :cursor}, 5000)
     end

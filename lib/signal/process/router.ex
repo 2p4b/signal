@@ -475,8 +475,9 @@ defmodule Signal.Process.Router do
             [id: name, namespace: namespace, object: object, number: ack]
             |> Signal.Effect.new()
 
-        application
-        |> Signal.Store.Adapter.save_effect(application, effect)
+        :ok = 
+            application
+            |> Signal.Store.Adapter.save_effect(effect)
         %Router{router| processes: processes}
     end
 
@@ -563,7 +564,7 @@ defmodule Signal.Process.Router do
                 %Signal.Effect{
                     id: name,
                     namespace: "Signal.Process",
-                    number: Signal.Store.get_cursor(),
+                    number: Signal.Store.Adapter.get_cursor(app),
                     object: [],
                 }
         end

@@ -16,8 +16,8 @@ defmodule Signal.Process.Saga do
         :app, 
         :state, 
         :module, 
-        ack: 0, 
         :namespace,
+        ack: 0, 
         status: :running,
         version: 0,
     ]
@@ -67,7 +67,7 @@ defmodule Signal.Process.Saga do
                     {:ok, state} = 
                         module
                         |> struct([])
-                        |> Codec.load(data)
+                        |> Codec.load(object)
 
                     {number, state}
 
@@ -185,16 +185,17 @@ defmodule Signal.Process.Saga do
     defp save_saga_state(%Saga{app: app, ack: ack}=saga) do
         {application, _tenant}  = app
         effect = create_effect(saga, ack)
-        application
-        |> Signal.Store.Adapter.save_effect(effect)
-
+        :ok =
+            application
+            |> Signal.Store.Adapter.save_effect(effect)
         saga
     end
 
     defp shutdown_saga(%Saga{app: app, namespace: namespace, id: id}=saga) do
         {application, _tenant}  = app
-        application
-        |> Signal.Store.Adapter.delete_effect(namespace, id)
+        :ok =
+            application
+            |> Signal.Store.Adapter.delete_effect(namespace, id)
         saga
     end
 
