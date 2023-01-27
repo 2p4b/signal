@@ -4,11 +4,17 @@ defmodule Signal.Store do
     
     @type snapshot :: term()
 
+    @type effect :: term()
+
     @type event :: term()
 
     @type iden :: {id::binary, type::binary} | binary()
 
-    #@callback get_event(number::integer, opts::list) :: event
+    @callback get_effect(uuid::binary, opts) :: effect
+
+    @callback save_effect(effect::effect, opts) :: :ok | {:error, term()}
+
+    @callback delete_effect(uuid::binary, opts) :: :ok | {:error, term()}
 
     @callback get_cursor(opts::list) :: integer
 

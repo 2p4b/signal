@@ -18,6 +18,10 @@ defmodule Signal.Void.Store do
         Supervisor.init(children, opts)
     end
 
+    def get_event(number, _opts \\ []) do
+        Repo.get_event(number)
+    end
+
     @impl true
     def get_effect(uuid, _opts\\[]) do
         GenServer.call(Repo, {:get_effect, uuid}, 5000)
@@ -42,11 +46,6 @@ defmodule Signal.Void.Store do
     def commit_transaction(transaction, opts \\ [])
     def commit_transaction(%Transaction{}=transaction, _opts) do
         GenServer.call(Repo, {:commit, transaction}, 5000)
-    end
-
-    @impl true
-    def get_event(number, _opts \\ []) do
-        Repo.get_event(number)
     end
 
     @impl true
