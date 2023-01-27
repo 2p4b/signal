@@ -3,8 +3,7 @@ defmodule Signal.Transaction do
         uuid: nil,
         cursor: 0,
         staged: [],
-        handles: [],
-        snapshots: [],
+        effects: [],
     ]
 
     def new(staged, opts \\ [])
@@ -14,13 +13,11 @@ defmodule Signal.Transaction do
     end
 
     def new(staged, opts) do
-        handles = Keyword.get(opts, :handles, [])
-        snapshots = Keyword.get(opts, :snapshots, [])
+        effects = Keyword.get(opts, :effects, [])
         %Signal.Transaction{
             uuid: UUID.uuid4(),
             staged: staged,
-            handles: handles,
-            snapshots:  snapshots
+            effects: effects
         }
     end
 

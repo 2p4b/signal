@@ -10,7 +10,7 @@ defmodule Signal.Command.Action do
         :stream,
         :command,
         :indices,
-        :snapshots,
+        :effects,
         :consistent,
         :causation_id,
         :correlation_id,
@@ -27,7 +27,7 @@ defmodule Signal.Command.Action do
             result: task.result,
             command: command,
             indices: task.indices,
-            snapshots: task.snapshots,
+            effects: task.effects,
             consistent: task.consistent,
             causation_id: task.causation_id, 
             correlation_id: task.correlation_id
