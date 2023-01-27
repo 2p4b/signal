@@ -144,7 +144,7 @@ defmodule Signal.Event.Broker do
                 [BROKER] #{broker.handle}
                 number: #{event.number}
                 published: #{event.topic}
-                stream index: #{event.index}
+                stream position: #{event.position}
                 """
                 Logger.info(info)
                 Map.put(sub, :syn, number)
@@ -166,7 +166,7 @@ defmodule Signal.Event.Broker do
             [BROKER] #{broker.handle}
             queued: #{event.topic}
             number: #{event.number}
-            index: #{event.index}
+            position: #{event.position}
             """
             Logger.info(info)
         end

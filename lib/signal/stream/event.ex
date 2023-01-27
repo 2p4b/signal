@@ -2,14 +2,13 @@ defmodule Signal.Stream.Event do
     use Signal.Type
 
     alias Signal.Codec
-    alias Signal.Helper
     alias Signal.Stream.Event
 
     schema enforce: true do
         field :uuid,            String.t()
         field :topic,           String.t()
         field :stream_id,       String.t()
-        field :index,           integer(),      default: 0
+        field :position,        integer(),      default: 0
         field :payload,         map()
         field :timestamp,       term()
         field :causation_id,    String.t(),     default: nil

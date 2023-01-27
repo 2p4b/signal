@@ -88,15 +88,15 @@ defmodule Signal.Processor.HandlerTest do
 
             stream = Signal.Stream.stream(deposited)
 
-            event1 = Signal.Stream.Event.new(deposited, [index: 1])
+            event1 = Signal.Stream.Event.new(deposited, [position: 1])
 
-            event2 = Signal.Stream.Event.new(deposited2, [index: 2])
+            event2 = Signal.Stream.Event.new(deposited2, [position: 2])
 
             staged1 = %Stage{
                 stage: self(),
                 stream: stream,
                 events: [event1],
-                position: event1.index,
+                version: event1.position,
             }
             |> Transaction.new()
 
@@ -104,7 +104,7 @@ defmodule Signal.Processor.HandlerTest do
                 stage: self(),
                 stream: stream,
                 events: [event2],
-                position: event2.index,
+                version: event2.position,
             }
             |> Transaction.new()
 

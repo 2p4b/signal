@@ -71,8 +71,8 @@ defmodule Signal.Void.Repo do
     end
 
     @impl true
-    def handle_call({:record, %Snapshot{}=snapshot}, _from, %Repo{}=store) do
-        %Repo{snapshots: snapshots} = store
+    def handle_call({:record, %Snapshot{}=snapshot}, _from, %Repo{}=repo) do
+        %Repo{snapshots: snapshots} = repo
         %Snapshot{id: id, type: type, version: version} = snapshot
 
         versions =
@@ -82,38 +82,38 @@ defmodule Signal.Void.Repo do
 
         snapshots = Map.put(snapshots, id, versions)
 
-        {:reply, {:ok, id}, %Repo{store | snapshots: snapshots} }
+        {:reply, {:ok, id}, %Repo{repo | snapshots: snapshots} }
     end
 
     @impl true
-    def handle_call({:handler_acknowledge, handler, number, _opts}, _from, %Repo{}=store) do
-        %Repo{handlers: handlers} = store
+    def handle_call({:handler_acknowledge, handler, number, _opts}, _from, %Repo{}=repo) do
+        %Repo{handlers: handlers} = repo
         handlers = Map.put(handlers, handler, number)
-        {:reply, {:ok, number}, %Repo{store | handlers: handlers} }
+        {:reply, {:ok, number}, %Repo{repo | handlers: handlers} }
     end
 
     @impl true
-    def handle_call({:handler_position, handler, _opts}, _from, %Repo{}=store) do
-        {:reply, Map.get(store.handlers, handler), store} 
+    def handle_call({:handler_position, handler, _opts}, _from, %Repo{}=repo) do
+        {:reply, Map.get(repo.handlers, handler), repo} 
     end
 
     @impl true
-    def handle_call({:purge, iden, _opts}, _from, %Repo{}=store) do
-        %Repo{snapshots: snapshots} = store
+    def handle_call({:purge, iden, _opts}, _from, %Repo{}=repo) do
+        %Repo{snapshots: snapshots} = repo
         snapshots = Map.delete(snapshots, iden)
-        {:reply, :ok, %Repo{store | snapshots: snapshots} }
+        {:reply, :ok, %Repo{repo | snapshots: snapshots} }
     end
 
     @impl true
-    def handle_call({:snapshot, iden, _opts}, _from, %Repo{}=store) do
+    def handle_call({:snapshot, iden, _opts}, _from, %Repo{}=repo) do
         snapshot = 
-            store
+            repo
             |> Map.get(:snapshots)
             |> Map.get(iden, %{})
             |> Map.values()
             |> Enum.max_by(&(Map.get(&1, :version)), fn -> nil end)
 
-        {:reply, snapshot, store}
+        {:reply, snapshot, repo}
     end
 
     def get_cursor() do
@@ -208,7 +208,7 @@ defmodule Signal.Void.Repo do
 
     defp handle_publish(%Repo{}=store, staged) do
         %{streams: streams, cursor: cursor} = store
-        %{stream: stream, events: events, position: version} = staged
+        %{stream: stream, events: events, version: version} = staged
 
         {stream_id, _} = stream
         store_stream = Map.get(streams, stream_id, %{

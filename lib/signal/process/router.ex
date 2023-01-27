@@ -1,8 +1,6 @@
 defmodule Signal.Process.Router do
 
     alias Signal.Event
-    alias Signal.Snapshot
-    alias Signal.Snapshot
     alias Signal.Event.Broker
     alias Signal.Process.Saga
     alias Signal.Process.Router

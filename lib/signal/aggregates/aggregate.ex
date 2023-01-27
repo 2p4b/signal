@@ -217,7 +217,7 @@ defmodule Signal.Aggregates.Aggregate do
         } = aggregate
 
         case event do
-            %Event{index: index} when index == (version + 1) ->
+            %Event{position: position} when position == (version + 1) ->
 
                 metadata = Event.metadata(event)
                 
@@ -225,7 +225,7 @@ defmodule Signal.Aggregates.Aggregate do
 
                 info = """
                 applying: #{event.topic}
-                index:    #{event.index}
+                position: #{event.position}
                 number: #{event.number}
                 """
                 log(info, aggregate)
@@ -245,7 +245,7 @@ defmodule Signal.Aggregates.Aggregate do
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
-                                version: index
+                                version: position,
                             }
                         {:ok, aggregate}
 
@@ -254,7 +254,7 @@ defmodule Signal.Aggregates.Aggregate do
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
-                                version: index
+                                version: position,
                             }
                         {:ok, aggregate}
 
@@ -264,7 +264,7 @@ defmodule Signal.Aggregates.Aggregate do
                                 ack: number,
                                 state: state,
                                 timeout: timeout,
-                                version: index
+                                version: position,
                             }
                         {:ok, aggregate}
 
@@ -274,7 +274,7 @@ defmodule Signal.Aggregates.Aggregate do
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
-                                version: index
+                                version: position
                             }
                             |> snapshot()
 
@@ -285,7 +285,7 @@ defmodule Signal.Aggregates.Aggregate do
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
-                                version: index
+                                version: position
                             }
                             |> snapshot()
 
@@ -297,7 +297,7 @@ defmodule Signal.Aggregates.Aggregate do
                                 ack: number,
                                 state: state,
                                 timeout: timeout,
-                                version: index
+                                version: position
                             }
                             |> snapshot()
 
@@ -308,7 +308,7 @@ defmodule Signal.Aggregates.Aggregate do
                             %Aggregate{aggregate | 
                                 ack: number,
                                 state: state,
-                                version: index
+                                version: position
                             }
 
                         {:hibernate, aggregate}
@@ -319,7 +319,7 @@ defmodule Signal.Aggregates.Aggregate do
                                 ack: number,
                                 state: state,
                                 timeout: timeout,
-                                version: index
+                                version: position
                             }
 
                         {:hibernate, aggregate}

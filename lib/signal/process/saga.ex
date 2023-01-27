@@ -4,7 +4,6 @@ defmodule Signal.Process.Saga do
     alias Signal.Event
     alias Signal.Codec
     alias Signal.Result
-    alias Signal.Snapshot
     alias Signal.Process.Saga
     alias Signal.Event.Metadata
     alias Signal.Process.Supervisor
@@ -199,7 +198,7 @@ defmodule Signal.Process.Saga do
         saga
     end
 
-    defp create_effect(%Saga{id: id, state: state, namespace: namespace}=saga, ack) do
+    defp create_effect(%Saga{id: id, state: state, namespace: namespace}, ack) do
         {:ok, object} = Codec.encode(state)
         [id: id, namespace: namespace, object: object, number: ack]
         |> Signal.Effect.new()

@@ -68,14 +68,14 @@ defmodule Signal.Stream.Producer do
 
         stage = stage_events(state, action, events, channel.pid)
 
-        %Stage{position: position} = stage
+        %Stage{version: version} = stage
 
         GenServer.reply(from, stage)
 
         # Halt until the task is resolved
         case Task.yield(channel, :infinity) do
-            {:ok, {:ok, ^position}} ->
-                {:noreply, %Producer{state | index: position}, Timer.seconds(5)}
+            {:ok, {:ok, ^version}} ->
+                {:noreply, %Producer{state | index: version}, Timer.seconds(5)}
 
             {:ok, {:rollback, _}} ->
                 {:noreply, calibrate(state), Timer.seconds(5)}
@@ -117,7 +117,7 @@ defmodule Signal.Stream.Producer do
                             # generated no event for its own stream (very unlikely)
                             # then restore producer stream index
                             index = Enum.find_value(staged, producer.index, fn
-                                %{stream: ^stream, position: position} ->
+                                %{stream: ^stream, version: position} ->
                                     position
                                 _ -> false
                             end)
@@ -195,19 +195,19 @@ defmodule Signal.Stream.Producer do
     def stage_events(%Producer{index: index, stream: stream}, action, events, stage)
     when is_list(events) and is_integer(index) and is_pid(stage) do
         {stream_id, _}  = stream
-        {events, position} =
-            Enum.map_reduce(events, index, fn event, index ->
-                index = index + 1
+        {events, version} =
+            Enum.map_reduce(events, index, fn event, position ->
+                position =  position + 1
                 params = [
-                    index: index,
+                    position: position,
                     stream_id: stream_id,
                     causation_id: action.causation_id,
                     correlation_id: action.correlation_id,
                 ]
                 event = Event.new(event, params)
-                {event, index}
+                {event, position}
             end)
-        %Stage{events: events, position: position, stream: stream, stage: stage}
+        %Stage{events: events, version: version, stream: stream, stage: stage}
     end
 
     def process(%Action{stream: stream, app: app}=action) do
@@ -227,7 +227,7 @@ defmodule Signal.Stream.Producer do
     end
 
     defp aggregate_state(%Producer{}=producer, sync) do
-        %Producer{ app: app, stream: stream, index: index} = producer
+        %Producer{app: app, stream: stream, index: index} = producer
         state_opts =
             if sync do
                 [index: index, timeout: :infinity]
@@ -310,8 +310,8 @@ defmodule Signal.Stream.Producer do
     end
 
     defp confirm_staged(staged) do
-        Enum.each(staged, fn %Stage{position: position, stage: stage}->
-            Process.send(stage, {:ok, position}, [])
+        Enum.each(staged, fn %Stage{version: version, stage: stage}->
+            Process.send(stage, {:ok, version}, [])
         end)
     end
 

@@ -39,13 +39,13 @@ defmodule Signal.Store.WriterTest do
     when is_integer(factor) and factor > 0 do
         events = 
             Range.new(1, factor)
-            |> Enum.map(fn index ->  
-                Signal.Stream.Event.new(event, [index: index])
+            |> Enum.map(fn  position->  
+                Signal.Stream.Event.new(event, [position: position])
             end)
         %Signal.Stream.Stage{
             stream: Signal.Stream.stream(event),
             events: events,
-            position: factor,
+            version: factor,
             stage: self(),
         }
     end
