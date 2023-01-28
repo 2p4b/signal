@@ -78,18 +78,20 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
-    def handle_call({:await, red}, from, %Aggregate{}=aggregate) do
+    def handle_call({:await, version}, from, %Aggregate{}=aggregate) do
         %Aggregate{
             state: state,
             version: vsn, 
+            timeout: timeout,
             awaiting: waiting, 
         } = aggregate
 
-        if vsn >= red do
-            {:reply, state, aggregate, aggregate.timeout} 
+        if vsn >= version do
+            {:reply, state, aggregate, timeout} 
         else
             ref = Process.monitor(elem(from, 0))
-            {:noreply, %Aggregate{aggregate | awaiting: waiting ++ [{from, ref, red}]}, aggregate.timeout }
+            waiter = {from, ref, version}
+            {:noreply, %Aggregate{aggregate | awaiting: waiting ++ [waiter]}, timeout}
         end
     end
 

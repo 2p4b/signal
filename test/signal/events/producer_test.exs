@@ -100,7 +100,7 @@ defmodule Signal.Events.ProducerTest do
 
             assert match?(%History{
                 stream: {"stream.one", Aggregate},
-                position: 1,
+                version: 1,
             },  first)
 
             assert length(first.events) == 1
@@ -110,7 +110,7 @@ defmodule Signal.Events.ProducerTest do
 
             assert match?(%History{
                 stream: {"stream.two", Aggregate},
-                position: 2,
+                version: 2,
             }, second)
 
             assert length(second.events) == 2

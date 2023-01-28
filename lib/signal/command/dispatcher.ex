@@ -62,8 +62,8 @@ defmodule Signal.Command.Dispatcher do
         if await do
             aggregates = 
                 histories
-                |> Enum.map(fn %History{events: [sample | _], position: position} -> 
-                    state_opts = [position: position, timeout: :infinity]
+                |> Enum.map(fn %History{events: [sample | _], version: version} -> 
+                    state_opts = [version: version, timeout: :infinity]
                     stream =
                         sample
                         |> Event.payload() 
