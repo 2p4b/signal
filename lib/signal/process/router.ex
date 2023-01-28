@@ -554,7 +554,8 @@ defmodule Signal.Process.Router do
     defp router_effect(%Router{}=router) do
         %Router{app: {app, _tenant}, name: name}=router
 
-        case Signal.Store.Adapter.get_effect(app, "Signal.Process", name) do
+        router_uuid = Signal.Effect.uuid("Signal.Process", name) 
+        case Signal.Store.Adapter.get_effect(app, router_uuid) do
             %Signal.Effect{}=effect-> 
                 effect
 

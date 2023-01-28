@@ -60,8 +60,9 @@ defmodule Signal.Process.Saga do
 
         {application, _tenant} = app
 
+        process_uuid = Signal.Effect.uuid(namespace, id) 
         {version, state} =
-            case Signal.Store.Adapter.get_effect(application, namespace, id) do
+            case Signal.Store.Adapter.get_effect(application, process_uuid) do
                 %Signal.Effect{object: object, number: number}->
                     {:ok, state} = 
                         module
