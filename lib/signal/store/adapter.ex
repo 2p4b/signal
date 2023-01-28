@@ -44,7 +44,7 @@ defmodule Signal.Store.Adapter do
     end
 
     def get_stream_event(application, stream_id, version, opts\\[]) do
-        case list_stream_events(application, [range: [version, version]], opts) do
+        case list_stream_events(application, stream_id, [range: [version, version]], opts) do
             [head| _] ->
                 head
 
