@@ -39,6 +39,16 @@ defmodule Signal.Void.Repo do
     end
 
     @impl true
+    def handle_call({:get_stream_event, sid, version}, _from, %Repo{}=store) do
+        event = 
+            store.events
+            |> Enum.find(fn event -> 
+                event.stream_id === sid and event.version === version
+            end)
+        {:reply, event, store} 
+    end
+
+    @impl true
     def handle_call({:get_effect, uuid}, _from, %Repo{}=repo) do
         {:reply, Map.get(repo.effects, uuid), repo} 
     end
@@ -73,15 +83,9 @@ defmodule Signal.Void.Repo do
     @impl true
     def handle_call({:record, %Snapshot{}=snapshot}, _from, %Repo{}=repo) do
         %Repo{snapshots: snapshots} = repo
-        %Snapshot{id: id, type: type, version: version} = snapshot
+        %Snapshot{id: id} = snapshot
 
-        versions =
-            snapshots
-            |> Map.get({type, id}, %{})
-            |> Map.put(version, snapshot)
-
-        snapshots = Map.put(snapshots, id, versions)
-
+        snapshots = Map.put(snapshots, id, snapshot)
         {:reply, {:ok, id}, %Repo{repo | snapshots: snapshots} }
     end
 
@@ -98,22 +102,14 @@ defmodule Signal.Void.Repo do
     end
 
     @impl true
-    def handle_call({:purge, iden, _opts}, _from, %Repo{}=repo) do
-        %Repo{snapshots: snapshots} = repo
-        snapshots = Map.delete(snapshots, iden)
-        {:reply, :ok, %Repo{repo | snapshots: snapshots} }
+    def handle_call({:snapshot, id, _opts}, _from, %Repo{}=repo) do
+        {:reply, Map.get(repo.snapshots, id), repo}
     end
 
     @impl true
-    def handle_call({:snapshot, iden, _opts}, _from, %Repo{}=repo) do
-        snapshot = 
-            repo
-            |> Map.get(:snapshots)
-            |> Map.get(iden, %{})
-            |> Map.values()
-            |> Enum.max_by(&(Map.get(&1, :version)), fn -> nil end)
-
-        {:reply, snapshot, repo}
+    def handle_call({:delete_snapshot, id, _opts}, _from, %Repo{}=repo) do
+        snapshots = Map.delete(repo.snapshots, id)
+        {:reply, :ok, %Repo{repo| snapshots: snapshots}}
     end
 
     def get_cursor() do
@@ -138,8 +134,29 @@ defmodule Signal.Void.Repo do
         end)
     end
 
+    def list_stream_events(sid, opts \\ []) do
+        rrange = Keyword.get(opts, :range, [])
+        topics = Keyword.get(opts, :topics, [])
+        range =
+            case Signal.Store.Helper.range(rrange) do
+                [lower, upper, :asc] ->
+                    Range.new(lower, cast_max(upper))
+                [lower, upper, :desc] ->
+                    Range.new(cast_max(upper), lower)
+            end
+
+        GenServer.call(__MODULE__, {:state, :events}, 5000)
+        |> Enum.filter(fn event -> 
+                event.stream_id === sid and event.position in range and Signal.Store.Helper.event_is_valid?(event, [], topics)
+        end)
+    end
+
     def get_event(number) do
         GenServer.call(__MODULE__, {:get_event, number}, 5000)
+    end
+
+    def get_stream_event(sid, version) do
+        GenServer.call(__MODULE__, {:get_stream_event, sid, version}, 5000)
     end
 
     defp cast_max(max) do
@@ -148,6 +165,34 @@ defmodule Signal.Void.Repo do
         else 
             get_cursor() 
         end
+    end
+
+    def read_stream_events(sid, callback, opts \\ []) do
+        rrange = Keyword.get(opts, :range, [])
+        topics = Keyword.get(opts, :topics, [])
+        streams = Keyword.get(opts, :streams, [])
+        range =
+            case Signal.Store.Helper.range(rrange) do
+                [lower, upper, :asc] ->
+                    Range.new(lower, cast_max(upper))
+                [lower, upper, :desc] ->
+                    Range.new(cast_max(upper), lower)
+            end
+        range
+        |> Enum.find_value(fn number -> 
+            event = get_stream_event(sid, number)
+            if event do
+                if Signal.Store.Helper.event_is_valid?(event, streams, topics) do
+                    case callback.(event) do
+                        :stop -> true
+                        _ -> false
+                    end
+                end
+            else
+                true
+            end
+        end)
+        :ok
     end
 
     def read_events(callback, opts \\ []) do
@@ -178,16 +223,16 @@ defmodule Signal.Void.Repo do
         :ok
     end
 
-    def delete_snapshot(snap, opts) do
-        GenServer.call(__MODULE__, {:purge, snap, opts}, 5000)
-    end
-
     def record_snapshot(%Snapshot{}=snapshot, _opts) do
         GenServer.call(__MODULE__, {:record, snapshot}, 500)
     end
 
-    def get_snapshot(iden, opts) do
-        GenServer.call(__MODULE__, {:snapshot, iden, opts}, 500)
+    def get_snapshot(id, opts) do
+        GenServer.call(__MODULE__, {:snapshot, id, opts}, 500)
+    end
+
+    def delete_snapshot(id, opts) do
+        GenServer.call(__MODULE__, {:delete_snapshot, id, opts}, 500)
     end
 
     def handler_position(handler, opts\\[]) do

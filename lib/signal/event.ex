@@ -77,22 +77,22 @@ defmodule Signal.Event do
         field :topic,           String.t()
         field :number,          integer()
         field :position,        integer()
-        field :payload,         map()
+        field :data,            map()
         field :stream_id,       String.t()
         field :causation_id,    String.t()
         field :correlation_id,  String.t()
         field :timestamp,       term()
     end
 
-    def payload(%Event{payload: payload, topic: topic}) do
+    def data(%Event{data: payload, topic: topic}) do
         module = Helper.string_to_module(topic)
 
         try do
-            {:ok, event_payload} =
+            {:ok, data} =
                 module
                 |> struct([])
                 |> Codec.load(payload)
-            event_payload
+            data
         rescue
             UndefinedFunctionError ->
                 msg = """

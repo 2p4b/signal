@@ -1,5 +1,5 @@
 defmodule Signal.Effect do
-    defstruct [:uuid, :id, :namespace, :object, :number]
+    defstruct [:uuid, :id, :namespace, :data, :number]
 
     def new(opts) when is_list(opts) do
         uuid = 

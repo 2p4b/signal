@@ -29,8 +29,8 @@ defmodule Signal.Store.Adapter do
         Kernel.apply(store, :get_cursor, [opts])
     end
 
-    def get_event(application, number) do 
-        case list_events(application, range: [number, number]) do
+    def get_event(application, number, opts\\[]) do 
+        case list_events(application, [range: [number, number]], opts) do
             [head| _] ->
                 head
 
@@ -43,14 +43,38 @@ defmodule Signal.Store.Adapter do
         end
     end
 
-    def read_events(application, callback, opts\\[]) do
-        store = application_store(application)
-        Kernel.apply(store, :read_events, [callback, opts])
+    def get_stream_event(application, stream_id, version, opts\\[]) do
+        case list_stream_events(application, [range: [version, version]], opts) do
+            [head| _] ->
+                head
+
+            [] ->
+                nil
+
+            unknown -> 
+                # Should not reach here!
+                unknown
+        end
     end
 
-    def list_events(application, opts\\[]) do
+    def read_events(application, callback, params\\[], opts\\[]) do
         store = application_store(application)
-        Kernel.apply(store, :list_events, [opts])
+        Kernel.apply(store, :read_events, [callback, params, opts])
+    end
+
+    def read_stream_events(application, stream_id, callback, params\\[], opts\\[]) do
+        store = application_store(application)
+        Kernel.apply(store, :read_stream_events, [stream_id, callback, params, opts])
+    end
+
+    def list_events(application, params\\[], opts\\[]) do
+        store = application_store(application)
+        Kernel.apply(store, :list_events, [params, opts])
+    end
+
+    def list_stream_events(application, stream_id, params\\[], opts\\[]) do
+        store = application_store(application)
+        Kernel.apply(store, :list_stream_events, [stream_id, params, opts])
     end
 
     def handler_position(application, handle, opts\\[]) do

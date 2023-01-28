@@ -133,7 +133,7 @@ defmodule Signal.Handler do
         ]
         |> Logger.info(label: :handler)
 
-        args = [Event.payload(event), Event.metadata(event), state]
+        args = [Event.data(event), Event.metadata(event), state]
 
         response =
             case Kernel.apply(module, :handle_event, args) do

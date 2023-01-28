@@ -110,7 +110,7 @@ defmodule Signal.Aggregates.Aggregate do
             if is_nil(record) do
                 aggregate
             else
-                load(aggregate, record)
+                load_state(aggregate, record)
             end
 
         {:noreply, listen(aggregate), aggregate.timeout}
@@ -223,7 +223,7 @@ defmodule Signal.Aggregates.Aggregate do
 
                 metadata = Event.metadata(event)
                 
-                event_payload = Event.payload(event)
+                event_data = Event.data(event)
 
                 info = """
                 applying: #{event.topic}
@@ -233,12 +233,12 @@ defmodule Signal.Aggregates.Aggregate do
                 log(info, aggregate)
 
                 apply_args = 
-                    case Reducer.impl_for(event_payload) do
+                    case Reducer.impl_for(event_data) do
                         nil ->
-                            [state, metadata, event_payload]
+                            [state, metadata, event_data]
 
                         _impl ->
-                            [event_payload, metadata, state]
+                            [event_data, metadata, state]
                     end
 
                 case Kernel.apply(Reducer, :apply, apply_args) do
@@ -373,19 +373,23 @@ defmodule Signal.Aggregates.Aggregate do
     defp snapshot(%Aggregate{}=aggregate) do
         %Aggregate{
             app: app, 
+            state: state,
             stream: stream,
             version: version
         } = aggregate
 
         {application, _tenant} = app
+
         {stream_id, _type} = stream
-        payload = encode(aggregate)
+
+        {:ok, data} = Codec.encode(state)
 
         snapshot = 
-            stream_id
-            |> Snapshot.new(payload, version: version)
+            [id: stream_id, version: version, data: data]
+            |> Snapshot.new()
 
-        Signal.Store.Adapter.record_snapshot(application, snapshot)
+        application
+        |> Signal.Store.Adapter.record_snapshot(snapshot)
 
         "snapshot: #{version}"
         |> log(aggregate)
@@ -393,38 +397,37 @@ defmodule Signal.Aggregates.Aggregate do
         aggregate
     end
 
-    def load(%Aggregate{state: state}=aggr, %Snapshot{}=snapshot) do
-        %Snapshot{version: version, payload: payload}=snapshot
-        case payload do
-            %{"index" => index, "state" => payload} ->
-                {:ok, aggregate_state} = Codec.load(state, payload)
-                %Aggregate{aggr | 
-                    ack: index,
-                    state: aggregate_state, 
-                    version: version, 
-                }
-
-            _ ->
-                aggr
-        end
+    def load_state(%Aggregate{state: state}=aggr, %Snapshot{}=snapshot) do
+        %Snapshot{version: version, data: data}=snapshot
+        {:ok, state} = Codec.load(state, data)
+        %Aggregate{aggr | 
+            state: state, 
+            version: version, 
+        }
     end
 
-    def encode(%Aggregate{ack: index, state: state}) do
-        {:ok, data} = Codec.encode(state)
-        %{"index" => index, "state" => data}
-    end
-
-    defp listen(%Aggregate{app: app, stream: stream, ack: ack}=aggr) do
+    defp listen(%Aggregate{app: app, stream: stream, version: vsn}=aggr) do
         {application, _tenant} = app
         {_id, stream_type} = stream
-        opts = [
-            start: ack,
-            track: false, 
-            streams: stream |> List.wrap(), 
-        ]
+
+        streams = List.wrap(stream)
+
+        start = 
+            if vsn === 0 do
+                0
+            else
+                %Signal.Event{number: start} = 
+                    application
+                    |> Signal.Store.Adapter.get_stream_event(stream, vsn)
+                start
+            end
+
+        opts = [start: start, track: false, streams: streams]
+
         {:ok, subscription} = 
             application
             |> Signal.Event.Broker.subscribe(stream_type, opts)
+
         %Aggregate{aggr| subscription: subscription}
     end
 

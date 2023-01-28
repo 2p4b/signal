@@ -120,11 +120,11 @@ defmodule Signal.Process.Router do
 
     def handle_boot(%Router{}=router) do
 
-        %Signal.Effect{object: object, number: number} = router_effect(router)
+        %Signal.Effect{data: data, number: number} = router_effect(router)
 
         router = 
             router
-            |> load_processes(object)
+            |> load_processes(data)
             |> subscribe_router(number)
 
         {:noreply, router}
@@ -344,7 +344,7 @@ defmodule Signal.Process.Router do
         %{module: module, processes: processes}= router
 
         reply = 
-            case Kernel.apply(module, :handle, [Event.payload(event)]) do
+            case Kernel.apply(module, :handle, [Event.data(event)]) do
                 {action, id} when (action in [:start, :apply]) and is_binary(id) ->
                     {action, id}
 
@@ -465,12 +465,12 @@ defmodule Signal.Process.Router do
             subscription: %{ack: ack}
         } = router
 
-        object = dump_processes(processes)
+        data = dump_processes(processes)
 
         namespace = "Signal.Process"
 
         effect = 
-            [id: name, namespace: namespace, object: object, number: ack]
+            [id: name, namespace: namespace, data: data, number: ack]
             |> Signal.Effect.new()
 
         :ok = 
@@ -564,7 +564,7 @@ defmodule Signal.Process.Router do
                     id: name,
                     namespace: "Signal.Process",
                     number: Signal.Store.Adapter.get_cursor(app),
-                    object: [],
+                    data: [],
                 }
         end
     end

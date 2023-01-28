@@ -63,11 +63,11 @@ defmodule Signal.Process.Saga do
         process_uuid = Signal.Effect.uuid(namespace, id) 
         {version, state} =
             case Signal.Store.Adapter.get_effect(application, process_uuid) do
-                %Signal.Effect{object: object, number: number}->
+                %Signal.Effect{data: data, number: number}->
                     {:ok, state} = 
                         module
                         |> struct([])
-                        |> Codec.load(object)
+                        |> Codec.load(data)
 
                     {number, state}
 
@@ -114,7 +114,7 @@ defmodule Signal.Process.Saga do
             {:error, error}->
                 params = %{
                     error: error,
-                    event: Event.payload(event),
+                    event: Event.data(event),
                     metadata: Event.metadata(event)
                 }
                 reply = Kernel.apply(module, :error, [command, params, state]) 
@@ -167,7 +167,7 @@ defmodule Signal.Process.Saga do
 
         metadata = Event.metadata(event)
 
-        reply = Kernel.apply(module, :apply, [Event.payload(event), metadata, state])
+        reply = Kernel.apply(module, :apply, [Event.data(event), metadata, state])
 
         handle_reply(saga, event, reply)
     end
@@ -193,15 +193,16 @@ defmodule Signal.Process.Saga do
 
     defp shutdown_saga(%Saga{app: app, namespace: namespace, id: id}=saga) do
         {application, _tenant}  = app
+        process_uuid  = Signal.Effect.uuid(namespace, id)
         :ok =
             application
-            |> Signal.Store.Adapter.delete_effect(namespace, id)
+            |> Signal.Store.Adapter.delete_effect(process_uuid)
         saga
     end
 
     defp create_effect(%Saga{id: id, state: state, namespace: namespace}, ack) do
-        {:ok, object} = Codec.encode(state)
-        [id: id, namespace: namespace, object: object, number: ack]
+        {:ok, data} = Codec.encode(state)
+        [id: id, namespace: namespace, data: data, number: ack]
         |> Signal.Effect.new()
     end
 
