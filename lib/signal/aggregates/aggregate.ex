@@ -408,7 +408,7 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp listen(%Aggregate{app: app, stream: stream, version: vsn}=aggr) do
         {application, _tenant} = app
-        {_id, stream_type} = stream
+        {id, stream_type} = stream
 
         streams = List.wrap(stream)
 
@@ -418,7 +418,7 @@ defmodule Signal.Aggregates.Aggregate do
             else
                 %Signal.Event{number: start} = 
                     application
-                    |> Signal.Store.Adapter.get_stream_event(stream, vsn)
+                    |> Signal.Store.Adapter.get_stream_event(id, vsn)
                 start
             end
 
