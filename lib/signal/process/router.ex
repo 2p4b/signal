@@ -351,11 +351,12 @@ defmodule Signal.Process.Router do
                 :skip ->
                     {:skip, event.number}
 
-                _ ->
+                returned ->
                     raise """
                     process #{inspect(module)}.handle/1
                             expected return type of 
                             {:start, String.t()} | {:apply, String.t()} | skip
+                            got #{inspect(returned)}
                     """
             end
 
