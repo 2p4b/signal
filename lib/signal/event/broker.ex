@@ -1,6 +1,5 @@
 defmodule Signal.Event.Broker do
-
-    use GenServer
+    use GenServer, restart: :transient
     alias Signal.Event
     alias Signal.Event.Broker
     alias Signal.Store.Helper
@@ -242,8 +241,8 @@ defmodule Signal.Event.Broker do
             broker.app
             |> Signal.Store.Writer.detach()
 
-            #broker.app
-            #|> Signal.Event.Supervisor.unregister_child(broker.handle)
+            broker.app
+            |> Signal.Event.Supervisor.unregister_child(broker.handle)
 
             # Shutdown worker if worker exist
             unless is_nil(broker.worker) do
@@ -251,7 +250,7 @@ defmodule Signal.Event.Broker do
             end
 
             #{:stop, :normal, %Broker{broker | consumers: [], worker: nil, buffer: []}}
-            {:noreply, %Broker{broker | buffer: [], consumers: consumers, worker: nil}}
+            {:stop, :normal, %Broker{broker | buffer: [], consumers: [], worker: nil}}
         else
             {:noreply, %Broker{broker | consumers: consumers}}
         end
@@ -432,6 +431,7 @@ defmodule Signal.Event.Broker do
 
     @impl true
     def terminate(_reason, _broker) do
+        #IO.inspect([reason, broker], label: broker.handle)
         :ok
     end
 

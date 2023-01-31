@@ -128,15 +128,15 @@ defmodule Signal.Stream.Producer do
 
                             state = %Producer{producer| index: index}
 
-                            {:reply, {:ok, histories}, state}
+                            {:reply, {:ok, histories}, state, Timer.seconds(5)}
 
                         error ->
                             rollback_staged(staged, error)
-                            {:reply, error, producer}
+                            {:reply, error, producer, Timer.seconds(5)}
                     end
 
                 {:error, reason} ->
-                    {:reply, {:error, reason}, producer}
+                    {:reply, {:error, reason}, producer, Timer.seconds(5)}
             end
         else
             {:reply, event_streams, producer, Timer.seconds(5)}
