@@ -431,7 +431,6 @@ defmodule Signal.Event.Broker do
 
     @impl true
     def terminate(_reason, _broker) do
-        #IO.inspect([reason, broker], label: broker.handle)
         :ok
     end
 
