@@ -79,7 +79,13 @@ defmodule Signal.Process.Saga do
                     {0, initial_state} 
             end
 
-        log(saga, "starting from: #{version}")
+        [
+            type: module,
+            sid: id,
+            status: :init,
+            reduction: version,
+        ]
+        |> Signal.Logger.info(label: :saga)
 
         saga = struct(saga, %{ack: version, version: version, state: state})
 
@@ -106,7 +112,15 @@ defmodule Signal.Process.Saga do
             causation_id: uuid,
             correlation_id: correlation_id
         ]
-        log(saga, "dispatch: #{command.__struct__}")
+
+        [
+            type: module,
+            id: saga.id,
+            cause: event.topic,
+            dispatch: command.__struct__,
+        ]
+        |> Signal.Logger.info(label: :saga)
+
         case execute(command, saga, opts) do
             {:ok, %Result{}}->
                 {:noreply, acknowledge_event_status(saga, number, :running)}
@@ -163,8 +177,14 @@ defmodule Signal.Process.Saga do
         %Event{topic: topic}=event
         %Saga{module: module, state: state} = saga
 
-        log(saga, "applying: #{inspect(topic)}")
-
+        [
+            type: module,
+            sid: saga.id,
+            status: :running,
+            apply: event.topic,
+            number: event.number,
+        ]
+        |> Signal.Logger.info(label: :saga)
         metadata = Event.metadata(event)
 
         reply = Kernel.apply(module, :apply, [Event.data(event), metadata, state])
@@ -206,16 +226,6 @@ defmodule Signal.Process.Saga do
         |> Signal.Effect.new()
     end
 
-    defp log(%Saga{module: module, id: id}, info) do
-        info = """ 
-
-        [SAGA] #{inspect(module)} #{id}
-        #{info}
-        """
-        Logger.info(info)
-    end
-
-
     defp handle_reply(%Saga{}=saga, %Event{number: number}=event, reply) do
         case reply do 
             {:dispatch, command, state} ->
@@ -239,12 +249,20 @@ defmodule Signal.Process.Saga do
 
 
             {:shutdown, state} ->
+                [
+                    type: saga.module,
+                    sid: saga.id,
+                    event: event.topic,
+                    status: :shutdown,
+                    number: event.number,
+                ]
+                |> Signal.Logger.info(label: :saga)
+
                 saga =
                     %Saga{ saga | state: state}
                     |> shutdown_saga()
                     |> acknowledge_event_status(number, :shutdown)
 
-                log(saga, "shutdown")
                 {:stop, :shutdown, saga}
         end
     end

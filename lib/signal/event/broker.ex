@@ -249,7 +249,6 @@ defmodule Signal.Event.Broker do
                 Task.shutdown(broker.worker)
             end
 
-            #{:stop, :normal, %Broker{broker | consumers: [], worker: nil, buffer: []}}
             {:stop, :normal, %Broker{broker | buffer: [], consumers: [], worker: nil}}
         else
             {:noreply, %Broker{broker | consumers: consumers}}
@@ -299,13 +298,14 @@ defmodule Signal.Event.Broker do
 
             consumers = 
                 List.update_at(consumers, index, fn consumer -> 
-                    info = """
-                    [BROKER] #{broker.handle}
-                    acknowledged: #{number}
-                    buffer: #{length(buffer)}
-                    """
-                    Logger.info(info)
                     Map.put(consumer, :ack, number)
+                    [
+                        handle: broker.handle,
+                        consumer: length(consumer),
+                        buffer: length(buffer),
+                        ack: number
+                    ]
+                    |> Signal.Logger.info(label: :broker)
                 end)
 
             %{ack: max_ack} = 
@@ -430,8 +430,16 @@ defmodule Signal.Event.Broker do
     end
 
     @impl true
-    def terminate(_reason, _broker) do
-        :ok
+    def terminate(reason, broker) do
+        [
+            handle: broker.handle,
+            status: :terminated,
+            topics: broker.topics,
+            streams: broker.streams,
+            reason: reason,
+            ack: broker.position
+        ]
+        |> Signal.Logger.info(label: :broker)
     end
 
 end
