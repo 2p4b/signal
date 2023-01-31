@@ -356,13 +356,13 @@ defmodule Signal.Aggregates.Aggregate do
     defp acknowledge(%Aggregate{}=aggregate, %Event{number: number}) do
         %Aggregate{
             app: app, 
-            subscription: %{handle: handle}
+            stream: {stream_id, _}
         } = aggregate
 
         {application, _tenant} = app
 
         application
-        |> Signal.Store.Adapter.handler_acknowledge(handle, number)
+        |> Signal.Event.Broker.acknowledge(stream_id, number)
 
         "acknowleded: #{number}"
         |> log(aggregate)
@@ -408,7 +408,7 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp listen(%Aggregate{app: app, stream: stream, version: vsn}=aggr) do
         {application, _tenant} = app
-        {id, stream_type} = stream
+        {stream_id, _stream_type} = stream
 
         streams = List.wrap(stream)
 
@@ -418,7 +418,7 @@ defmodule Signal.Aggregates.Aggregate do
             else
                 %Signal.Event{number: start} = 
                     application
-                    |> Signal.Store.Adapter.get_stream_event(id, vsn)
+                    |> Signal.Store.Adapter.get_stream_event(stream_id, vsn)
                 start
             end
 
@@ -426,7 +426,7 @@ defmodule Signal.Aggregates.Aggregate do
 
         {:ok, subscription} = 
             application
-            |> Signal.Event.Broker.subscribe(stream_type, opts)
+            |> Signal.Event.Broker.subscribe(stream_id, opts)
 
         %Aggregate{aggr| subscription: subscription}
     end
@@ -441,13 +441,12 @@ defmodule Signal.Aggregates.Aggregate do
     def log(info, %Aggregate{}=aggregate) do
         %Aggregate{
             version: version, 
-            state: %{__struct__: state_type}, 
-            stream: {stream_id, _stream_type} 
+            stream: {stream_id, stream_type} 
         } = aggregate
 
         text = """
 
-        [AGGREGATE] #{state_type} 
+        [AGGREGATE] #{stream_type} 
         stream: #{stream_id}
         version: #{version}
         #{info}

@@ -46,6 +46,12 @@ defmodule Signal.Store.Writer do
     end
 
     @impl true
+    def handle_call({:detach, _opts}, {pid, _tag}, %Writer{brokers: brokers}=writer) do
+        brokers = Enum.filter(brokers, &(&1 !== pid))
+        {:reply, :ok, %Writer{writer| brokers: brokers}}
+    end
+
+    @impl true
     def handle_call({:commit, %Transaction{}=transaction, opts}, _from, writer) do
         # { streams, events }
         transaction = prepare_transaction(writer, transaction)
@@ -104,6 +110,12 @@ defmodule Signal.Store.Writer do
         application
         |> name()
         |> GenServer.call({:attach, opts})
+    end
+
+    def detach(application, opts \\ []) do
+        application
+        |> name()
+        |> GenServer.call({:detach, opts})
     end
 
     def commit(application, transaction, opts \\ []) do

@@ -3,6 +3,7 @@ defmodule Signal.Event.Broker do
     use GenServer
     alias Signal.Event
     alias Signal.Event.Broker
+    alias Signal.Store.Helper
     alias Signal.Event.Supervisor
 
     require Logger
@@ -15,7 +16,7 @@ defmodule Signal.Event.Broker do
         cursor: 0, 
         buffer: [],
         position: 0,
-        subscriptions: [],
+        consumers: [],
         topics: [],
         streams: [],
     ]
@@ -44,31 +45,36 @@ defmodule Signal.Event.Broker do
     end
 
     @impl true
+    def handle_call({:state, nil}, _from, %Broker{}=broker) do
+        {:reply, broker, broker} 
+    end
+
+    @impl true
     def handle_call({:state, prop}, _from, %Broker{}=broker) do
         {:reply, Map.get(broker, prop), broker} 
     end
 
     @impl true
-    def handle_call(:subscription, {pid, _ref}, %Broker{subscriptions: subs}= broker) do
-        subscription = Enum.find(subs, &(Map.get(&1, :id) == pid))
-        {:reply, subscription, broker} 
+    def handle_call(:consumer, {pid, _ref}, %Broker{consumers: subs}= broker) do
+        consumer = Enum.find(subs, &(Map.get(&1, :id) == pid))
+        {:reply, consumer, broker} 
     end
 
     @impl true
     def handle_call({:subscribe, opts}, {pid, _ref}, %Broker{}=broker) do
-        %Broker{subscriptions: subscriptions} = broker
-        subscription = Enum.find(subscriptions, &(Map.get(&1, :id) == pid))
+        %Broker{consumers: consumers} = broker
+        consumer = Enum.find(consumers, &(Map.get(&1, :id) == pid))
 
-        if is_nil(subscription) do
-            subscription = create_subscription(broker, pid, opts)
-            subscriptions = subscriptions ++ List.wrap(subscription)
+        if is_nil(consumer) do
+            consumer = create_consumer(broker, pid, opts)
+            consumers = consumers ++ List.wrap(consumer)
 
-            {streams, topics} = collect_streams_and_topics(subscriptions)
+            {streams, topics} = collect_streams_and_topics(consumers)
 
             position = 
-                case subscriptions do
+                case consumers do
                     [_sub] ->
-                        subscription.ack
+                        consumer.ack
                     _ ->
                         broker.position
                 end
@@ -77,23 +83,24 @@ defmodule Signal.Event.Broker do
                 topics: topics, 
                 streams: streams,
                 position: position,
-                subscriptions: subscriptions, 
+                consumers: consumers, 
             }
 
             broker = start_worker_stream(broker)
 
-            {:reply, {:ok, subscription}, broker} 
+            Process.monitor(consumer.id)
+            {:reply, {:ok, consumer}, broker} 
         else
-            {:reply, {:ok, subscription}, broker}
+            {:reply, {:ok, consumer}, broker}
         end
     end
 
     @impl true
     def handle_call(:unsubscribe, {pid, _ref}, %Broker{}=broker) do
-        subscriptions = Enum.filter(broker.subscriptions, fn %{pid: spid} -> 
+        consumers = Enum.filter(broker.consumers, fn %{pid: spid} -> 
             spid != pid 
         end)
-        {:reply, :ok, %Broker{broker| subscriptions: subscriptions}} 
+        {:reply, :ok, %Broker{broker| consumers: consumers}} 
     end
 
     @impl true
@@ -101,22 +108,22 @@ defmodule Signal.Event.Broker do
 
         %Broker{handle: handle, position: position} = broker
 
-        broker = handle_ack(broker, pid, number)
+        broker = handle_consumer_ack(broker, pid, number)
 
-        subscription = 
+        consumer = 
             broker
-            |> Map.get(:subscriptions)
+            |> Map.get(:consumers)
             |> Enum.max_by(&(Map.get(&1, :ack)), fn -> 
                 %{ack: position, track: false, id: pid} 
             end)
 
-        %{ack: ack, track: track, id: id} = subscription
+        %{ack: ack, track: track, id: id} = consumer
 
         if track and (ack > position) and (id == pid) do
             {:ok, ^number} = 
                 Signal.Store.Adapter.handler_acknowledge(broker.app, handle, number)
 
-            {:reply, number, broker}
+            {:reply, number, %Broker{broker| position: number}}
         else
             {:reply, number,  broker}
         end
@@ -125,10 +132,21 @@ defmodule Signal.Event.Broker do
     @impl true
     def handle_info({:push, %{number: number}=event}, %Broker{}=broker) do
 
-        %Broker{subscriptions: subscriptions} = broker
-        index = Enum.find_index(subscriptions, fn sub -> 
-            handle?(sub, event)
-        end)
+        %Broker{consumers: consumers} = broker
+        index = 
+            consumers
+            |> Enum.find_index(fn %{streams: streams, ack: ack, topics: topics} -> 
+                streams = Enum.map(streams, fn stream ->
+                    cond do
+                        is_tuple(stream) ->
+                              {sid, _} = stream
+                              sid
+                        is_binary(stream) ->
+                            stream
+                    end
+                end)
+                Helper.event_is_valid?(event, streams, topics) and number > ack
+            end)
 
         if is_nil(index) do
             broker = 
@@ -138,18 +156,18 @@ defmodule Signal.Event.Broker do
 
             {:noreply, broker}
         else
-            subs = List.update_at(subscriptions, index, fn sub -> 
+            subs = List.update_at(consumers, index, fn sub -> 
                 send(sub.id, event)
                 info = """
                 [BROKER] #{broker.handle}
-                number: #{event.number}
                 published: #{event.topic}
-                stream position: #{event.position}
+                number: #{event.number}
+                position: #{event.position}
                 """
                 Logger.info(info)
                 Map.put(sub, :syn, number)
             end)
-            {:noreply, %Broker{broker | subscriptions: subs, ready: false}}
+            {:noreply, %Broker{broker | consumers: subs, ready: false}}
         end
     end
 
@@ -189,10 +207,13 @@ defmodule Signal.Event.Broker do
         broker.app
         |> Signal.Store.Writer.attach()
 
-        # Testament.listern_event()
+        %{ack: max_ack} = 
+            broker.consumers
+            |> Enum.max_by(&(Map.get(&1, :ack)), fn -> %{ack: broker.position} end)
+
         # Pull events thats may have fallen through
         config = [
-            range: [broker.position + 1],
+            range: [max_ack + 1],
             topics: broker.topics, 
             streams: broker.streams,
         ] 
@@ -200,6 +221,7 @@ defmodule Signal.Event.Broker do
         fallen = 
             broker.app
             |> Signal.Store.Adapter.list_events(config)
+
         broker = %Broker{broker | buffer: fallen, worker: nil}
         {:noreply, broker |> sched_next() }
     end
@@ -210,53 +232,32 @@ defmodule Signal.Event.Broker do
     end
 
     @impl true
-    def handle_info({:DOWN, _ref, :process, _pid, _status}, %Broker{}=broker) do
-        # Handle the worker shuting down
-        {:noreply, broker}
-    end
+    def handle_info({:DOWN, _ref, :process, pid, _status}, %Broker{}=broker) do
+        # Handle the consumer shuting down
+        consumers = 
+            broker.consumers
+            |> Enum.filter(&(Map.get(&1, :id) !== pid))
+        if Enum.empty?(consumers) do
 
-    defp handle?(%{syn: syn, ack: ack}, _ev)
-    when syn != ack do
-        false
-    end
+            broker.app
+            |> Signal.Store.Writer.detach()
 
-    defp handle?(%{handle: handle, syn: syn, ack: ack}, _event)
-    when (not is_nil(handle)) and (syn > ack) do
-        false
-    end
+            #broker.app
+            #|> Signal.Event.Supervisor.unregister_child(broker.handle)
 
-    defp handle?(%{ack: position}, %{number: number})
-    when is_integer(position) and position > number do
-        false
-    end
-
-    defp handle?(%{stream: sstream}, %{stream: estream}) 
-    when not(is_nil(sstream)) and sstream != estream do
-        false
-    end
-
-    defp handle?(%{topics: topics}, %{topic: topic}) do
-
-        valid_topic =
-            if length(topics) == 0 do
-                true
-            else
-                if topic in topics do
-                    true
-                else
-                    false
-                end
+            # Shutdown worker if worker exist
+            unless is_nil(broker.worker) do
+                Task.shutdown(broker.worker)
             end
 
-        if valid_topic do
-            true
+            #{:stop, :normal, %Broker{broker | consumers: [], worker: nil, buffer: []}}
+            {:noreply, %Broker{broker | buffer: [], consumers: consumers, worker: nil}}
         else
-            false
+            {:noreply, %Broker{broker | consumers: consumers}}
         end
     end
 
-
-    defp create_subscription(%Broker{}=broker, pid, opts) do
+    defp create_consumer(%Broker{}=broker, pid, opts) do
 
         %Broker{handle: handle, position: hpos} = broker
 
@@ -288,33 +289,37 @@ defmodule Signal.Event.Broker do
         }
     end
 
-    defp handle_ack(%Broker{}=broker, pid, number) do
-        %Broker{subscriptions: subscriptions, buffer: buffer} = broker
+    defp handle_consumer_ack(%Broker{}=broker, pid, number) do
+        %Broker{consumers: consumers, buffer: buffer} = broker
         ack_sub = &(Map.get(&1, :id) == pid and Map.get(&1, :syn) == number)
-        index = Enum.find_index(subscriptions, ack_sub)
+        index = Enum.find_index(consumers, ack_sub)
 
         if is_nil(index) do
             broker
         else
 
-            subscriptions = 
-                List.update_at(subscriptions, index, fn subscription -> 
+            consumers = 
+                List.update_at(consumers, index, fn consumer -> 
                     info = """
                     [BROKER] #{broker.handle}
                     acknowledged: #{number}
                     buffer: #{length(buffer)}
                     """
                     Logger.info(info)
-                    Map.put(subscription, :ack, number)
+                    Map.put(consumer, :ack, number)
                 end)
 
             %{ack: max_ack} = 
-                subscriptions
+                consumers
                 |> Enum.max_by(&(Map.get(&1, :ack)), fn -> %{ack: number} end)
 
             buffer = Enum.filter(buffer, &(Map.get(&1, :number) > max_ack))
 
-            %Broker{broker | subscriptions: subscriptions, buffer: buffer, ready: true}
+            %Broker{broker | 
+                consumers: consumers, 
+                buffer: buffer, 
+                ready: true
+            }
             |> sched_next()
         end
     end
@@ -347,7 +352,7 @@ defmodule Signal.Event.Broker do
                 end, config)
                 {:worker, {:done, self()}}
             end)
-        %Broker{broker| worker: worker}
+        %Broker{broker| buffer: [], worker: worker}
     end
 
     def sched_next(%Broker{buffer: [], worker: nil}=broker) do
@@ -366,7 +371,7 @@ defmodule Signal.Event.Broker do
         broker
     end
 
-    def sched_next(%Broker{buffer: [event | buffer], subscriptions: subs}=broker) do
+    def sched_next(%Broker{buffer: [event | buffer], consumers: subs}=broker) do
 
         nil_max = fn -> nil end
         max_sub = Enum.max_by(subs, &(Map.get(&1, :syn)), nil_max)
@@ -383,8 +388,8 @@ defmodule Signal.Event.Broker do
         end
     end
 
-    def collect_streams_and_topics(subscriptions) do
-        Enum.reduce(subscriptions, {[],[]}, fn 
+    def collect_streams_and_topics(consumers) do
+        Enum.reduce(consumers, {[],[]}, fn 
             %{streams: sub_streams, topics: sub_topics}, {streams, topics} -> 
                 stream_ids = for {stream_id, _type} <- sub_streams, do: stream_id
                 streams = Enum.uniq(streams ++ stream_ids)
@@ -411,10 +416,10 @@ defmodule Signal.Event.Broker do
         end
     end
 
-    def subscription(app, handle) when is_binary(handle) do
+    def consumer(app, handle) when is_binary(handle) do
         broker = Supervisor.broker(app, handle)
         with {:via, _reg, _iden} <- broker do
-            GenServer.call(broker, :subscription, 5000)
+            GenServer.call(broker, :consumer, 5000)
         end
     end
 
@@ -423,6 +428,11 @@ defmodule Signal.Event.Broker do
         with {:via, _reg, _iden} <- broker do
             GenServer.call(broker, {:ack, self(), number})
         end
+    end
+
+    @impl true
+    def terminate(_reason, _broker) do
+        :ok
     end
 
 end
