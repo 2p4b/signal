@@ -8,8 +8,6 @@ defmodule Signal.Process.Saga do
     alias Signal.Event.Metadata
     alias Signal.Process.Supervisor
 
-    require Logger
-
     defstruct [
         :id, 
         :app, 

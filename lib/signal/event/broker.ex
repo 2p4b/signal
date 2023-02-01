@@ -5,8 +5,6 @@ defmodule Signal.Event.Broker do
     alias Signal.Store.Helper
     alias Signal.Event.Supervisor
 
-    require Logger
-
     defstruct [
         handle: nil,
         worker: nil,

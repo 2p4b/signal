@@ -225,12 +225,13 @@ defmodule Signal.Aggregates.Aggregate do
                 
                 event_data = Event.data(event)
 
-                info = """
-                applying: #{event.topic}
-                position: #{event.position}
-                number: #{event.number}
-                """
-                log(info, aggregate)
+                [
+                    stream: aggregate.stream,
+                    version: aggregate.version,
+                    reducing: event.topic,
+                    position: event.position,
+                ]
+                |> Signal.Logger.info(label: :aggregate)
 
                 apply_args = 
                     case Reducer.impl_for(event_data) do
@@ -364,9 +365,6 @@ defmodule Signal.Aggregates.Aggregate do
         application
         |> Signal.Event.Broker.acknowledge(stream_id, number)
 
-        "acknowleded: #{number}"
-        |> log(aggregate)
-
         aggregate
     end
 
@@ -384,15 +382,19 @@ defmodule Signal.Aggregates.Aggregate do
 
         {:ok, data} = Codec.encode(state)
 
+        [
+            stream: stream,
+            status: :snapshoting,
+            version: version,
+        ]
+        |> Signal.Logger.info(label: :aggregate)
+
         snapshot = 
             [id: stream_id, version: version, data: data]
             |> Snapshot.new()
 
         application
         |> Signal.Store.Adapter.record_snapshot(snapshot)
-
-        "snapshot: #{version}"
-        |> log(aggregate)
 
         aggregate
     end
@@ -433,25 +435,13 @@ defmodule Signal.Aggregates.Aggregate do
 
     @impl true
     def terminate(reason, %Aggregate{}=aggregate) do
-        "shutdown: #{inspect(reason)}"
-        |> log(aggregate)
-        reason
-    end
-
-    def log(info, %Aggregate{}=aggregate) do
-        %Aggregate{
-            version: version, 
-            stream: {stream_id, stream_type} 
-        } = aggregate
-
-        text = """
-
-        [AGGREGATE] #{stream_type} 
-        stream: #{stream_id}
-        version: #{version}
-        #{info}
-        """
-        Logger.info(text)
+        [
+            stream: aggregate.stream,
+            status: :terminated,
+            reason: reason,
+            version: aggregate.version,
+        ]
+        |> Signal.Logger.info(label: :aggregate)
     end
 
 end
