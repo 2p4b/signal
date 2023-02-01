@@ -298,14 +298,15 @@ defmodule Signal.Event.Broker do
 
             consumers = 
                 List.update_at(consumers, index, fn consumer -> 
-                    Map.put(consumer, :ack, number)
                     [
                         handle: broker.handle,
-                        consumer: length(consumer),
                         buffer: length(buffer),
+                        consumer: consumer.id,
                         ack: number
                     ]
                     |> Signal.Logger.info(label: :broker)
+
+                    Map.put(consumer, :ack, number)
                 end)
 
             %{ack: max_ack} = 

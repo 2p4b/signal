@@ -174,7 +174,6 @@ defmodule Signal.Process.Saga do
     def handle_cast({action, %Event{}=event}, %Saga{}=saga) 
     when action in [:apply, :start] do
 
-        %Event{topic: topic}=event
         %Saga{module: module, state: state} = saga
 
         [
@@ -185,6 +184,7 @@ defmodule Signal.Process.Saga do
             number: event.number,
         ]
         |> Signal.Logger.info(label: :saga)
+
         metadata = Event.metadata(event)
 
         reply = Kernel.apply(module, :apply, [Event.data(event), metadata, state])
