@@ -6,10 +6,7 @@ defmodule Signal.Process.Router do
     alias Signal.Process.Router
     alias Signal.Process.Supervisor
 
-    require Logger
-
     defstruct [:name, :processes, :app, :topics, :subscription, :module]
-
 
     defmodule Proc do
         alias Signal.Process.Router
@@ -65,18 +62,26 @@ defmodule Signal.Process.Router do
 
             cond do
                 is_pid(pid) and syn == ack and number > ack and qnext == number ->
-                    Router.log(router, """ 
-                        process: #{proc.id}
-                        status: :running syn: #{number}
-                        """ )
+                    [
+                        process: router.name,
+                        saga: proc.id,
+                        status: :running,
+                        action: action,
+                        push: number,
+                    ]
+                    |> Signal.Logger.info(label: :router)
+
                     GenServer.cast(pid, {action, event})
                     %Proc{ proc | syn: number, queue: queue, status: :running }
 
                 number > syn  ->
-                    Router.log(router, """ 
-                        process: #{proc.id}
-                        status: #{proc.status} queued: #{number}
-                        """ )
+                    [
+                        process: router.name,
+                        saga: proc.id,
+                        status: proc.status,
+                        queued: number
+                    ]
+                    |> Signal.Logger.info(label: :router)
                     %Proc{proc | queue: queue}
 
                 true ->
@@ -191,10 +196,13 @@ defmodule Signal.Process.Router do
 
         %Router{processes: processes}=router
 
-        log(router, """
-            process: #{id}
-            status: running ack: #{number}
-            """ )
+        [
+            process: router.name,
+            saga: id,
+            status: :running,
+            ack: number,
+        ]
+        |> Signal.Logger.info(label: :router)
         index =
             processes
             |> Enum.find_index(fn 
@@ -245,10 +253,13 @@ defmodule Signal.Process.Router do
     def handle_ack({:sleeping, id, number}, %Router{}=router) do
         %Router{processes: processes}=router
 
-        log(router, """
-            process: #{id}
-            status: sleeping ack: #{number}
-            """ )
+        [
+            process: router.name,
+            saga: id,
+            status: :sleeping,
+            ack: number,
+        ]
+        |> Signal.Logger.info(label: :router)
         index =
             Enum.find_index(processes, fn 
                 %Proc{id: ^id, status: :sleeping} -> 
@@ -292,10 +303,13 @@ defmodule Signal.Process.Router do
 
     def handle_ack({:shutdown, id, number}, %Router{}=router) do
         %Router{processes: processes}=router
-        log(router, """
-            process: #{id}
-            status: shutdown ack: #{number}
-            """ )
+        [
+            process: router.name,
+            saga: id,
+            status: :shutdown,
+            ack: number,
+        ]
+        |> Signal.Logger.info(label: :router)
         index =
             processes
             |> Enum.find_index(fn 
@@ -366,11 +380,13 @@ defmodule Signal.Process.Router do
             processes
             |> Enum.find_index(&(Map.get(&1, :id) == id))
 
-        log(router, """
-            routing: #{event.topic}
-            number: #{event.number}
-            handle: #{inspect(reply)}
-            """ )
+        [
+            process: router.name,
+            routing: event.topic,
+            number: event.number,
+            handle: reply,
+        ]
+        |> Signal.Logger.info(label: :router)
         proc =
             case {action, index} do
 
@@ -391,11 +407,6 @@ defmodule Signal.Process.Router do
 
         if proc do
 
-            log(router, """
-                routing: #{event.topic}
-                number: #{event.number}
-                process: #{proc.id} pid: #{inspect(proc.pid)}
-                """ )
             process = 
                 router
                 |> wake_process(proc)
@@ -449,9 +460,11 @@ defmodule Signal.Process.Router do
         } = router
 
         if number > sub.ack  do
+            [process: router.name, ack: number]
+            |> Signal.Logger.info(label: :router)
+
             application
             |> Broker.acknowledge(sub.handle, number)
-            log(router, "acknowledged: #{number}")
             %Router{router| subscription: Map.put(sub, :ack, number)}
         else
             router
@@ -568,16 +581,6 @@ defmodule Signal.Process.Router do
                     data: [],
                 }
         end
-    end
-
-    def log(%Router{module: module}, info) do
-        info = """ 
-
-        [ROUTER]
-        #{inspect(module)}
-        #{info}
-        """
-        Logger.info(info)
     end
 
 end
