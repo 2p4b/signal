@@ -104,7 +104,7 @@ defmodule Signal.Projector do
         ]
         |> Logger.info(label: :projector)
 
-        args = [Event.data(event), Event.metadata(event)]
+        args = [Event.data(event)]
         response = Kernel.apply(module, :project, args)
         case handle_response(projector, response) do
             {:noreply, handler} ->
