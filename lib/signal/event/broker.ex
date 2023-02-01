@@ -122,6 +122,13 @@ defmodule Signal.Event.Broker do
             {:ok, ^number} = 
                 Signal.Store.Adapter.handler_acknowledge(broker.app, handle, number)
 
+            [
+                handle: broker.handle,
+                consumer: consumer.id,
+                ack: number
+            ]
+            |> Signal.Logger.info(label: :broker)
+
             {:reply, number, %Broker{broker| position: number}}
         else
             {:reply, number,  broker}
@@ -157,13 +164,13 @@ defmodule Signal.Event.Broker do
         else
             subs = List.update_at(consumers, index, fn sub -> 
                 send(sub.id, event)
-                info = """
-                [BROKER] #{broker.handle}
-                published: #{event.topic}
-                number: #{event.number}
-                position: #{event.position}
-                """
-                Logger.info(info)
+                [
+                    handle: broker.handle,
+                    pushed: event.topic,
+                    number: event.number,
+                    consumer: sub.id,
+                ]
+                |> Signal.Logger.info(label: :broker)
                 Map.put(sub, :syn, number)
             end)
             {:noreply, %Broker{broker | consumers: subs, ready: false}}
@@ -177,16 +184,6 @@ defmodule Signal.Event.Broker do
                 buffer: buffer ++ List.wrap(event)
             }
             |> sched_next()
-
-        unless Enum.empty?(broker.buffer) do
-            info = """
-            [BROKER] #{broker.handle}
-            queued: #{event.topic}
-            number: #{event.number}
-            position: #{event.position}
-            """
-            Logger.info(info)
-        end
 
         {:noreply, broker}
     end
@@ -298,14 +295,6 @@ defmodule Signal.Event.Broker do
 
             consumers = 
                 List.update_at(consumers, index, fn consumer -> 
-                    [
-                        handle: broker.handle,
-                        buffer: length(buffer),
-                        consumer: consumer.id,
-                        ack: number
-                    ]
-                    |> Signal.Logger.info(label: :broker)
-
                     Map.put(consumer, :ack, number)
                 end)
 
