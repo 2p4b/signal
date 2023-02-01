@@ -6,7 +6,6 @@ defmodule Signal.Aggregates.Aggregate do
     alias Signal.Snapshot
     alias Signal.Stream.Reducer
     alias Signal.Aggregates.Aggregate
-    require Logger
 
     defstruct [
         :id,
