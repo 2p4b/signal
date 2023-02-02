@@ -57,7 +57,7 @@ defmodule Signal.Processor.HandlerTest do
             {:reply, :ok, pid}
         end
 
-        def handle_event(event, _meta, pid) do
+        def handle_event(event, pid) do
             Process.send(pid, event, [])
             {:noreply, pid}
         end
