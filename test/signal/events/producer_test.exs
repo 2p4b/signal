@@ -18,7 +18,7 @@ defmodule Signal.Events.ProducerTest do
             field :uuid,    :string,   default: ""
         end
 
-        def apply(%Aggregate{}=aggr, _meta, _event) do
+        def apply(%Aggregate{}=aggr, _event) do
             aggr
         end
 

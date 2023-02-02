@@ -28,12 +28,12 @@ defmodule Signal.Event do
                 end
             end
 
-            if Module.defines?(__MODULE__, {:apply, 3}, :def) do
+            if Module.defines?(__MODULE__, {:apply, 2}, :def) do
                 with module <- @module do
                     defimpl Signal.Stream.Reducer do
                         @pmodule module
-                        def apply(event, meta, agg) do 
-                            Kernel.apply(@pmodule, :apply, [event, meta, agg])
+                        def apply(event, agg) do 
+                            Kernel.apply(@pmodule, :apply, [event, agg])
                         end
                     end
                 end

@@ -219,11 +219,6 @@ defmodule Signal.Aggregates.Aggregate do
 
         case event do
             %Event{position: position} when position == (version + 1) ->
-
-                metadata = Event.metadata(event)
-                
-                event_data = Event.data(event)
-
                 [
                     stream: aggregate.stream,
                     version: aggregate.version,
@@ -232,16 +227,7 @@ defmodule Signal.Aggregates.Aggregate do
                 ]
                 |> Signal.Logger.info(label: :aggregate)
 
-                apply_args = 
-                    case Reducer.impl_for(event_data) do
-                        nil ->
-                            [state, metadata, event_data]
-
-                        _impl ->
-                            [event_data, metadata, state]
-                    end
-
-                case Kernel.apply(Reducer, :apply, apply_args) do
+                case Reducer.apply(state, Event.data(event)) do
                     %{__struct__: type}=state when is_atom(type) and type == stream_type ->
                          aggregate = 
                             %Aggregate{aggregate | 

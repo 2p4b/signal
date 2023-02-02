@@ -39,19 +39,28 @@ defmodule Signal.Aggregate do
                 end
             end
 
-            if (Module.defines?(__MODULE__, {:apply, 3}, :def) or @apply_strict === false) do
+            if (Module.defines?(__MODULE__, {:apply, 2}, :def) or @apply_strict === false) do
                 with module <- @module do
                     defimpl Signal.Stream.Reducer do
                         @pmodule module
-                        def apply(agg, meta, event) do 
-                            Kernel.apply(@pmodule, :apply, [event, meta, agg])
+                        def apply(agg, event) do 
+                            # Check if the event has a custom reduction
+                            # function and use that else reduce the
+                            # event with the aggregate reduce func
+                            case Signal.Stream.Reducer.impl_for(event) do
+                                nil ->
+                                    Kernel.apply(@pmodule, :apply, [event, agg])
+
+                                _impl ->
+                                    Signal.Stream.Reducer.apply(event, agg)
+                            end
                         end
                     end
                 end
             end
 
             if @apply_strict === false do
-                def apply(_event, _meta, state) do
+                def apply(_event, state) do
                     {:ok, state}
                 end
             end
