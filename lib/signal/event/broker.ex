@@ -199,7 +199,7 @@ defmodule Signal.Event.Broker do
         # Attach the broker to recieve 
         # events from the store writer
         broker.app
-        |> Signal.Store.Writer.attach()
+        |> Signal.Event.Dispatcher.subscribe_to_events()
 
         %{ack: max_ack} = 
             broker.consumers
@@ -234,7 +234,7 @@ defmodule Signal.Event.Broker do
         if Enum.empty?(consumers) do
 
             broker.app
-            |> Signal.Store.Writer.detach()
+            |> Signal.Event.Dispatcher.unsubscribe_from_events()
 
             broker.app
             |> Signal.Event.Supervisor.unregister_child(broker.handle)

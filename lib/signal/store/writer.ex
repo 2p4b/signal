@@ -3,6 +3,7 @@ defmodule Signal.Store.Writer do
     alias Signal.Store.Writer
     alias Signal.Stream.Stage
     alias Signal.Store.Adapter
+    alias Signal.Event.Dispatcher
 
     use GenServer
 
@@ -66,12 +67,14 @@ defmodule Signal.Store.Writer do
         end
     end
 
-    def push_broker_events(%Writer{brokers: brokers}, %Transaction{staged: staged}) do
+    def push_broker_events(%Writer{}=writer, %Transaction{}=trnx) do
+        %Writer{brokers: brokers, app: app} = writer
+        %Transaction{staged: staged} = trnx
         staged
         |> Enum.each(fn %Stage{events: events} -> 
             Enum.each(events, fn event -> 
                 Enum.each(brokers, fn broker -> 
-                    Process.send(broker, event, [])
+                    Signal.Event.Dispatcher.broadcast_event(app, event)
                 end)
             end)
         end)

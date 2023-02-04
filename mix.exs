@@ -37,6 +37,7 @@ defmodule Signal.MixProject do
             {:timex, "~> 3.7.6"},
             {:telemetry, "~> 0.4"},
             {:ex_machina, "2.6.0"},
+            {:phoenix_pubsub, "~> 2.1.1"},
             {:blueprint, in_umbrella: true},
         ]
     end

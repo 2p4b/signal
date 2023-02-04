@@ -61,13 +61,14 @@ defmodule Signal.Command.DispatchTest do
     setup do
         {:ok, _pid} = start_supervised(Store)
         {:ok, _pid} = start_supervised(TestApplication)
+        #{:ok, _} = Application.ensure_all_started(TestApplication)
         :ok
     end
 
     describe "Dispatcher" do
 
         @tag :dispatcher
-        test "should process task" do
+        test "Signal.Command.Dispatcher.execute/1" do
             result =
                 Deposite.new([amount: 5000])
                 |>Task.new([
@@ -80,7 +81,7 @@ defmodule Signal.Command.DispatchTest do
         end
 
         @tag :dispatcher
-        test "should execute task" do
+        test "Signal.Command.Dispatcher.process/1" do
             {:ok, histories} =
                 Deposite.new([amount: 5000])
                 |>Task.new([
@@ -95,12 +96,13 @@ defmodule Signal.Command.DispatchTest do
         end
 
         @tag :dispatcher
-        test "should dispatch and return result" do
+        test "Signal.Command.Dispatcher.dispatch/1" do
 
             command = Deposite.new([amount: 5000])
 
             task = Task.new(command, [
                 await: true,
+                timeout: :infinity,
                 consistent: true,
                 app: {TestApplication, TestApplication}
             ])
@@ -112,6 +114,8 @@ defmodule Signal.Command.DispatchTest do
                 assigns: %{},
                 result: nil,
             }, result)
+
+            assert_receive(%Signal.Event{}, 10000)
         end
 
     end
