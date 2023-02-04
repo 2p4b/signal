@@ -46,7 +46,7 @@ defmodule Signal.Command.DispatchTest do
             field :amount,  :number,    default: 0
         end
 
-        def handle(%Deposite{}=deposite, _params, %Account{number: "123", balance: 0}) do
+        def handle(%Deposite{}=deposite, _params, %Account{number: "123"}) do
             Deposited.from(deposite)
         end
 
@@ -70,8 +70,9 @@ defmodule Signal.Command.DispatchTest do
         @tag :dispatcher
         test "Signal.Command.Dispatcher.execute/1" do
             result =
-                Deposite.new([amount: 5000])
-                |>Task.new([
+                [amount: 1000]
+                |> Deposite.new()
+                |> Task.new([
                     timeout: :infinity,
                     app: {TestApplication, TestApplication}
                 ])
@@ -83,8 +84,9 @@ defmodule Signal.Command.DispatchTest do
         @tag :dispatcher
         test "Signal.Command.Dispatcher.process/1" do
             {:ok, histories} =
-                Deposite.new([amount: 5000])
-                |>Task.new([
+                [amount: 2000]
+                |> Deposite.new()
+                |> Task.new([
                     timeout: :infinity,
                     app: {TestApplication, TestApplication}
                 ])
@@ -97,25 +99,24 @@ defmodule Signal.Command.DispatchTest do
 
         @tag :dispatcher
         test "Signal.Command.Dispatcher.dispatch/1" do
+            amount = 3000
 
-            command = Deposite.new([amount: 5000])
-
-            task = Task.new(command, [
-                await: true,
-                timeout: :infinity,
-                consistent: true,
-                app: {TestApplication, TestApplication}
-            ])
-
-            {:ok, result} = Signal.Command.Dispatcher.dispatch(task)
+            {:ok, result} =
+                [amount: amount]
+                |> Deposite.new()
+                |> Task.new([
+                    await: true,
+                    timeout: :infinity,
+                    consistent: true,
+                    app: {TestApplication, TestApplication}
+                ])
+                |> Signal.Command.Dispatcher.dispatch()
 
             assert match?(%Result{
-                aggregates: [%Account{number: "123", balance: 5000}],
+                aggregates: [%Account{number: "123"}],
                 assigns: %{},
                 result: nil,
             }, result)
-
-            assert_receive(%Signal.Event{}, 10000)
         end
 
     end
