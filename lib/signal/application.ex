@@ -53,6 +53,11 @@ defmodule Signal.Application do
                 |> Signal.Event.Dispatcher.subscribe_to_events(opts)
             end
 
+            def unsubscribe() do
+                __MODULE__
+                |> Signal.Event.Dispatcher.unsubscribe_from_events()
+            end
+
             def store(), do: @store
 
             def get_event(number, _opts \\ []) do
