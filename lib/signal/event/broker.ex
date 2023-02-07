@@ -304,6 +304,7 @@ defmodule Signal.Event.Broker do
         params = %{
             app: app,
             ack: ack,
+            syn: ack,
             uuid: uuid,
             node: Node.self(),
             track: track,

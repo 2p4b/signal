@@ -76,6 +76,12 @@ defmodule Signal.Tracker do
         |> Phoenix.Tracker.untrack(self(), handle, id)
     end
 
+    def update(app, pid, handle, id, data) do
+        app
+        |> Module.concat(__MODULE__)
+        |> Phoenix.Tracker.update(pid, handle, id, data)
+    end
+
     def list(app, handle) do
         app
         |> Module.concat(__MODULE__)
