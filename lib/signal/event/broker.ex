@@ -140,9 +140,7 @@ defmodule Signal.Event.Broker do
                 app: broker.app,
                 handle: broker.handle,
                 pushed: event.topic,
-                number: event.number,
-                topics: topics,
-                streams: streams,
+                number: event.number
             ]
             |> Signal.Logger.info(label: :broker)
 
