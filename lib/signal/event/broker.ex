@@ -107,6 +107,7 @@ defmodule Signal.Event.Broker do
                 Adapter.handler_acknowledge(broker.app, handle, number)
 
             [
+                app: broker.app,
                 handle: broker.handle,
                 consumer: broker.consumer.uuid,
                 ack: number
@@ -135,6 +136,15 @@ defmodule Signal.Event.Broker do
         %Broker{consumer: %{streams: streams, topics: topics}, ack: ack} = broker
 
         if Helper.event_is_valid?(event, streams, topics) and number > ack do
+            [
+                app: broker.app,
+                handle: broker.handle,
+                pushed: event.topic,
+                number: event.number,
+                topics: topics,
+                streams: streams,
+            ]
+            |> Signal.Logger.info(label: :broker)
 
             broker.app
             |> Signal.PubSub.broadcast(broker.consumer.uuid, event)
@@ -266,9 +276,8 @@ defmodule Signal.Event.Broker do
         broker
     end
 
-    def sched_next(%Broker{buffer: [event | buffer], consumer: consumer}=broker) do
-        broker.app
-        |> Signal.PubSub.broadcast(consumer.uuid, event)
+    def sched_next(%Broker{buffer: [event | buffer]}=broker) do
+        send(self(), {:push, event})
         %Broker{broker | buffer: buffer, ready: false}
     end
 
@@ -335,6 +344,7 @@ defmodule Signal.Event.Broker do
     @impl true
     def terminate(reason, broker) do
         [
+            app: broker.app,
             handle: broker.handle,
             status: :terminated,
             reason: reason,

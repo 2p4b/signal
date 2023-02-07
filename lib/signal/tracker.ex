@@ -30,7 +30,6 @@ defmodule Signal.Tracker do
                 case topic do
                     "broker" ->
                         nil
-                        #IO.inspect([:join, meta], label: key)
 
                     "consumer" ->
                         meta.app
@@ -42,7 +41,6 @@ defmodule Signal.Tracker do
                 case topic do
                     "broker" ->
                         nil
-                        #IO.inspect([:leave, meta], label: key)
 
                     "consumer" ->
                         broker =
