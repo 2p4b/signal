@@ -4,7 +4,7 @@ defmodule Signal.Handler do
     alias Signal.Logger
     alias Signal.Handler
 
-    defstruct [:app, :state, :module, :subscription]
+    defstruct [:app, :state, :module, :consumer]
 
     defmacro __using__(opts) do
         app = Keyword.get(opts, :application)
@@ -85,47 +85,36 @@ defmodule Signal.Handler do
     def init(module, opts) do
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
-        start = Keyword.get(opts, :start, :current)
+        start = Keyword.get(opts, :start, :resume)
         application = Keyword.get(opts, :application)
-        tenant = Keyword.get(opts, :tenant, application)
-        app = {application, tenant}
-        {:ok, subscription} = subscribe(app, name, topics, start)
+        consumer = subscribe(application, name, topics, start)
         init_params = []
-        case Kernel.apply(module, :init, [subscription, init_params]) do
+        case Kernel.apply(module, :init, [consumer, init_params]) do
             {:ok, state} ->
-                params = [state: state, app: app, subscription: subscription, module: module]
+                params = [state: state, app: application, consumer: consumer, module: module]
                 {:ok, struct(__MODULE__, params)} 
             error -> 
                 error
         end
     end
 
-    def subscribe(app, name, topics, start \\ :current) do
-        {application, tenant} = app
-        opts = [topics: topics, tenant: tenant, start: start]
-        Enum.find_value(1..5, fn _x -> 
-            case Signal.Event.Broker.subscribe(application, name, opts) do
-                {:ok, subscription} ->
-                    {:ok, subscription}
-                _ ->
-                    Process.sleep(50)
-                    false
-            end
-        end)
+    def subscribe(app, handle, topics, _start \\ :current) do
+        opts = [topics: topics]
+        Signal.Event.Broker.subscribe(app, handle, opts)
     end
 
 
     def handle_event(handler, event) do
         %Event{number: number} = event
         %Handler{
-            app: app, 
+            app: application, 
             module: module, 
             state: state, 
-            subscription: %{handle: handle}
+            consumer: consumer,
         } = handler
-        {application, _tenant} = app
 
         [
+            app: application,
             handler: module,
             processing: event.topic,
             topic: event.topic,
@@ -145,13 +134,13 @@ defmodule Signal.Handler do
 
                 response when not is_tuple(response) ->
                     application
-                    |> Signal.Event.Broker.acknowledge(handle, number)
+                    |> Signal.Event.Broker.acknowledge(consumer, number)
                     {:noreply, response}
 
 
                response -> 
                     application
-                    |> Signal.Event.Broker.acknowledge(handle, number)
+                    |> Signal.Event.Broker.acknowledge(consumer, number)
                     response
             end
 

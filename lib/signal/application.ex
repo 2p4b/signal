@@ -30,10 +30,11 @@ defmodule Signal.Application do
 
                 default_args = [app: app, store: @store]
 
-                bus = Signal.Event.Dispatcher.event_bus(__MODULE__)
+                bus = Signal.PubSub.event_bus(__MODULE__)
 
                 children = [
                     { Phoenix.PubSub, name: bus},
+                    { Signal.Tracker, [app: __MODULE__]},
                     { Signal.Store.Writer, [app: __MODULE__, store: @store]},
                     { Task.Supervisor, supervisor_args(Task, name)},
                     { Signal.Registry.Supervisor, default_args},
@@ -50,12 +51,12 @@ defmodule Signal.Application do
             def subscribe(opts\\[]) do
                 opts = Keyword.merge(opts, cast: true)
                 __MODULE__
-                |> Signal.Event.Dispatcher.subscribe_to_events(opts)
+                |> Signal.PubSub.subscribe_to_events(opts)
             end
 
             def unsubscribe() do
                 __MODULE__
-                |> Signal.Event.Dispatcher.unsubscribe_from_events()
+                |> Signal.PubSub.unsubscribe_from_events()
             end
 
             def store(), do: @store

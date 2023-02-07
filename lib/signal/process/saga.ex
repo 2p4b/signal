@@ -53,14 +53,10 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def handle_info(:load, %Saga{}=saga) do
-
         %Saga{app: app, module: module, id: id, namespace: namespace}=saga
-
-        {application, _tenant} = app
-
         process_uuid = Signal.Effect.uuid(namespace, id) 
         {version, state} =
-            case Signal.Store.Adapter.get_effect(application, process_uuid) do
+            case Signal.Store.Adapter.get_effect(app, process_uuid) do
                 %Signal.Effect{data: data, number: number}->
                     {:ok, state} = 
                         module
@@ -78,6 +74,7 @@ defmodule Signal.Process.Saga do
             end
 
         [
+            app: app,
             type: module,
             sid: id,
             status: :init,
@@ -112,6 +109,7 @@ defmodule Signal.Process.Saga do
         ]
 
         [
+            app: saga.app,
             type: module,
             id: saga.id,
             cause: event.topic,
@@ -175,6 +173,7 @@ defmodule Signal.Process.Saga do
         %Saga{module: module, state: state} = saga
 
         [
+            app: saga.app,
             type: module,
             sid: saga.id,
             status: :running,
@@ -191,8 +190,7 @@ defmodule Signal.Process.Saga do
     end
 
     defp execute(command, %Saga{app: app}, opts) do
-        {application, _tenant}  = app
-        Kernel.apply(application, :dispatch, [command, opts])
+        Kernel.apply(app, :dispatch, [command, opts])
     end
 
     defp acknowledge_event_status(%Saga{id: id, module: router}=saga, number, status) do
@@ -201,19 +199,17 @@ defmodule Signal.Process.Saga do
     end
 
     defp save_saga_state(%Saga{app: app, ack: ack}=saga) do
-        {application, _tenant}  = app
         effect = create_effect(saga, ack)
         :ok =
-            application
+            app
             |> Signal.Store.Adapter.save_effect(effect)
         saga
     end
 
     defp shutdown_saga(%Saga{app: app, namespace: namespace, id: id}=saga) do
-        {application, _tenant}  = app
         process_uuid  = Signal.Effect.uuid(namespace, id)
         :ok =
-            application
+            app
             |> Signal.Store.Adapter.delete_effect(process_uuid)
         saga
     end
@@ -248,6 +244,7 @@ defmodule Signal.Process.Saga do
 
             {:shutdown, state} ->
                 [
+                    app: saga.app,
                     type: saga.module,
                     sid: saga.id,
                     event: event.topic,

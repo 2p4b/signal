@@ -1,9 +1,9 @@
 defmodule Signal.Store.Writer do
+    alias Signal.PubSub
     alias Signal.Transaction
     alias Signal.Store.Writer
     alias Signal.Stream.Stage
     alias Signal.Store.Adapter
-    alias Signal.Event.Dispatcher
 
     use GenServer
 
@@ -60,7 +60,7 @@ defmodule Signal.Store.Writer do
         staged
         |> Enum.each(fn %Stage{events: events} -> 
             Enum.each(events, fn event -> 
-                Dispatcher.broadcast_event(app, event)
+                PubSub.broadcast_event(app, event)
             end)
         end)
     end

@@ -6,7 +6,7 @@ defmodule Signal.Process.Router do
     alias Signal.Process.Router
     alias Signal.Process.Supervisor
 
-    defstruct [:name, :processes, :app, :topics, :subscription, :module]
+    defstruct [:name, :processes, :app, :topics, :consumer, :module]
 
     defmodule Proc do
         alias Signal.Process.Router
@@ -109,18 +109,17 @@ defmodule Signal.Process.Router do
 
     def init(opts) do
         application = Keyword.get(opts, :application)
-        app = {application, Keyword.get(opts, :app, application)}
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
         Process.send(self(), :boot, [])
         params = [
-            app: app, 
+            app: application, 
             name: name, 
             processes: [],
             topics: topics,
             module: Keyword.get(opts, :module),
         ]
-        {:ok, struct(__MODULE__, Keyword.merge(opts, params) )}
+        {:ok, struct(__MODULE__, Keyword.merge(opts, params))}
     end
 
     def handle_boot(%Router{}=router) do
@@ -444,8 +443,9 @@ defmodule Signal.Process.Router do
                 nil
 
             %{queue: [number|_]} ->
-                {application, _tenant} = router.app
-                event = Signal.Store.Adapter.get_event(application, number)
+                event = 
+                    router.app
+                    |> Signal.Store.Adapter.get_event(number)
                 Process.send(self(), event, [])
         end
 
@@ -455,17 +455,17 @@ defmodule Signal.Process.Router do
     defp acknowledge(%Router{}=router, %Event{}=event) do
         %Event{number: number} = event
         %Router{
-            app: {application, _tenant}, 
-            subscription: sub 
+            app: application, 
+            consumer:  consumer
         } = router
 
-        if number > sub.ack  do
+        if number > consumer.ack  do
             [process: router.name, ack: number]
             |> Signal.Logger.info(label: :router)
 
             application
-            |> Broker.acknowledge(sub.handle, number)
-            %Router{router| subscription: Map.put(sub, :ack, number)}
+            |> Broker.acknowledge(consumer, number)
+            %Router{router| consumer: Map.put(consumer, :ack, number)}
         else
             router
         end
@@ -474,9 +474,9 @@ defmodule Signal.Process.Router do
     defp save_state(%Router{}=router, processes) do
 
         %Router{
-            app: {application, _tenant},
+            app: application,
             name: name, 
-            subscription: %{ack: ack}
+            consumer: %{ack: ack}
         } = router
 
         data = dump_processes(processes)
@@ -554,19 +554,19 @@ defmodule Signal.Process.Router do
     end
 
     defp subscribe_router(%Router{}=router, start) do
-        %Router{app: {application, _tenant}, name: name, topics: topics}=router
+        %Router{app: application, name: name, topics: topics}=router
 
-        subopts = [topics: topics, start: start]
+        subopts = [topics: topics, ack: start]
 
-        {:ok, sub} = 
+        consumer = 
             application
             |> Broker.subscribe(name, subopts)
 
-        %Router{router | subscription: sub}
+        %Router{router | consumer: consumer}
     end
 
     defp router_effect(%Router{}=router) do
-        %Router{app: {app, _tenant}, name: name}=router
+        %Router{app: app, name: name}=router
 
         router_uuid = Signal.Effect.uuid("Signal.Process", name) 
         case Signal.Store.Adapter.get_effect(app, router_uuid) do

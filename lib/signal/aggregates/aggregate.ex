@@ -10,11 +10,13 @@ defmodule Signal.Aggregates.Aggregate do
     defstruct [
         :id,
         :app, 
+        :ref,
+        :uuid,
         :store,
         :state, 
         :timeout,
         :stream, 
-        :subscription,
+        :consumer,
         ack: 0, 
         version: 0,
         awaiting: [],
@@ -28,14 +30,36 @@ defmodule Signal.Aggregates.Aggregate do
             name: Keyword.get(opts, :name), 
             hibernate_after: Timer.min(60)
         ]
+        opts = Keyword.merge(opts, uuid: UUID.uuid4())
         GenServer.start_link(__MODULE__, opts, aggregate_opts)
     end
 
     @impl true
     def init(opts) do
-        Process.send(self(), :init, [])
-        {:ok, struct(__MODULE__, opts), Timer.hours(1)}
+        {:ok, struct(__MODULE__, opts), {:continue, :load_aggregate}}
     end
+
+    @impl true
+    def handle_continue(:load_aggregate, %Aggregate{}=aggregate) do
+        %Aggregate{
+            app: {application, _tenant}, 
+            stream: {stream_id, _}
+        } = aggregate
+
+        record = 
+            application
+            |> Signal.Store.Adapter.get_snapshot(stream_id)
+
+        aggregate = 
+            if is_nil(record) do
+                aggregate
+            else
+                load_state(aggregate, record)
+            end
+
+        {:noreply, listen(aggregate), Timer.seconds(30)}
+    end
+
 
     @impl true
     def handle_call({:state, opts}, from, %Aggregate{}=aggregate) do
@@ -92,27 +116,6 @@ defmodule Signal.Aggregates.Aggregate do
             waiter = {from, ref, version}
             {:noreply, %Aggregate{aggregate | awaiting: waiting ++ [waiter]}, timeout}
         end
-    end
-
-    @impl true
-    def handle_info(:init, %Aggregate{}=aggregate) do
-        %Aggregate{
-            app: {application, _tenant}, 
-            stream: {stream_id, _}
-        } = aggregate
-
-        record = 
-            application
-            |> Signal.Store.Adapter.get_snapshot(stream_id)
-
-        aggregate = 
-            if is_nil(record) do
-                aggregate
-            else
-                load_state(aggregate, record)
-            end
-
-        {:noreply, listen(aggregate), aggregate.timeout}
     end
 
     @impl true
@@ -342,13 +345,13 @@ defmodule Signal.Aggregates.Aggregate do
     defp acknowledge(%Aggregate{}=aggregate, %Event{number: number}) do
         %Aggregate{
             app: app, 
-            stream: {stream_id, _}
+            consumer: consumer,
         } = aggregate
 
         {application, _tenant} = app
 
         application
-        |> Signal.Event.Broker.acknowledge(stream_id, number)
+        |> Signal.Event.Broker.acknowledge(consumer, number)
 
         aggregate
     end
@@ -397,9 +400,9 @@ defmodule Signal.Aggregates.Aggregate do
         {application, _tenant} = app
         {stream_id, _stream_type} = stream
 
-        streams = List.wrap(stream)
+        streams = List.wrap(stream_id)
 
-        start = 
+        ack = 
             if vsn === 0 do
                 0
             else
@@ -409,13 +412,13 @@ defmodule Signal.Aggregates.Aggregate do
                 start
             end
 
-        opts = [start: start, track: false, streams: streams]
+        opts = [ack: ack, track: false, streams: streams]
 
-        {:ok, subscription} = 
+        consumer = 
             application
             |> Signal.Event.Broker.subscribe(stream_id, opts)
 
-        %Aggregate{aggr| subscription: subscription}
+        %Aggregate{aggr| consumer: consumer}
     end
 
     @impl true

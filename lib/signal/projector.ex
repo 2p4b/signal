@@ -5,7 +5,7 @@ defmodule Signal.Projector do
     alias Signal.Projector
     alias Signal.Event.Broker
 
-    defstruct [:app, :name, :module, :subscription]
+    defstruct [:app, :name, :module, :consumer]
 
     defmacro __using__(opts) do
         app = Keyword.get(opts, :application)
@@ -62,42 +62,33 @@ defmodule Signal.Projector do
     def init(module, opts) do
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
+        start = Keyword.get(opts, :start, :resume)
         application = Keyword.get(opts, :application)
-        start = Keyword.get(opts, :start, :current)
-        tenant = Keyword.get(opts, :tenant, application)
-        app = {application, tenant}
-        sub_opts = [
-            start: start,
-            topics: topics, 
-            tenant: tenant,
-        ]
-        {:ok, sub} = subscribe(app, name, sub_opts)
-        params = [name: name, app: app, module: module, subscription: sub]
-        {:ok, struct(__MODULE__, params)} 
+        consumer = subscribe(application, name, topics, start)
+        init_params = []
+        case Kernel.apply(module, :init, [consumer, init_params]) do
+            {:ok, state} ->
+                params = [state: state, app: application, consumer: consumer, module: module]
+                {:ok, struct(__MODULE__, params)} 
+            error -> 
+                error
+        end
     end
 
-    def subscribe(app, name, opts) do
-        {application, _tenant} = app
-        Enum.find_value(1..5, fn _x -> 
-            case Broker.subscribe(application, name, opts) do
-                {:ok, subscription} ->
-                    {:ok, subscription}
-                _ ->
-                    Process.sleep(50)
-                    false
-            end
-        end)
+    def subscribe(app, handle, topics, _start \\ :current) do
+        opts = [topics: topics]
+        Signal.Event.Broker.subscribe(app, handle, opts)
     end
 
     def handle_event(%Projector{}=projector, %Event{number: number}=event) do
         %Projector{
             app: app, 
             module: module, 
-            subscription: %{handle: handle}
+            consumer: consumer
         } = projector
-        {application, _tenant} = app
 
         [
+          app: app,
           projector: module,
           projecting: event.topic,
           number: event.number,
@@ -108,8 +99,8 @@ defmodule Signal.Projector do
         response = Kernel.apply(module, :project, args)
         case handle_response(projector, response) do
             {:noreply, handler} ->
-                application
-                |> Broker.acknowledge(handle, number)
+                app
+                |> Broker.acknowledge(consumer, number)
                 {:noreply, handler}
 
             response ->            
