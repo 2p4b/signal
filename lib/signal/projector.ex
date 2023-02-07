@@ -65,14 +65,8 @@ defmodule Signal.Projector do
         start = Keyword.get(opts, :start, :resume)
         application = Keyword.get(opts, :application)
         consumer = subscribe(application, name, topics, start)
-        init_params = []
-        case Kernel.apply(module, :init, [consumer, init_params]) do
-            {:ok, state} ->
-                params = [state: state, app: application, consumer: consumer, module: module]
-                {:ok, struct(__MODULE__, params)} 
-            error -> 
-                error
-        end
+        params = [app: application, name: name, consumer: consumer, module: module]
+        {:ok, struct(__MODULE__, params)} 
     end
 
     def subscribe(app, handle, topics, _start \\ :current) do
