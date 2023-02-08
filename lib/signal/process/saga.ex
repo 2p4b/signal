@@ -29,8 +29,7 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def init(opts) do
-        Process.send(self(), :load, [])
-        {:ok, struct(__MODULE__, opts)}
+        {:ok, struct(__MODULE__, opts), {:continue, :load_effect}}
     end
 
     def start(app, {id, module}, index \\ 0) do
@@ -52,7 +51,7 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info(:load, %Saga{}=saga) do
+    def handle_continue(:load_effect, %Saga{}=saga) do
         %Saga{app: app, module: module, id: id, namespace: namespace}=saga
         process_uuid = Signal.Effect.uuid(namespace, id) 
         {version, state} =
