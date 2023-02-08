@@ -183,9 +183,7 @@ defmodule Signal.Process.Saga do
         ]
         |> Signal.Logger.info(label: :saga)
 
-        metadata = Event.metadata(event)
-
-        reply = Kernel.apply(module, :apply, [Event.data(event), metadata, state])
+        reply = Kernel.apply(module, :apply, [Event.data(event), state])
 
         handle_reply(saga, event, reply)
     end
