@@ -111,7 +111,6 @@ defmodule Signal.Process.Router do
         application = Keyword.get(opts, :application)
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
-        Process.send(self(), :boot, [])
         params = [
             app: application, 
             name: name, 
@@ -119,7 +118,7 @@ defmodule Signal.Process.Router do
             topics: topics,
             module: Keyword.get(opts, :module),
         ]
-        {:ok, struct(__MODULE__, Keyword.merge(opts, params))}
+        {:ok, struct(__MODULE__, Keyword.merge(opts, params)), {:continue, :boot}}
     end
 
     def handle_boot(%Router{}=router) do

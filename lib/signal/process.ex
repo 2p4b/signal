@@ -50,7 +50,7 @@ defmodule Signal.Process do
 
 
             @impl true
-            def handle_info(:boot, router) do
+            def handle_continue(:boot, router) do
                 Router.handle_boot(router)
             end
 
