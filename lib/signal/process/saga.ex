@@ -122,11 +122,8 @@ defmodule Signal.Process.Saga do
                 {:noreply, acknowledge_event_status(saga, number, :running)}
 
             {:error, error}->
-                params = %{
-                    error: error,
-                    event: Event.data(event),
-                }
-                reply = Kernel.apply(module, :error, [command, params, state]) 
+                args = [{command, error}, event, state]
+                reply = Kernel.apply(module, :handle_error, args) 
                 handle_reply(saga, event, reply)
 
             error ->
@@ -181,7 +178,7 @@ defmodule Signal.Process.Saga do
         ]
         |> Signal.Logger.info(label: :saga)
 
-        reply = Kernel.apply(module, :apply, [Event.data(event), state])
+        reply = Kernel.apply(module, :handle_event, [Event.data(event), state])
 
         handle_reply(saga, event, reply)
     end
