@@ -40,16 +40,6 @@ defmodule Signal.Process.Saga do
         saga
     end
 
-    def position(app, {id, module}) do
-        Supervisor.prepare_saga(app, {id, module})    
-        |> GenServer.call(:position, 5000)
-    end
-
-    @impl true
-    def handle_call(:position, _from, %Saga{version: version}=saga) do
-        {:reply, version, saga}
-    end
-
     @impl true
     def handle_continue(:load_effect, %Saga{}=saga) do
         %Saga{app: app, module: module, id: id, namespace: namespace}=saga
