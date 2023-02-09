@@ -230,7 +230,7 @@ defmodule Signal.Stream.Producer do
         %Producer{app: app, stream: stream, index: index} = producer
         state_opts =
             if sync do
-                [index: index, timeout: :infinity]
+                [version: index, timeout: :infinity]
             else
                 []
             end
