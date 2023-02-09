@@ -229,10 +229,21 @@ defmodule Signal.Stream.Producer do
     defp aggregate_state(%Producer{}=producer, sync) do
         %Producer{app: app, stream: stream, index: index} = producer
         state_opts =
-            if sync do
-                [version: index, timeout: :infinity]
-            else
-                []
+            case sync do
+                false ->
+                    []
+
+                true ->
+                    [version: index, timeout: Timer.seconds(5)]
+
+                :infinity ->
+                    [version: index, timeout: :infinity]
+
+                value when is_integer(value) and value > 0 ->
+                    [version: index, timeout: value]
+
+                _  ->
+                    raise(ArgumentError, "invalid stream sync: #{sync}")
             end
         Signal.Aggregates.Supervisor.prepare_aggregate(app, stream)
         |> Signal.Aggregates.Aggregate.state(state_opts)
