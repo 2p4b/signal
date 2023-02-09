@@ -79,7 +79,10 @@ defmodule Signal.Application do
                 GenServer.call(process, {:alive, id}, 5000)
             end
 
-            def aggregate(stream, opts\\[]) do
+            def aggregate(stream, opts\\[]) when is_tuple(stream) and is_list(opts) do
+                opts = Keyword.put_new_lazy(opts, :version, fn -> 
+                    stream_position(elem(stream, 0), [])
+                end)
                 tenant = Keyword.get(opts, :tenant, __MODULE__)
                 {__MODULE__, tenant}
                 |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
