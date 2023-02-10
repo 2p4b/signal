@@ -93,8 +93,8 @@ defmodule Signal.Event.Broker do
     end
 
     @impl true
-    def handle_info({:ack, uuid, number}, %Broker{consumer: %{uuid: cuuid}, ack: ack}=broker) 
-    when uuid === cuuid and number > ack do
+    def handle_info({:ack, id, number}, %Broker{consumer: %{uuid: cuuid, syn: syn}}=broker) 
+    when id === cuuid and  number === syn do
 
         %Broker{handle: handle, ack: b_ack} = broker
 
@@ -114,7 +114,7 @@ defmodule Signal.Event.Broker do
             ]
             |> Signal.Logger.info(label: :broker)
 
-            {:noreply, %Broker{broker| ack: number}}
+            {:noreply, broker}
         else
             {:noreply,  broker}
         end
@@ -210,12 +210,14 @@ defmodule Signal.Event.Broker do
         {:noreply, broker}
     end
 
-    defp handle_consumer_ack(%Broker{}=broker, number) do
+    defp handle_consumer_ack(%Broker{consumer: %{syn: syn}}=broker, number) 
+    when syn === number do
         %Broker{consumer: consumer, buffer: buffer} = broker
 
         buffer = Enum.filter(buffer, &(Map.get(&1, :number) > number))
 
         %Broker{broker | 
+            ack: number,
             ready: true,
             buffer: buffer, 
             consumer: Map.put(consumer, :ack, number)
