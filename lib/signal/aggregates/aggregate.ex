@@ -353,7 +353,7 @@ defmodule Signal.Aggregates.Aggregate do
         application
         |> Signal.Event.Broker.acknowledge(consumer, number)
 
-        aggregate
+        %{aggregate| ack: number, consumer: %{ consumer| ack: number} }
     end
 
     defp snapshot(%Aggregate{}=aggregate) do
