@@ -291,16 +291,45 @@ defmodule Signal.Event.Broker do
         topics = Keyword.get(opts, :topics, [])
         streams = Keyword.get(opts, :streams, [])
         ack = 
-            if Keyword.has_key?(opts, :ack)  do
-                Keyword.get(opts, :ack)
-            else
-                #recover last ack
-                case Adapter.handler_position(app, handle) do
-                    nil ->
-                        0
-                    value -> 
-                        value
-                end
+            case Adapter.handler_position(app, handle) do
+                nil ->
+                    value = Keyword.get(opts, :start)
+                    cond do
+                        is_nil(value) or value in [:cursor] ->
+                            Signal.Store.Adapter.get_cursor(app)
+
+                        value in [:beginning]
+                            0
+
+                        is_integer(value) and value >= 0 ->
+                            value
+
+                        true ->
+                            message = """
+                            invalid consumer start value
+                                handle: #{handle}
+                                opts: #{inspect(opts)}
+
+                                valid start: 
+                                    :cursor, :beginning, non_negative_integer() 
+
+                                    :cursor
+                                        if the handle does not exist start processing
+                                        events from the current store cursor position
+
+                                    :beginning
+                                        if the handle does not exist start processing
+                                        events from the beginning or 0
+
+                                    non_negative_integer()
+                                        if the handle does not exists start processing
+                                        events from non_negative_integer() value
+                            """
+                            raise(ArgumentError, [message: message])
+                    end
+
+                value -> 
+                    value
             end
 
         params = %{

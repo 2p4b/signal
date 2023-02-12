@@ -555,7 +555,7 @@ defmodule Signal.Process.Router do
     defp subscribe_router(%Router{}=router, start) do
         %Router{app: application, name: name, topics: topics}=router
 
-        subopts = [topics: topics, ack: start]
+        subopts = [topics: topics, start: start]
 
         consumer = 
             application

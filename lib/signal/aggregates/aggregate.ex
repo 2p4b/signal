@@ -402,7 +402,7 @@ defmodule Signal.Aggregates.Aggregate do
 
         streams = List.wrap(stream_id)
 
-        ack = 
+        start = 
             if vsn === 0 do
                 0
             else
@@ -412,7 +412,7 @@ defmodule Signal.Aggregates.Aggregate do
                 start
             end
 
-        opts = [ack: ack, track: false, streams: streams]
+        opts = [start: start, track: false, streams: streams]
 
         consumer = 
             application

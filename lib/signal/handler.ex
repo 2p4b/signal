@@ -9,8 +9,8 @@ defmodule Signal.Handler do
     defmacro __using__(opts) do
         app = Keyword.get(opts, :application)
         name = Keyword.get(opts, :name)
+        start = Keyword.get(opts, :start)
         topics = Keyword.get(opts, :topics)
-        start = Keyword.get(opts, :start, :current)
         quote do
             use GenServer, restart: :transient
             alias Signal.Event
@@ -84,8 +84,8 @@ defmodule Signal.Handler do
 
     def init(module, opts) do
         name = Keyword.get(opts, :name)
+        start = Keyword.get(opts, :start)
         topics = Keyword.get(opts, :topics)
-        start = Keyword.get(opts, :start, :resume)
         application = Keyword.get(opts, :application)
         consumer = subscribe(application, name, topics, start)
         init_params = []
@@ -98,8 +98,8 @@ defmodule Signal.Handler do
         end
     end
 
-    def subscribe(app, handle, topics, _start \\ :current) do
-        opts = [topics: topics]
+    def subscribe(app, handle, topics, start) do
+        opts = [topics: topics, start: start]
         Signal.Event.Broker.subscribe(app, handle, opts)
     end
 
