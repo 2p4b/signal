@@ -28,20 +28,16 @@ defmodule Signal.Tracker do
         for {topic, {joins, leaves}} <- diff do
             for {_key, meta} <- joins do
                 case topic do
-                    "broker" ->
-                        nil
-
                     "consumer" ->
                         meta.app
                         |> Signal.Event.Supervisor.prepare_broker(meta.handle, [])
-                        #|> GenServer.cast({:subscribe, meta})
+
+                    _ ->
+                        nil
                 end
             end
             for {_key, meta} <- leaves do
                 case topic do
-                    "broker" ->
-                        nil
-
                     "consumer" ->
                         broker =
                             meta.app
@@ -51,6 +47,8 @@ defmodule Signal.Tracker do
                             broker
                             |> GenServer.cast({:unsubscribe, meta.uuid})
                         end
+                    _ ->
+                        nil
                 end
             end
         end

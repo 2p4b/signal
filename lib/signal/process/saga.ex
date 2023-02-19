@@ -15,6 +15,7 @@ defmodule Signal.Process.Saga do
         :module, 
         :namespace,
         ack: 0, 
+        timeout: 5000,
         status: :running,
         version: 0,
     ]
@@ -42,6 +43,10 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def handle_continue(:load_effect, %Saga{}=saga) do
+        [{_, %{timeout: timeout}}| _] = 
+            saga.app
+            |> Signal.Tracker.list("router")
+            |> Enum.filter(&(elem(&1, 0) === saga.namespace))
         %Saga{app: app, module: module, id: id, namespace: namespace}=saga
         process_uuid = Signal.Effect.uuid(namespace, id) 
         {version, state} =
@@ -62,18 +67,24 @@ defmodule Signal.Process.Saga do
                     {0, initial_state} 
             end
 
+
+        saga = struct(saga, %{
+            ack: version, 
+            state: state, 
+            version: version,
+            timeout: timeout,
+        })
+
         [
-            app: app,
-            type: module,
-            sid: id,
-            status: :init,
-            reduction: version,
+            app: saga.app,
+            type: saga.namespace,
+            loaded: version,
+            sid: saga.id,
+            status: saga.status,
+            timeout: saga.timeout,
         ]
         |> Signal.Logger.info(label: :saga)
-
-        saga = struct(saga, %{ack: version, version: version, state: state})
-
-        {:noreply, saga}
+        {:noreply, saga, saga.timeout}
     end
 
     @impl true
@@ -108,7 +119,10 @@ defmodule Signal.Process.Saga do
 
         case execute(command, saga, opts) do
             {:ok, %Result{}}->
-                {:noreply, acknowledge_event_status(saga, number, :running)}
+                saga = 
+                    saga
+                    |> acknowledge_event(number, :running) 
+                {:noreply, saga, saga.timeout}
 
             {:error, error}->
                 args = [{command, error}, event, state]
@@ -121,28 +135,28 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
+    def handle_info(:timeout, %Saga{}=saga) do
+        {:noreply, saga, :hibernate}
+    end
+
+    @impl true
     def handle_cast({:init, index}, %Saga{}=saga) when is_number(index) do
         %Saga{id: id, module: module, ack: ack, version: version} = saga
         saga = 
             cond do
                 ack == 0 and version == 0 and index > ack ->
                     state = Kernel.apply(module, :init, [id])
-                     %Saga{saga | 
-                        ack: 0, 
-                        state: state, 
-                        status: :running,
-                        version: 0, 
-                    }
-
-                index <= ack ->
-                    struct(saga, status: :running)
+                    %Saga{saga | ack: 0, state: state, version: 0}
 
                 true ->
                     saga
             end
+            
+        saga =
+            saga
+            |> acknowledge_event(saga.ack, :running)
 
-        GenServer.cast(module, {:ack, id, saga.ack, saga.status})
-        {:noreply, saga}
+        {:noreply, saga, saga.timeout}
     end
 
     @impl true
@@ -176,7 +190,7 @@ defmodule Signal.Process.Saga do
         Kernel.apply(app, :dispatch, [command, opts])
     end
 
-    defp acknowledge_event_status(%Saga{id: id, module: router}=saga, number, status) do
+    defp acknowledge_event(%Saga{id: id, module: router}=saga, number, status) do
         GenServer.cast(router, {:ack, id, number, status})
         %Saga{saga | ack: number, status: status}
     end
@@ -211,17 +225,23 @@ defmodule Signal.Process.Saga do
 
             {:ok, state} ->
                 saga = 
-                    %Saga{ saga | state: state}
-                    |> acknowledge_event_status(number, :running)
+                    %Saga{saga | state: state}
+                    |> acknowledge_event(number, :running)
                     |> save_saga_state()
-                {:noreply, saga}
+                {:noreply, saga, saga.timeout}
 
             {:sleep, state} ->
                 saga = 
-                    %Saga{ saga | state: state}
-                    |> acknowledge_event_status(number, :sleeping)
+                    %Saga{saga | state: state}
+                    |> acknowledge_event(number, :running)
                     |> save_saga_state()
+                {:noreply, saga, :hibernate}
 
+            {:hibernate, state} ->
+                saga = 
+                    %Saga{saga | state: state}
+                    |> acknowledge_event(number, :sleep)
+                    |> save_saga_state()
                 {:noreply, saga}
 
 
@@ -237,9 +257,9 @@ defmodule Signal.Process.Saga do
                 |> Signal.Logger.info(label: :saga)
 
                 saga =
-                    %Saga{ saga | state: state}
+                    %Saga{saga | state: state}
+                    |> acknowledge_event(number, :shutdown)
                     |> shutdown_saga()
-                    |> acknowledge_event_status(number, :shutdown)
 
                 {:stop, :shutdown, saga}
         end
