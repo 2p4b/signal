@@ -234,12 +234,12 @@ defmodule Signal.Process.Router do
         end
     end
 
-    def handle_ack({:shutdown, id, number}, %Router{}=router) do
+    def handle_ack({:stop, id, number}, %Router{}=router) do
         %Router{processes: processes}=router
         [
             process: router.name,
             saga: id,
-            status: :shutdown,
+            status: :stopped,
         ]
         |> Signal.Logger.info(label: :router)
 

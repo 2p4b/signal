@@ -245,20 +245,20 @@ defmodule Signal.Process.Saga do
                 {:noreply, saga}
 
 
-            {:shutdown, state} ->
+            {:stop, state} ->
                 [
                     app: saga.app,
                     type: saga.module,
                     sid: saga.id,
                     event: event.topic,
-                    status: :shutdown,
+                    status: :stopped,
                     number: event.number,
                 ]
                 |> Signal.Logger.info(label: :saga)
 
                 saga =
                     %Saga{saga | state: state}
-                    |> acknowledge_event(number, :shutdown)
+                    |> acknowledge_event(number, :stop)
                     |> shutdown_saga()
 
                 {:stop, :shutdown, saga}
