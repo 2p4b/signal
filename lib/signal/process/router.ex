@@ -531,10 +531,10 @@ defmodule Signal.Process.Router do
 
     defp stop_process(%Router{}=router, %Proc{pid: pid, ref: ref}=process) 
     when is_pid(pid) do
-        pname = Supervisor.process_name({process.id, process.type})
         Process.demonitor(ref)
+        pname = Supervisor.process_name({process.id, process.type})
         router.app
-        |> Supervisor.stop_child(pname)
+        |> Supervisor.unregister_child(pname)
         %Proc{process | pid: nil, ref: nil, status: :stopped}
     end
 

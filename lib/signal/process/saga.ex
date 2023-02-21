@@ -205,9 +205,7 @@ defmodule Signal.Process.Saga do
 
     defp shutdown_saga(%Saga{app: app, namespace: namespace, id: id}=saga) do
         process_uuid  = Signal.Effect.uuid(namespace, id)
-        :ok =
-            app
-            |> Signal.Store.Adapter.delete_effect(process_uuid)
+        :ok = Signal.Store.Adapter.delete_effect(app, process_uuid)
         saga
     end
 
@@ -261,7 +259,7 @@ defmodule Signal.Process.Saga do
                     |> acknowledge_event(number, :stop)
                     |> shutdown_saga()
 
-                {:stop, :shutdown, saga}
+                {:stop, :normal, saga}
         end
     end
 
