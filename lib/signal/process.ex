@@ -71,18 +71,23 @@ defmodule Signal.Process do
             end
 
             @impl true
-            def handle_cast({:ack, id, number, status}, router) do
-                Router.handle_ack({status, id, number}, router)
+            def handle_info({:start, id, number}, router) do
+                Router.handle_ack({:start, id, number}, router)
             end
 
             @impl true
-            def handle_call({:alive, id}, _from, router) do
-                Router.handle_alive(id, router)
+            def handle_info({:ack, id, number, status}, router) do
+                Router.handle_ack({status, id, number}, router)
             end
 
             @impl true
             def handle_info(:timeout, router) do
                 Router.handle_timeout(router)
+            end
+
+            @impl true
+            def handle_call({:alive, id}, _from, router) do
+                Router.handle_alive(id, router)
             end
 
         end

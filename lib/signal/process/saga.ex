@@ -10,14 +10,17 @@ defmodule Signal.Process.Saga do
 
     defstruct [
         :id, 
-        :app, 
+        :app,
+        :uuid,
         :state, 
+        :start,
         :module, 
-        :namespace,
+        :domain,
+        :channel,
         ack: 0, 
-        timeout: 5000,
-        status: :running,
         version: 0,
+        timeout: 5000,
+        status: :start,
     ]
 
     @doc """
@@ -33,54 +36,35 @@ defmodule Signal.Process.Saga do
         {:ok, struct(__MODULE__, opts), {:continue, :load_effect}}
     end
 
-    def start(app, {id, module}, index \\ 0) do
-        saga = Supervisor.prepare_saga(app, {id, module})    
-        saga
-        |> GenServer.whereis()
-        |> GenServer.cast({:init, index})
-        saga
+    def start(app, {id, module}, opts \\ []) do
+        Supervisor.prepare_saga(app, {id, module}, opts)    
     end
 
     @impl true
     def handle_continue(:load_effect, %Saga{}=saga) do
-        [{_, %{timeout: timeout}}| _] = 
-            saga.app
-            |> Signal.Tracker.list("router")
-            |> Enum.filter(&(elem(&1, 0) === saga.namespace))
-        %Saga{app: app, module: module, id: id, namespace: namespace}=saga
-        process_uuid = Signal.Effect.uuid(namespace, id) 
-        {version, state} =
-            case Signal.Store.Adapter.get_effect(app, process_uuid) do
-                %Signal.Effect{data: data, number: number}->
-                    {:ok, state} = 
-                        module
-                        |> struct([])
-                        |> Codec.load(data)
-
-                    {number, state}
+        saga =
+            case Signal.Store.Adapter.get_effect(saga.app, saga.uuid) do
+                %Signal.Effect{}=effect->
+                    load_saga_state(saga, effect)
 
                 _ -> 
-                    initial_state = 
-                        module
-                        |> Kernel.apply(:init, [id])
+                    state = 
+                        saga.module
+                        |> Kernel.apply(:init, [saga.id])
 
-                    {0, initial_state} 
+                    %Saga{saga| state: state}
             end
 
+        Signal.PubSub.subscribe(saga.app, saga.uuid)
 
-        saga = struct(saga, %{
-            ack: version, 
-            state: state, 
-            version: version,
-            timeout: timeout,
-        })
-
+        router_push(saga, {saga.status, saga.id, saga.start})
         [
             app: saga.app,
-            type: saga.namespace,
-            loaded: version,
             sid: saga.id,
+            spid: saga.uuid,
+            domain: saga.domain,
             status: saga.status,
+            loaded: saga.version,
             timeout: saga.timeout,
         ]
         |> Signal.Logger.info(label: :saga)
@@ -140,7 +124,7 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast({:init, index}, %Saga{}=saga) when is_number(index) do
+    def handle_info({:init, index}, %Saga{}=saga) when is_number(index) do
         %Saga{id: id, module: module, ack: ack, version: version} = saga
         saga = 
             cond do
@@ -160,13 +144,13 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_cast({_action, %Event{number: number}}, %Saga{ack: ack}=saga)
+    def handle_info({_action, %Event{number: number}}, %Saga{ack: ack}=saga)
     when number <= ack do
         {:noreply, saga}
     end
 
     @impl true
-    def handle_cast({action, %Event{}=event}, %Saga{}=saga) 
+    def handle_info({action, %Event{}=event}, %Saga{}=saga) 
     when action in [:apply, :start] do
 
         %Saga{module: module, state: state} = saga
@@ -190,9 +174,9 @@ defmodule Signal.Process.Saga do
         Kernel.apply(app, :dispatch, [command, opts])
     end
 
-    defp acknowledge_event(%Saga{id: id, module: router}=saga, number, status) do
-        GenServer.cast(router, {:ack, id, number, status})
-        %Saga{saga | ack: number, status: status}
+    defp acknowledge_event(%Saga{id: id, version: version}=saga, number, status) do
+        router_push(saga, {:ack, id, number, status})
+        %Saga{saga | ack: number, status: status, version: version + 1}
     end
 
     defp save_saga_state(%Saga{app: app, ack: ack}=saga) do
@@ -203,15 +187,15 @@ defmodule Signal.Process.Saga do
         saga
     end
 
-    defp shutdown_saga(%Saga{app: app, namespace: namespace, id: id}=saga) do
-        process_uuid  = Signal.Effect.uuid(namespace, id)
+    defp shutdown_saga(%Saga{app: app, domain: domain, id: id}=saga) do
+        process_uuid  = Signal.Effect.uuid(domain, id)
         :ok = Signal.Store.Adapter.delete_effect(app, process_uuid)
         saga
     end
 
-    defp create_effect(%Saga{id: id, state: state, namespace: namespace}, ack) do
+    defp create_effect(%Saga{id: id, state: state, domain: domain}, ack) do
         {:ok, data} = Codec.encode(state)
-        [id: id, namespace: namespace, data: data, number: ack]
+        [id: id, domain: domain, data: data, number: ack]
         |> Signal.Effect.new()
     end
 
@@ -261,6 +245,56 @@ defmodule Signal.Process.Saga do
 
                 {:stop, :normal, saga}
         end
+    end
+
+    defp load_saga_state(%Saga{}=saga, %Signal.Effect{data: data}) do
+        %{
+            "ack" => ack, 
+            "state" => payload, 
+            "status" => status,
+            "version" => version, 
+        } = data
+
+        status = String.to_existing_atom(status)
+
+        {:ok, state} = 
+            saga.module
+            |> struct([])
+            |> Codec.load(payload)
+        %Saga{saga | state: state, ack: ack, version: version, status: status}
+    end
+
+    def create_saga_effect(%Saga{}=saga) do
+        %Saga{
+            id: id, 
+            ack: ack, 
+            state: state, 
+            status: status,
+            domain: domain,
+            version: version, 
+        } = saga
+
+        status = String.to_existing_atom(status)
+
+        {:ok, payload} = Codec.encode(state)
+
+        data = %{
+            "id" => id,
+            "ack" => ack, 
+            "domain" => domain,
+            "state" => payload, 
+            "status" => status,
+            "version" => version, 
+        } 
+
+        uuid = Signal.Effect.uuid(domain, id)
+
+        [uuid: uuid, data: data]
+        |> Signal.Effect.new()
+    end
+
+    def router_push(%Saga{}=saga, payload) do
+        Signal.PubSub.broadcast(saga.app, saga.channel, payload)
     end
 
     @impl true
