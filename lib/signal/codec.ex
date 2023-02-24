@@ -2,7 +2,7 @@ defprotocol Signal.Codec do
 
     @fallback_to_any true
 
-    @spec encode(t) :: String.t()
+    @spec encode(t) :: {:ok, map()} | {:error, reason::term()}
     def encode(type)
 
     @spec load(t, p :: map) :: term()
