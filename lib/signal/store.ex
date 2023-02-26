@@ -30,13 +30,13 @@ defmodule Signal.Store do
 
     @callback get_snapshot(id::binary, opts::list) :: snapshot()
 
+    @callback list_events(opts::list) :: list()
+
     @callback read_events(reader::term, opts::list) :: :ok
 
-    @callback list_events(params::list, opts::list) :: list()
+    @callback list_stream_events(sid::binary, opts::list) :: list()
 
     @callback read_stream_events(sid::binary, reader::term, opts::list) :: :ok
-
-    @callback list_stream_events(sid::binary, params::list, opts::list) :: list()
 
     @callback stream_position(id::binary, opts::list) :: integer()
 

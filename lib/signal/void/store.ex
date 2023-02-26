@@ -74,23 +74,23 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
-    def read_events(reader, params, _opts) do
-        Repo.read_events(reader, params)
+    def read_events(reader, opts) do
+        Repo.read_events(reader, opts)
     end
 
     @impl true
-    def read_stream_events(sid, reader, params, _opts) do
-        Repo.read_stream_events(sid, reader, params)
+    def read_stream_events(sid, reader, opts) do
+        Repo.read_stream_events(sid, reader, opts)
     end
 
     @impl true
-    def list_events(params, _opts) do
-        Repo.list_events(params)
+    def list_events(opts) do
+        Repo.list_events(opts)
     end
 
     @impl true
-    def list_stream_events(sid, params, _opts) do
-        Repo.list_stream_events(sid, params)
+    def list_stream_events(sid, opts) do
+        Repo.list_stream_events(sid, opts)
     end
 
     @impl true
