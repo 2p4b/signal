@@ -368,7 +368,7 @@ defmodule Signal.Aggregates.Aggregate do
 
         {stream_id, _type} = stream
 
-        {:ok, data} = Codec.encode(state)
+        {:ok, payload} = Codec.encode(state)
 
         [
             stream: stream,
@@ -376,6 +376,8 @@ defmodule Signal.Aggregates.Aggregate do
             version: version,
         ]
         |> Signal.Logger.info(label: :aggregate)
+
+        data = %{"state" => payload, "ack" => aggregate.consumer.ack}
 
         snapshot = 
             [id: stream_id, version: version, data: data]
@@ -388,7 +390,7 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     def load_state(%Aggregate{state: state}=aggr, %Snapshot{}=snapshot) do
-        %Snapshot{version: version, data: data}=snapshot
+        %Snapshot{version: version, data: %{"state" => data}}=snapshot
         {:ok, state} = Codec.load(state, data)
         %Aggregate{aggr | 
             state: state, 
