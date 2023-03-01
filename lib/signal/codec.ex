@@ -16,6 +16,12 @@ defimpl Signal.Codec, for: Any do
         type.dump(data, [])
     end
 
+    def encode(data) when is_map(data) do
+        data
+        |> Jason.encode!()
+        |> Jason.decode()
+    end
+
     def load(%{__struct__: type}, payload) do
         type.cast(payload, [])
     end

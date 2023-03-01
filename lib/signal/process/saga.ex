@@ -19,6 +19,7 @@ defmodule Signal.Process.Saga do
         :channel,
         ack: 0, 
         version: 0,
+        actions: [],
         timeout: 5000,
         status: :start,
     ]
@@ -72,75 +73,133 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info({:execute, %Event{}=event, command}, %Saga{}=saga) 
-    when is_struct(command) do
-        %Saga{state: state, module: module} = saga
-        %Metadata{
-            uuid: uuid, 
-            number: number, 
-            correlation_id: correlation_id
-        } = Event.metadata(event)
-
-        effects = 
-            saga
-            |> create_effect(number)
-            |> List.wrap()
+    def handle_continue({:dispatch, command, action}, %Saga{}=saga) do
+        action_name = Map.get(action, "name")
+        action_uuid = Map.get(action, "uuid")
+        action_cause = Map.get(action, "cause")
+        causation_id = Map.get(action, "causation_id")
 
         opts = [
-            effects: effects,
-            causation_id: uuid,
-            correlation_id: correlation_id
+            causation_id: causation_id,
+            correlation_id: action_uuid
         ]
 
         [
             app: saga.app,
-            type: module,
-            id: saga.id,
-            cause: event.topic,
+            type: saga.module,
+            sid: saga.id,
+            cause: action_cause,
+            action: action_name,
             dispatch: command.__struct__,
         ]
         |> Signal.Logger.info(label: :saga)
 
         case execute(command, saga, opts) do
-            {:ok, %Result{}}->
+            {:ok, %Result{}} ->
                 saga = 
                     saga
-                    |> acknowledge_event(number, :running) 
+                    |> drop_action(action_uuid)
+                    |> sched_next_action()
                 {:noreply, saga, saga.timeout}
 
-            {:error, error}->
-                args = [{command, error}, event, state]
-                reply = Kernel.apply(module, :handle_error, args) 
-                handle_reply(saga, event, reply)
+            {:error, error} ->
+                continue = {:action_error, action, command, error}
+                {:noreply, saga, {:continue, continue}}
+        end
+    end
 
-            error ->
-                {:stop, error, saga}
+    @impl true
+    def handle_continue({:action_error, action, command, error}, %Saga{}=saga) do
+          action_name = Map.get(action, "name")
+          action_uuid = Map.get(action, "uuid")
+          action_params = Map.get(action, "params")
+
+          args = [{action_name, action_params, command, error}, saga.state]
+
+          case Kernel.apply(saga.module, :handle_error, args)  do
+              {:ok, state} ->
+                  saga = 
+                      %Saga{saga | state: state}
+                      |> drop_action(action_uuid)
+                      |> save_saga_state()
+                      |> sched_next_action()
+                  {:noreply, saga, saga.timeout}
+
+              {action_name, params, state} when is_binary(action)  ->
+                  saga = 
+                      %Saga{saga | state: state}
+                      |> enqueue_action_action(action_uuid, {action_name, params})
+                      |> save_saga_state()
+                  {:noreply, saga, saga.timeout}
+
+              {:retry, name, params, state} ->
+                  saga = 
+                      %Saga{saga | state: state}
+                      |> requeue_action_inplace(action_uuid, {name, params})
+                      |> save_saga_state()
+                      |> sched_next_action()
+                  {:noreply, saga}
+
+                invalid_value ->
+                    raise """
+                        Invalid saga return value
+                        domain: #{saga.domain}
+                        id: #{saga.id}
+                        expected: {:ok, state} | {:retry, {name, params}, state}
+                        got: #{invalid_value}
+                    """
+          end
+    end
+
+    @impl true
+    def handle_info({:action, _id}, %Saga{actions: []}=saga) do
+        {:noreply, saga}
+    end
+
+    @impl true
+    def handle_info({:action, id}, %Saga{actions: [%{"uuid" => uuid}|_]}=saga) 
+    when id !== uuid do
+        {:noreply, saga}
+    end
+
+    @impl true
+    def handle_info({:action, _action_uuid}, %Saga{}=saga) do
+        [action| actions] = saga.actions
+
+        [app: saga.app, action: action]
+        |> Signal.Logger.info(label: :saga)
+
+        action_name = Map.get(action, "name")
+        action_params = Map.get(action, "params")
+
+        action_tuple = {action_name, action_params}
+        args = [action_tuple, saga.state]
+
+        case Kernel.apply(saga.module, :handle_action, args) do
+            {:dispatch, command}->
+                {:noreply, saga, {:continue, {:dispatch, command, action}}}
+
+            {:ok, state}->
+                saga =
+                    %Saga{saga| state: state, actions: actions}
+                    |> save_saga_state()
+                    |> sched_next_action()
+                {:noreply, saga, saga.timeout}
+
+            invalid_value ->
+                raise """
+                    Invalid saga return value
+                    domain: #{saga.domain}
+                    id: #{saga.id}
+                    expected: {:dispatch, command} | {:ok, new_state}
+                    got: #{invalid_value}
+                """
         end
     end
 
     @impl true
     def handle_info(:timeout, %Saga{}=saga) do
         {:noreply, saga, :hibernate}
-    end
-
-    @impl true
-    def handle_info({:init, index}, %Saga{}=saga) when is_number(index) do
-        %Saga{id: id, module: module, ack: ack, version: version} = saga
-        saga = 
-            cond do
-                ack == 0 and version == 0 and index > ack ->
-                    state = Kernel.apply(module, :init, [id])
-                    %Saga{saga | ack: 0, state: state, version: 0}
-
-                true ->
-                    saga
-            end
-            
-        saga =
-            saga
-            |> acknowledge_event(saga.ack, :running)
-
-        {:noreply, saga, saga.timeout}
     end
 
     @impl true
@@ -174,16 +233,31 @@ defmodule Signal.Process.Saga do
         Kernel.apply(app, :dispatch, [command, opts])
     end
 
-    defp acknowledge_event(%Saga{id: id, version: version}=saga, number, status) do
-        router_push(saga, {:ack, id, number, status})
+    defp acknowledge_event(%Saga{ack: ack}=saga, number, _) when ack > number do
+        saga
+    end
+
+    defp acknowledge_event(%Saga{ack: ack}=saga, number, status) when ack == number do
+        %Saga{saga | status: status}
+    end
+
+    defp acknowledge_event(%Saga{version: version}=saga, number, status) do
         %Saga{saga | ack: number, status: status, version: version + 1}
     end
 
-    defp save_saga_state(%Saga{app: app, ack: ack}=saga) do
-        effect = create_effect(saga, ack)
-        :ok =
-            app
-            |> Signal.Store.Adapter.save_effect(effect)
+    defp commit_state_and_notify_router(%Saga{}=saga) do
+        saga
+        |> save_saga_state()
+        |> notify_router_ack()
+    end
+
+    defp notify_router_ack(%Saga{id: id, ack: ack, status: status}=saga) do
+        router_push(saga, {:ack, id, ack, status})
+    end
+
+    defp save_saga_state(%Saga{app: app}=saga) do
+        effect = create_saga_effect(saga)
+        :ok = Signal.Store.Adapter.save_effect(app, effect)
         saga
     end
 
@@ -193,37 +267,35 @@ defmodule Signal.Process.Saga do
         saga
     end
 
-    defp create_effect(%Saga{id: id, state: state, domain: domain}, ack) do
-        {:ok, data} = Codec.encode(state)
-        [id: id, domain: domain, data: data, number: ack]
-        |> Signal.Effect.new()
-    end
-
     defp handle_reply(%Saga{}=saga, %Event{number: number}=event, reply) do
         case reply do 
-            {:dispatch, command, state} ->
-                Process.send(self(), {:execute, event, command}, []) 
-                {:noreply, %Saga{saga | state: state}}
+            {action, params, state} when is_binary(action)  ->
+                saga = 
+                    %Saga{saga| state: state}
+                    |> enqueue_event_action(event, {action, params})
+                    |> acknowledge_event(number, :running)
+                    |> commit_state_and_notify_router()
+                {:noreply, saga}
 
             {:ok, state} ->
                 saga = 
                     %Saga{saga | state: state}
                     |> acknowledge_event(number, :running)
-                    |> save_saga_state()
+                    |> commit_state_and_notify_router()
                 {:noreply, saga, saga.timeout}
 
             {:sleep, state} ->
                 saga = 
                     %Saga{saga | state: state}
                     |> acknowledge_event(number, :running)
-                    |> save_saga_state()
+                    |> commit_state_and_notify_router()
                 {:noreply, saga, :hibernate}
 
             {:hibernate, state} ->
                 saga = 
                     %Saga{saga | state: state}
                     |> acknowledge_event(number, :sleep)
-                    |> save_saga_state()
+                    |> commit_state_and_notify_router()
                 {:noreply, saga}
 
 
@@ -241,9 +313,17 @@ defmodule Signal.Process.Saga do
                 saga =
                     %Saga{saga | state: state}
                     |> acknowledge_event(number, :stop)
-                    |> shutdown_saga()
-
+                    |> commit_state_and_notify_router()
                 {:stop, :normal, saga}
+
+            invalid_value ->
+                raise """
+                    Invalid saga return value
+                    domain: #{saga.domain}
+                    id: #{saga.id}
+                    event: #{inspect(Event.data(event))}
+                    reply: #{inspect(invalid_value)}
+                """
         end
     end
 
@@ -271,20 +351,22 @@ defmodule Signal.Process.Saga do
             state: state, 
             status: status,
             domain: domain,
+            actions: actions,
             version: version, 
         } = saga
 
-        status = String.to_existing_atom(status)
+        status = Atom.to_string(status)
 
         {:ok, payload} = Codec.encode(state)
 
         data = %{
             "id" => id,
             "ack" => ack, 
-            "domain" => domain,
             "state" => payload, 
+            "domain" => domain,
             "status" => status,
             "version" => version, 
+            "actions" => actions,
         } 
 
         uuid = Signal.Effect.uuid(domain, id)
@@ -293,8 +375,108 @@ defmodule Signal.Process.Saga do
         |> Signal.Effect.new()
     end
 
+    defp enqueue_action_action(%Saga{}=saga, action_uuid, {name, params}) do
+        action = Enum.find(saga.actions, &(Map.get(&1, "uuid") == action_uuid))
+        params = encode_action_params(params)
+
+        updated_action = 
+            action
+            |> Map.put("name", name)
+            |> Map.put("params", params)
+
+        actions = 
+            saga
+            |> drop_action(action_uuid)
+            |> Map.get(:actions)
+            |> Enum.concat(List.wrap(updated_action))
+
+        send(self(), {:action, action_uuid})
+        %Saga{saga | actions: actions}
+    end
+
+    defp enqueue_event_action(%Saga{}=saga, event, {name, params}) do
+        action = make_event_action(saga, event, name, params)
+        send(self(), {:action, Map.get(action, "uuid")})
+        %Saga{saga | actions: saga.actions ++ List.wrap(action)}
+    end
+
+    defp requeue_action_inplace(%Saga{}=saga, id, {name, params}) do
+        params = encode_action_params(params)
+        index = 
+            saga.actions
+            |> Enum.find_index(&(Map.get(&1, "uuid") == id))
+
+        action = 
+            saga.actions
+            |> Enum.at(index)
+            |> Map.put("name", name)
+            |> Map.put("params", params)
+            |> Map.update!("tries", &(&1+1))
+
+        actions = List.replace_at(saga.actions, index, action)
+
+        send(self(), {:action, Map.get(action, "uuid")})
+        %Saga{saga | actions: actions}
+    end
+
+    defp sched_next_action(%Saga{actions: []}=saga) do
+        saga
+    end
+
+    defp sched_next_action(%Saga{actions: [action|_]}=saga) do
+        send(self(), {:action, Map.get(action, "uuid")})
+        saga
+    end
+
+    defp drop_action(%Saga{}=saga, id) do
+        actions = 
+            saga.actions
+            |> Enum.filter(&(Map.get(&1, "uuid") !== id))
+        %Saga{saga | actions: actions}
+    end
+
+    defp make_event_action(%Saga{}=saga, %Event{}=event, name, params) do
+        uuid = UUID.uuid5(saga.uuid, event.uuid)
+        %{
+            "name" => name,
+            "uuid" => uuid,
+            "tries" => 0,
+            "cause" => event.topic,
+            "params" => encode_action_params(params),
+            "timestamp" => DateTime.utc_now(),
+            "causation_id" => event.uuid,
+        }
+    end
+
+    defp encode_action_params(params) when is_map(params) do
+        {:ok, data} = Codec.encode(params)
+        data
+    end
+
+    defp encode_action_params(%DateTime{}=v) do
+        String.Chars.to_string(v)
+    end
+
+    defp encode_action_params(v) 
+    when is_binary(v) or is_integer(v) or is_float(v)  do
+        v
+    end
+
+    defp encode_action_params(nil) do
+        nil
+    end
+
+    defp encode_action_params(v) when is_atom(v) do
+        Atom.to_string(v)
+    end
+
+    defp encode_action_params(v) do
+        raise ArgumentError, message: "unable to encode action params:\n #{v}"
+    end
+    
     def router_push(%Saga{}=saga, payload) do
         Signal.PubSub.broadcast(saga.app, saga.channel, payload)
+        saga
     end
 
     @impl true

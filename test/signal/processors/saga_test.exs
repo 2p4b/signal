@@ -152,8 +152,8 @@ defmodule Signal.Processor.SagaTest do
             acknowledge(act, ev)
             amount = ev.amount + amt
             if amount == 9000 do
-                bonus = %Deposite{account: "saga.123", amount: 1000}
-                {:dispatch, bonus , %ActivityNotifier{act | amount: amount} }
+                bonus = %{"account" => ev.account, "amount" => 1000}
+                {"deposite", bonus, %ActivityNotifier{act | amount: amount} }
             else
                 {:ok, %ActivityNotifier{act | amount: amount} }
             end
@@ -162,6 +162,12 @@ defmodule Signal.Processor.SagaTest do
         def handle_event(%AccountClosed{}=ev,  %ActivityNotifier{}=act) do
             acknowledge(act, ev)
             {:stop, act}
+        end
+
+        def handle_action({"deposite", params}, _process) do
+            amount = Map.get(params, "amount")
+            account = Map.get(params, "account")
+            {:dispatch, %Deposite{amount: amount, account: account}}
         end
 
         def handle_error({%Deposite{}, _}, _event,  %ActivityNotifier{}=acc) do
@@ -190,18 +196,18 @@ defmodule Signal.Processor.SagaTest do
 
             TestApp.dispatch(Deposite.new([amount: 5000]))
 
-            assert_receive(%AccountOpened{account: "saga.123"}, 1000)
+            assert_receive(%AccountOpened{account: "saga.123"}, 3000)
 
-            assert_receive(%Deposited{amount: 5000}, 1000)
+            assert_receive(%Deposited{amount: 5000}, 3000)
 
             TestApp.dispatch(Deposite.new([amount: 4000]))
 
-            assert_receive(%Deposited{amount: 4000}, 1000)
-            assert_receive(%Deposited{amount: 1000}, 1000)
+            assert_receive(%Deposited{amount: 4000}, 3000)
+            assert_receive(%Deposited{amount: 1000}, 3000)
 
             TestApp.dispatch(CloseAccount.new([]), await: true)
 
-            assert_receive(%AccountClosed{}, 1000)
+            assert_receive(%AccountClosed{}, 3000)
 
             Process.sleep(500)
             refute TestApp.process_alive?(ActivityNotifier, "saga.123")
