@@ -5,7 +5,6 @@ defmodule Signal.Process.Saga do
     alias Signal.Codec
     alias Signal.Result
     alias Signal.Process.Saga
-    alias Signal.Event.Metadata
     alias Signal.Process.Supervisor
 
     defstruct [
@@ -15,9 +14,10 @@ defmodule Signal.Process.Saga do
         :state, 
         :start,
         :module, 
-        :domain,
+        :namespace,
         :channel,
         ack: 0, 
+        buffer: [],
         version: 0,
         actions: [],
         timeout: 5000,
@@ -42,10 +42,22 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_continue(:load_effect, %Saga{}=saga) do
+    def handle_continue(:load_effect, %Saga{start: start}=saga) do
         saga =
             case Signal.Store.Adapter.get_effect(saga.app, saga.uuid) do
-                %Signal.Effect{}=effect->
+                # incomplete previous process state shutdown
+                # cleanup clean up and start new state
+                # there is a better way to handle this
+                # just nothing comes to mind at the
+                # moment to handle this case more...
+                # gracefully
+                %{data: %{"ack" => ack, "status" => "stop"}} when start > ack ->
+                    # shutdown the saga
+                    shutdown_saga(saga)
+                    saga.module
+                    |> Kernel.apply(:init, [saga.id])
+
+                %Signal.Effect{}=effect ->
                     load_saga_state(saga, effect)
 
                 _ -> 
@@ -63,13 +75,21 @@ defmodule Signal.Process.Saga do
             app: saga.app,
             sid: saga.id,
             spid: saga.uuid,
-            domain: saga.domain,
+            namespace: saga.namespace,
             status: saga.status,
             loaded: saga.version,
             timeout: saga.timeout,
         ]
         |> Signal.Logger.info(label: :saga)
         {:noreply, saga, saga.timeout}
+    end
+
+    def handle_continue(:stop, %Saga{actions: [], status: :stop}=saga) do
+        {:noreply, notify_router_ack(saga)}
+    end
+
+    def handle_continue(:stop, %Saga{}=saga) do
+        {:noreply, saga}
     end
 
     @impl true
@@ -143,12 +163,23 @@ defmodule Signal.Process.Saga do
                 invalid_value ->
                     raise """
                         Invalid saga return value
-                        domain: #{saga.domain}
+                        namespace: #{saga.namespace}
                         id: #{saga.id}
                         expected: {:ok, state} | {:retry, {name, params}, state}
                         got: #{invalid_value}
                     """
           end
+    end
+
+    @impl true
+    def handle_info(:stopped, %Saga{actions: [], status: :stop}=saga) do
+        shutdown_saga(saga)
+        {:stop, :normal, saga}
+    end
+
+    @impl true
+    def handle_info({:action, :stop}, %Saga{actions: [], status: :stop}=saga) do
+        {:noreply, saga, {:continue, :stop}}
     end
 
     @impl true
@@ -189,7 +220,7 @@ defmodule Signal.Process.Saga do
             invalid_value ->
                 raise """
                     Invalid saga return value
-                    domain: #{saga.domain}
+                    namespace: #{saga.namespace}
                     id: #{saga.id}
                     expected: {:dispatch, command} | {:ok, new_state}
                     got: #{invalid_value}
@@ -203,14 +234,13 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info({_action, %Event{number: number}}, %Saga{ack: ack}=saga)
+    def handle_info(%Event{number: number}, %Saga{ack: ack}=saga)
     when number <= ack do
         {:noreply, saga}
     end
 
     @impl true
-    def handle_info({action, %Event{}=event}, %Saga{}=saga) 
-    when action in [:apply, :start] do
+    def handle_info(%Event{}=event, %Saga{}=saga) do
 
         %Saga{module: module, state: state} = saga
 
@@ -261,10 +291,8 @@ defmodule Signal.Process.Saga do
         saga
     end
 
-    defp shutdown_saga(%Saga{app: app, domain: domain, id: id}=saga) do
-        process_uuid  = Signal.Effect.uuid(domain, id)
+    defp shutdown_saga(%Saga{app: app, uuid: process_uuid}) do
         :ok = Signal.Store.Adapter.delete_effect(app, process_uuid)
-        saga
     end
 
     defp handle_reply(%Saga{}=saga, %Event{number: number}=event, reply) do
@@ -313,13 +341,14 @@ defmodule Signal.Process.Saga do
                 saga =
                     %Saga{saga | state: state}
                     |> acknowledge_event(number, :stop)
-                    |> commit_state_and_notify_router()
-                {:stop, :normal, saga}
+                    |> save_saga_state()
+
+                {:noreply, saga, {:continue, :stop}}
 
             invalid_value ->
                 raise """
                     Invalid saga return value
-                    domain: #{saga.domain}
+                    namespace: #{saga.namespace}
                     id: #{saga.id}
                     event: #{inspect(Event.data(event))}
                     reply: #{inspect(invalid_value)}
@@ -350,9 +379,9 @@ defmodule Signal.Process.Saga do
             ack: ack, 
             state: state, 
             status: status,
-            domain: domain,
             actions: actions,
             version: version, 
+            namespace: namespace,
         } = saga
 
         status = Atom.to_string(status)
@@ -363,15 +392,14 @@ defmodule Signal.Process.Saga do
             "id" => id,
             "ack" => ack, 
             "state" => payload, 
-            "domain" => domain,
             "status" => status,
             "version" => version, 
             "actions" => actions,
         } 
 
-        uuid = Signal.Effect.uuid(domain, id)
+        uuid = Signal.Effect.uuid(namespace, id)
 
-        [uuid: uuid, data: data]
+        [uuid: uuid, namespace: namespace, data: data]
         |> Signal.Effect.new()
     end
 
@@ -417,6 +445,11 @@ defmodule Signal.Process.Saga do
 
         send(self(), {:action, Map.get(action, "uuid")})
         %Saga{saga | actions: actions}
+    end
+
+    defp sched_next_action(%Saga{actions: [], status: :stop}=saga) do
+        send(self(), {:action, :stop})
+        saga
     end
 
     defp sched_next_action(%Saga{actions: []}=saga) do

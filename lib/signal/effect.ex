@@ -1,5 +1,5 @@
 defmodule Signal.Effect do
-    defstruct [:uuid, :data]
+    defstruct [:uuid, :namespace, :data]
 
     def new(opts) when is_list(opts) do
         struct(__MODULE__, opts)

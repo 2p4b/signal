@@ -1,6 +1,6 @@
 defmodule Signal.Process.Router do
 
-    @effect_domain "$router"
+    @router_namespace "$router"
 
     alias Signal.Event
     alias Signal.Event.Broker
@@ -12,14 +12,16 @@ defmodule Signal.Process.Router do
 
     defmodule Proc do
         alias Signal.Process.Router
+        alias Signal.Process.Supervisor
         defstruct [
             :id, 
+            :app,
             :uuid, 
             :pid, 
             :ack, 
             :syn, 
             :ref, 
-            :domain, 
+            :namespace, 
             status: :running, 
             queue: []
         ]
@@ -28,8 +30,8 @@ defmodule Signal.Process.Router do
             id = Keyword.fetch!(opts, :id)
             pid = Keyword.get(opts, :pid)
             ack = Keyword.get(opts, :ack, 0)
-            domain = Keyword.fetch!(opts, :domain)
-            uuid = Signal.Effect.uuid(domain, id)
+            namespace = Keyword.fetch!(opts, :namespace)
+            uuid = Signal.Effect.uuid(namespace, id)
             {ref, pid} = 
                 cond do
                     is_pid(pid) ->
@@ -50,7 +52,7 @@ defmodule Signal.Process.Router do
             struct(__MODULE__, opts) 
         end
 
-        def push_event(%Proc{}=proc, {action, %Event{number: number}=event}, router) do
+        def push_event(%Proc{}=proc, %Event{number: number}=event) do
 
             %Proc{pid: pid, syn: syn, ack: ack, queue: queue} =  proc
 
@@ -66,21 +68,20 @@ defmodule Signal.Process.Router do
             cond do
                 is_pid(pid) and syn == ack and number > ack and qnext == number ->
                     [
-                        process: router.name,
+                        process: proc.namespace,
                         saga: proc.id,
                         status: :running,
-                        action: action,
                         push: number,
                     ]
                     |> Signal.Logger.info(label: :router)
 
-                    router.app
-                    |> Signal.PubSub.broadcast(proc.uuid, {action, event})
+                    proc.app
+                    |> Signal.PubSub.broadcast(proc.uuid, event)
                     %Proc{proc | syn: number, queue: queue, status: :running}
 
                 number > syn  ->
                     [
-                        process: router.name,
+                        process: proc.namespace,
                         saga: proc.id,
                         status: proc.status,
                         queued: number
@@ -91,6 +92,13 @@ defmodule Signal.Process.Router do
                 true ->
                     proc
             end
+        end
+
+        def stop(%Proc{app: app, ref: ref, uuid: uuid}=proc) do
+            Process.demonitor(ref)
+            Supervisor.unregister_child(app, uuid)
+            Signal.PubSub.broadcast(app, uuid, :stopped)
+            %Proc{proc | pid: nil, ref: nil, status: :stopped}
         end
 
         def acknowledge(%Proc{}=proc, number) do
@@ -113,7 +121,7 @@ defmodule Signal.Process.Router do
 
     def init(opts) do
         name = Keyword.fetch!(opts, :name)
-        uuid = Signal.Effect.uuid(@effect_domain, name)
+        uuid = Signal.Effect.uuid(@router_namespace, name)
         opts = 
             opts
             |> Keyword.put(:uuid, uuid)
@@ -307,10 +315,15 @@ defmodule Signal.Process.Router do
             {:noreply, router, router.timeout}
         else
 
-            case Enum.at(processes, index) do
-                %{pid: pid} when is_pid(pid) ->
+            process = 
+                processes
+                |> Enum.at(index)
+                |> Proc.acknowledge(number)
+
+            case process do
+                %{queue: [], pid: pid} when is_pid(pid) ->
                     process = Enum.at(processes, index)
-                    stop_process(router, process)
+                    Proc.stop(process)
 
                 _ ->
                     nil
@@ -386,7 +399,7 @@ defmodule Signal.Process.Router do
     end
 
     def handle_event(%Event{}=event, %Router{}=router) do
-        %{module: module, processes: processes, name: domain}= router
+        %{module: module, app: app, processes: processes, name: namespace}= router
 
         reply = 
             case Kernel.apply(module, :handle, [Event.data(event)]) do
@@ -424,7 +437,12 @@ defmodule Signal.Process.Router do
                 {:start, index}  ->
                     if is_nil(index) do
                         pid = start_process(router, id)
-                        opts = [id: id, pid: pid, domain: domain]
+                        opts = [
+                            id: id, 
+                            app: app, 
+                            pid: pid, 
+                            namespace: namespace
+                        ]
                         Proc.new(opts)
                     else
                         Enum.at(processes, index)
@@ -442,7 +460,7 @@ defmodule Signal.Process.Router do
             process = 
                 router
                 |> wake_process(proc)
-                |> Proc.push_event({action, event}, router)
+                |> Proc.push_event(event)
 
             processes = 
                 case {action, index} do
@@ -517,6 +535,7 @@ defmodule Signal.Process.Router do
         %Router{
             app: application,
             name: name, 
+            uuid: effect_uuid,
             consumer: %{ack: ack}
         } = router
 
@@ -526,17 +545,14 @@ defmodule Signal.Process.Router do
                 dump_process(process) 
             end)
 
-        effect_uuid = Signal.Effect.uuid(@effect_domain, name)
-
         data = %{
             "id" => name,
             "ack" => ack,
-            "domain" => @effect_domain,
             "processes" => dumped_processes
         }
 
         effect = 
-            [uuid: effect_uuid, data: data]
+            [uuid: effect_uuid, namespace: @router_namespace, data: data]
             |> Signal.Effect.new()
 
         :ok = Signal.Store.Adapter.save_effect(application, effect)
@@ -555,9 +571,9 @@ defmodule Signal.Process.Router do
             app: router.app, 
             uuid: suuid, 
             start: index,
-            domain: router.name, 
             module: router.module, 
             channel: router.uuid,
+            namespace: router.name, 
         ]
         router.app
         |> Saga.start({suuid, router.module}, opts)
@@ -573,14 +589,19 @@ defmodule Signal.Process.Router do
         }
     end
 
-    defp create_proc(%Router{name: name}=router, data) when is_map(data) do
+    defp create_proc(%Router{name: name, app: app}=router, data) when is_map(data) do
+        common = [app: app, namespace: name, module: router.module]
         case data do
             %{"id" => id, "queue" => []} -> 
-                Proc.new([id: id, queue: [], domain: name])
+                common
+                |> Keyword.merge([id: id, queue: []])
+                |> Proc.new()
 
             %{"id" => id, "queue" => queue} -> 
                 pid = start_process(router, id, 0)
-                Proc.new([id: id, pid: pid, queue: queue, domain: name])
+                common
+                |> Keyword.merge([id: id, queue: queue, pid: pid])
+                |> Proc.new()
         end
     end
 
@@ -604,14 +625,6 @@ defmodule Signal.Process.Router do
         router.app
         |> Supervisor.stop_child(uuid)
         %Proc{process | pid: nil, ref: nil, status: :sleeping}
-    end
-
-    defp stop_process(%Router{}=router, %Proc{uuid: uuid, pid: pid, ref: ref}=process) 
-    when is_pid(pid) do
-        Process.demonitor(ref)
-        router.app
-        |> Supervisor.unregister_child(uuid)
-        %Proc{process | pid: nil, ref: nil, status: :stopped}
     end
 
     defp subscribe_router(%Router{}=router, start) do
@@ -642,8 +655,7 @@ defmodule Signal.Process.Router do
 
     defp load_router_data(%Router{}=router) do
         %Router{app: app, name: name}=router
-
-        router_uuid = Signal.Effect.uuid(@effect_domain, name) 
+        router_uuid = Signal.Effect.uuid(@router_namespace, name) 
         case Signal.Store.Adapter.get_effect(app, router_uuid) do
             %Signal.Effect{data: %{"ack" => ack, "processes" => processes}}-> 
                 {processes, ack}
