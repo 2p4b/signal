@@ -3,6 +3,7 @@ defmodule Signal.Process.Saga do
 
     alias Signal.Event
     alias Signal.Codec
+    alias Signal.Effect
     alias Signal.Result
     alias Signal.Process.Saga
     alias Signal.Process.Supervisor
@@ -57,7 +58,7 @@ defmodule Signal.Process.Saga do
                     saga.module
                     |> Kernel.apply(:init, [saga.id])
 
-                %Signal.Effect{}=effect ->
+                %Effect{}=effect ->
                     load_saga_state(saga, effect)
 
                 _ -> 
@@ -67,10 +68,11 @@ defmodule Signal.Process.Saga do
 
                     %Saga{saga| state: state}
             end
+            |> sched_next_action()
 
         Signal.PubSub.subscribe(saga.app, saga.uuid)
 
-        router_push(saga, {saga.status, saga.id, saga.start})
+        router_push(saga, {saga.status, saga.id, saga.ack})
         [
             app: saga.app,
             sid: saga.id,
@@ -84,11 +86,71 @@ defmodule Signal.Process.Saga do
         {:noreply, saga, saga.timeout}
     end
 
-    def handle_continue(:stop, %Saga{actions: [], status: :stop}=saga) do
-        {:noreply, notify_router_ack(saga)}
+    # no actions in queue to process
+    # so continue to stopping saga
+    @impl true
+    def handle_continue(:process_event, %Saga{status: :stop, actions: []}=saga) do
+        {:noreply, saga, {:continue, :stop}}
     end
 
-    def handle_continue(:stop, %Saga{}=saga) do
+    # stop processing events
+    # so ignore signal
+    @impl true
+    def handle_continue(:process_event, %Saga{status: :stop}=saga) do
+        {:noreply, saga}
+    end
+
+    # Do noting because event 
+    # buffer is empty
+    @impl true
+    def handle_continue(:process_event, %Saga{buffer: []}=saga) do
+        {:noreply, saga}
+    end
+
+    @impl true
+    def handle_continue(:process_event, %Saga{buffer: [number| rest]}=saga) 
+    when is_integer(number) do
+
+        buffer =
+            saga.app
+            |> Signal.Store.Adapter.get_event(number)
+            |> List.wrap()
+            |> Enum.concat(rest)
+
+        handle_continue(:process_event, %Saga{saga| buffer: buffer})
+    end
+
+    @impl true
+    def handle_continue(:process_event, %Saga{buffer: [%Event{}=event| buffer]}=saga) do
+        [
+            app: saga.app,
+            type: saga.module,
+            sid: saga.id,
+            uuid: saga.uuid,
+            status: saga.status,
+            processing: [
+                topic: event.topic,
+                number: event.number,
+            ]
+        ]
+        |> Signal.Logger.info(label: :saga)
+
+        saga = 
+            saga
+            |> process_event(event)
+            |> struct(%{buffer: buffer})
+            |> save_saga_state()
+
+        {:noreply, saga, {:continue, :process_event}}
+    end
+
+
+    def handle_continue(:stop, %Saga{actions: [], buffer: [], status: :stop}=saga) do
+        router_push(saga, {:stop, saga.id})
+        {:noreply, saga, :hibernate}
+    end
+
+    def handle_continue(:stop, %Saga{actions: []}=saga) do
         {:noreply, saga}
     end
 
@@ -234,55 +296,46 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info(%Event{number: number}, %Saga{ack: ack}=saga)
+    def handle_info(%Event{number: number}, %Saga{ack: ack}=saga) 
     when number <= ack do
         {:noreply, saga}
     end
 
     @impl true
-    def handle_info(%Event{}=event, %Saga{}=saga) do
-
-        %Saga{module: module, state: state} = saga
-
-        [
-            app: saga.app,
-            type: module,
-            sid: saga.id,
-            status: :running,
-            apply: event.topic,
-            number: event.number,
-        ]
-        |> Signal.Logger.info(label: :saga)
-
-        reply = Kernel.apply(module, :handle_event, [Event.data(event), state])
-
-        handle_reply(saga, event, reply)
+    def handle_info(%Event{number: number}=event, %Saga{id: id}=saga) do
+        saga = 
+            saga
+            |> queue_event(event)
+            |> save_saga_state()
+            |> router_push({:ack, id, number, :running})
+        {:noreply, saga, {:continue, :process_event}}
     end
 
     defp execute(command, %Saga{app: app}, opts) do
         Kernel.apply(app, :dispatch, [command, opts])
     end
 
-    defp acknowledge_event(%Saga{ack: ack}=saga, number, _) when ack > number do
-        saga
-    end
+    defp queue_event(%Saga{}=saga, %Event{}=event) do
+        %Saga{buffer: buffer} = saga
+        %Event{number: number} = event
 
-    defp acknowledge_event(%Saga{ack: ack}=saga, number, status) when ack == number do
-        %Saga{saga | status: status}
-    end
+        ack = 
+            if event.number > saga.ack do
+                event.number
+            else
+                saga.ack
+            end
 
-    defp acknowledge_event(%Saga{version: version}=saga, number, status) do
-        %Saga{saga | ack: number, status: status, version: version + 1}
-    end
+        found = Enum.find(saga.buffer, fn 
+            %Event{number: no} -> no === number 
+            no when is_integer(no) -> no === number
+        end)
 
-    defp commit_state_and_notify_router(%Saga{}=saga) do
-        saga
-        |> save_saga_state()
-        |> notify_router_ack()
-    end
-
-    defp notify_router_ack(%Saga{id: id, ack: ack, status: status}=saga) do
-        router_push(saga, {:ack, id, ack, status})
+        if found do
+            saga
+        else
+            %Saga{saga| ack: ack, buffer: buffer ++ List.wrap(event)}
+        end
     end
 
     defp save_saga_state(%Saga{app: app}=saga) do
@@ -295,36 +348,17 @@ defmodule Signal.Process.Saga do
         :ok = Signal.Store.Adapter.delete_effect(app, process_uuid)
     end
 
-    defp handle_reply(%Saga{}=saga, %Event{number: number}=event, reply) do
-        case reply do 
+    defp process_event(%Saga{}=saga, %Event{}=event) do
+
+        %Saga{state: state, module: module} = saga
+
+        case Kernel.apply(module, :handle_event, [Event.data(event), state]) do 
             {action, params, state} when is_binary(action)  ->
-                saga = 
-                    %Saga{saga| state: state}
-                    |> enqueue_event_action(event, {action, params})
-                    |> acknowledge_event(number, :running)
-                    |> commit_state_and_notify_router()
-                {:noreply, saga}
+                %Saga{saga| state: state, status: :running}
+                |> enqueue_event_action(event, {action, params})
 
             {:ok, state} ->
-                saga = 
-                    %Saga{saga | state: state}
-                    |> acknowledge_event(number, :running)
-                    |> commit_state_and_notify_router()
-                {:noreply, saga, saga.timeout}
-
-            {:sleep, state} ->
-                saga = 
-                    %Saga{saga | state: state}
-                    |> acknowledge_event(number, :running)
-                    |> commit_state_and_notify_router()
-                {:noreply, saga, :hibernate}
-
-            {:hibernate, state} ->
-                saga = 
-                    %Saga{saga | state: state}
-                    |> acknowledge_event(number, :sleep)
-                    |> commit_state_and_notify_router()
-                {:noreply, saga}
+                %Saga{saga | state: state, status: :running}
 
 
             {:stop, state} ->
@@ -338,12 +372,7 @@ defmodule Signal.Process.Saga do
                 ]
                 |> Signal.Logger.info(label: :saga)
 
-                saga =
-                    %Saga{saga | state: state}
-                    |> acknowledge_event(number, :stop)
-                    |> save_saga_state()
-
-                {:noreply, saga, {:continue, :stop}}
+                %Saga{saga | state: state, status: :stop}
 
             invalid_value ->
                 raise """
@@ -356,10 +385,11 @@ defmodule Signal.Process.Saga do
         end
     end
 
-    defp load_saga_state(%Saga{}=saga, %Signal.Effect{data: data}) do
+    defp load_saga_state(%Saga{}=saga, %Effect{data: data}) do
         %{
             "ack" => ack, 
             "state" => payload, 
+            "buffer" => buffer,
             "status" => status,
             "version" => version, 
         } = data
@@ -370,7 +400,14 @@ defmodule Signal.Process.Saga do
             saga.module
             |> struct([])
             |> Codec.load(payload)
-        %Saga{saga | state: state, ack: ack, version: version, status: status}
+
+        %Saga{saga | 
+            ack: ack, 
+            state: state, 
+            buffer: buffer, 
+            status: status,
+            version: version, 
+        }
     end
 
     def create_saga_effect(%Saga{}=saga) do
@@ -378,11 +415,18 @@ defmodule Signal.Process.Saga do
             id: id, 
             ack: ack, 
             state: state, 
+            buffer: buffer,
             status: status,
             actions: actions,
             version: version, 
             namespace: namespace,
         } = saga
+
+        event_buffer = 
+            Enum.map(buffer, fn 
+                %Event{number: number} -> number 
+                number when is_integer(number) -> number
+            end)
 
         status = Atom.to_string(status)
 
@@ -395,12 +439,13 @@ defmodule Signal.Process.Saga do
             "status" => status,
             "version" => version, 
             "actions" => actions,
+            "buffer" => event_buffer,
         } 
 
-        uuid = Signal.Effect.uuid(namespace, id)
+        uuid = Effect.uuid(namespace, id)
 
         [uuid: uuid, namespace: namespace, data: data]
-        |> Signal.Effect.new()
+        |> Effect.new()
     end
 
     defp enqueue_action_action(%Saga{}=saga, action_uuid, {name, params}) do

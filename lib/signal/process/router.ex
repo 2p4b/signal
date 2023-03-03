@@ -293,55 +293,6 @@ defmodule Signal.Process.Router do
         end
     end
 
-    def handle_ack({:stop, id, number}, %Router{}=router) do
-        %Router{processes: processes}=router
-        [
-            process: router.name,
-            saga: id,
-            status: :stopped,
-        ]
-        |> Signal.Logger.info(label: :router)
-
-        index =
-            processes
-            |> Enum.find_index(fn 
-                %Proc{id: ^id, syn: ^number} -> 
-                    true
-                _ -> 
-                    false
-            end)
-
-        if is_nil(index) do
-            {:noreply, router, router.timeout}
-        else
-
-            process = 
-                processes
-                |> Enum.at(index)
-                |> Proc.acknowledge(number)
-
-            case process do
-                %{queue: [], pid: pid} when is_pid(pid) ->
-                    process = Enum.at(processes, index)
-                    Proc.stop(process)
-
-                _ ->
-                    nil
-            end
-
-            processes = 
-                processes
-                |> Enum.filter(fn %{id: sid} ->  sid != id end)
-
-            router = 
-                router
-                |> struct(%{processes: processes})
-                |> save_state()
-
-            {:noreply, router, router.timeout}
-        end
-    end
-
     def handle_ack({:sleep, id, number}, %Router{}=router) do
         %Router{processes: processes}=router
 
@@ -384,6 +335,53 @@ defmodule Signal.Process.Router do
                 end
 
             {:noreply, %Router{router| processes: processes}, router.timeout}
+        end
+    end
+
+    def handle_stop(id, %Router{}=router) do
+        %Router{processes: processes}=router
+        [
+            process: router.name,
+            saga: id,
+            status: :stopped,
+        ]
+        |> Signal.Logger.info(label: :router)
+
+        index =
+            processes
+            |> Enum.find_index(fn 
+                %Proc{id: ^id} -> true
+                _ -> false
+            end)
+
+        if is_nil(index) do
+            {:noreply, router, router.timeout}
+        else
+
+            process = 
+                processes
+                |> Enum.at(index)
+
+            case process do
+                %{queue: [], pid: pid} when is_pid(pid) ->
+                    processes
+                    |> Enum.at(index)
+                    |> Proc.stop()
+
+                _ ->
+                    nil
+            end
+
+            processes = 
+                processes
+                |> Enum.filter(fn %{id: sid} ->  sid != id end)
+
+            router = 
+                router
+                |> struct(%{processes: processes})
+                |> save_state()
+
+            {:noreply, router, router.timeout}
         end
     end
 

@@ -71,6 +71,11 @@ defmodule Signal.Process do
             end
 
             @impl true
+            def handle_info({:stop, id}, router) do
+                Router.handle_stop(id, router)
+            end
+
+            @impl true
             def handle_info({:start, id, number}, router) do
                 Router.handle_ack({:start, id, number}, router)
             end
