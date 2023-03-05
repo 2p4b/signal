@@ -15,6 +15,7 @@ defmodule Signal.Event.Broker do
         worker: nil,
         consumer: nil,
         ready: true,
+        pushed: [],
         cursor: 0, 
         buffer: [],
     ]
@@ -60,7 +61,7 @@ defmodule Signal.Event.Broker do
             [consumer| _] ->
                 broker = %Broker{broker| 
                     ack: consumer.ack,
-                    consumer: Map.put(consumer, :syn, consumer.ack)
+                    consumer: consumer
                 }
                 {:noreply, broker, {:continue, :start}} 
         end
@@ -93,7 +94,7 @@ defmodule Signal.Event.Broker do
     end
 
     @impl true
-    def handle_info({:ack, id, number}, %Broker{consumer: %{uuid: cuuid, syn: syn}}=broker) 
+    def handle_info({:ack, id, number}, %Broker{consumer: %{uuid: cuuid, pushed: [%Event{number: syn}|_]}}=broker) 
     when id === cuuid and  number === syn do
 
         %Broker{handle: handle, ack: b_ack} = broker
@@ -131,11 +132,12 @@ defmodule Signal.Event.Broker do
     end
 
     @impl true
-    def handle_info({:push, %{number: number}=event}, %Broker{}=broker) do
+    def handle_info({:push, %Event{number: number}=event}, %Broker{}=broker) do
 
-        %Broker{consumer: %{streams: streams, topics: topics}, ack: ack} = broker
+        %Broker{consumer: consumer, pushed: pushed, ack: ack} = broker
 
-        if Helper.event_is_valid?(event, streams, topics) and number > ack do
+        last = List.last(pushed)
+        if number > ack and (is_nil(last) or (number > last.number)) do
             [
                 app: broker.app,
                 handle: broker.handle,
@@ -145,11 +147,17 @@ defmodule Signal.Event.Broker do
             |> Signal.Logger.info(label: :broker)
 
             broker.app
-            |> Signal.PubSub.broadcast(broker.consumer.uuid, event)
+            |> Signal.PubSub.broadcast(consumer.uuid, event)
 
-            consumer = Map.put(broker.consumer, :syn, number)
+            pushed = pushed ++ List.wrap(event)
 
-            {:noreply, %Broker{broker | consumer: consumer, ready: false}}
+            ready = length(pushed) < consumer.buffer_size
+
+            broker = 
+                %Broker{broker|pushed: pushed, ready: ready}
+                |> sched_next()
+
+            {:noreply, broker}
         else
             broker = 
                 broker
@@ -162,13 +170,18 @@ defmodule Signal.Event.Broker do
 
     @impl true
     def handle_info(%Event{}=event, %Broker{buffer: buffer, worker: nil}=broker) do
-        broker = 
-            %Broker{broker | 
-                buffer: buffer ++ List.wrap(event)
-            }
-            |> sched_next()
+        %Broker{consumer: %{streams: streams, topics: topics}}=broker
+        if Helper.event_is_valid?(event, streams, topics) do
+            broker = 
+                %Broker{broker | 
+                    buffer: buffer ++ List.wrap(event)
+                }
+                |> sched_next()
 
-        {:noreply, broker}
+            {:noreply, broker}
+        else
+            {:noreply, broker}
+        end
     end
 
     @impl true
@@ -212,14 +225,18 @@ defmodule Signal.Event.Broker do
 
     defp handle_consumer_ack(%Broker{consumer: %{syn: syn}}=broker, number) 
     when syn === number do
-        %Broker{consumer: consumer, buffer: buffer} = broker
+        %Broker{consumer: consumer, pushed: pushed,  buffer: buffer} = broker
 
         buffer = Enum.filter(buffer, &(Map.get(&1, :number) > number))
+        pushed = Enum.filter(pushed, &(Map.get(&1, :number) > number))
+
+        ready = length(pushed) < consumer.buffer_size
 
         %Broker{broker | 
             ack: number,
-            ready: true,
+            ready: ready,
             buffer: buffer, 
+            pushed: pushed,
             consumer: Map.put(consumer, :ack, number)
         }
         |> sched_next()
@@ -233,7 +250,7 @@ defmodule Signal.Event.Broker do
         end
 
         config = [
-            range: [consumer.ack + 1],
+            range: [broker.ack + 1],
             topics: consumer.topics, 
             streams: consumer.streams,
         ] 
@@ -290,6 +307,7 @@ defmodule Signal.Event.Broker do
         track = Keyword.get(opts, :track, true)
         topics = Keyword.get(opts, :topics, [])
         streams = Keyword.get(opts, :streams, [])
+        buffer_size = Keyword.get(opts, :buffer, 20)
         ack = 
             case Adapter.handler_position(app, handle) do
                 nil ->
@@ -335,7 +353,6 @@ defmodule Signal.Event.Broker do
         params = %{
             app: app,
             ack: ack,
-            syn: ack,
             uuid: uuid,
             node: Node.self(),
             track: track,
@@ -343,6 +360,7 @@ defmodule Signal.Event.Broker do
             topics: topics,
             streams: streams,
             consumer: true,
+            buffer_size: buffer_size,
             ts: DateTime.utc_now(),
         }
         Signal.PubSub.subscribe(app, uuid)
