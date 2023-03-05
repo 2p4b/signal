@@ -375,6 +375,7 @@ defmodule Signal.Event.Broker do
 
     def acknowledge(app, consumer, number) do
         Signal.PubSub.broadcast(app, consumer.handle, {:ack, consumer.uuid, number})
+        Map.put(consumer, :ack, number)
     end
 
     def list_consumers(%Broker{app: app, handle: handle}) do
