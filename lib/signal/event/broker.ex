@@ -312,10 +312,10 @@ defmodule Signal.Event.Broker do
                 nil ->
                     value = Keyword.get(opts, :start)
                     cond do
-                        is_nil(value) or value in [:cursor] ->
+                        is_nil(value) or Enum.member?([:cursor], value) ->
                             Signal.Store.Adapter.get_cursor(app)
 
-                        value in [:beginning]
+                        Enum.member?([:beginning], value) ->
                             0
 
                         is_integer(value) and value >= 0 ->
@@ -326,6 +326,7 @@ defmodule Signal.Event.Broker do
                             invalid consumer start value
                                 handle: #{handle}
                                 opts: #{inspect(opts)}
+                                got [start: #{inspect(value)}]
 
                                 valid start: 
                                     :cursor, :beginning, non_negative_integer() 
