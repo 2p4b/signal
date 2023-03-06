@@ -33,6 +33,11 @@ defmodule Signal.Void.Store do
     end
 
     @impl true
+    def list_effects(namespace, _opts\\[]) do
+        GenServer.call(Repo, {:list_effects, namespace}, 5000)
+    end
+
+    @impl true
     def delete_effect(uuid, _opts\\[]) do
         GenServer.call(Repo, {:delete_effect, uuid}, 5000)
     end
