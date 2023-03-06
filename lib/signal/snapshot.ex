@@ -9,7 +9,7 @@ defmodule Signal.Snapshot do
     def uuid(stream_id, version) when is_binary(version) do
         :oid
         |> UUID.uuid5(stream_id)
-        |> UUID.uuid5(Integer.to_string(version))
+        |> UUID.uuid5(version)
     end
 
     def new(opts) when is_list(opts) do
