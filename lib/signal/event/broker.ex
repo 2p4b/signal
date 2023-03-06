@@ -94,7 +94,7 @@ defmodule Signal.Event.Broker do
     end
 
     @impl true
-    def handle_info({:ack, id, number}, %Broker{consumer: %{uuid: cuuid, pushed: [%Event{number: syn}|_]}}=broker) 
+    def handle_info({:ack, id, number}, %Broker{consumer: %{uuid: cuuid}, pushed: [%Event{number: syn}|_]}=broker) 
     when id === cuuid and  number === syn do
 
         %Broker{handle: handle, ack: b_ack} = broker
@@ -223,8 +223,7 @@ defmodule Signal.Event.Broker do
         {:noreply, broker}
     end
 
-    defp handle_consumer_ack(%Broker{consumer: %{syn: syn}}=broker, number) 
-    when syn === number do
+    defp handle_consumer_ack(%Broker{}=broker, number) do
         %Broker{consumer: consumer, pushed: pushed,  buffer: buffer} = broker
 
         buffer = Enum.filter(buffer, &(Map.get(&1, :number) > number))
@@ -307,7 +306,7 @@ defmodule Signal.Event.Broker do
         track = Keyword.get(opts, :track, true)
         topics = Keyword.get(opts, :topics, [])
         streams = Keyword.get(opts, :streams, [])
-        buffer_size = Keyword.get(opts, :buffer, 20)
+        buffer_size = Keyword.get(opts, :buffer_size, 20)
         ack = 
             case Adapter.handler_position(app, handle) do
                 nil ->
