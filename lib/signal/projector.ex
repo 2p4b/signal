@@ -1,5 +1,6 @@
 defmodule Signal.Projector do
     defmacro __using__(opts) do
+        opts = Keyword.put_new_lazy(opts, :start, fn -> :beginning end)
         quote [location: :keep, line: 3] do
             import Signal.Handler
             Signal.Handler.__using__(unquote(opts))
