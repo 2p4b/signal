@@ -14,6 +14,11 @@ defmodule Signal.Store.Adapter do
         Kernel.apply(store, :save_effect, [effect, opts])
     end
 
+    def list_effects(application, namespace, opts\\[]) do
+        store = application_store(application)
+        Kernel.apply(store, :list_effects, [namespace, opts])
+    end
+
     def delete_effect(application, uuid, opts\\[]) do
         store = application_store(application)
         Kernel.apply(store, :delete_effect, [uuid, opts])

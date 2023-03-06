@@ -19,7 +19,6 @@ defmodule Signal.Process.Saga do
         :channel,
         ack: 0, 
         buffer: [],
-        version: 0,
         actions: [],
         timeout: 5000,
         status: :start,
@@ -43,21 +42,9 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_continue(:load_effect, %Saga{start: start}=saga) do
+    def handle_continue(:load_effect, %Saga{}=saga) do
         saga =
             case Signal.Store.Adapter.get_effect(saga.app, saga.uuid) do
-                # incomplete previous process state shutdown
-                # cleanup clean up and start new state
-                # there is a better way to handle this
-                # just nothing comes to mind at the
-                # moment to handle this case more...
-                # gracefully
-                %{data: %{"ack" => ack, "status" => "stop"}} when start > ack ->
-                    # shutdown the saga
-                    shutdown_saga(saga)
-                    saga.module
-                    |> Kernel.apply(:init, [saga.id])
-
                 %Effect{}=effect ->
                     load_saga_state(saga, effect)
 
@@ -72,18 +59,17 @@ defmodule Signal.Process.Saga do
 
         Signal.PubSub.subscribe(saga.app, saga.uuid)
 
-        router_push(saga, {saga.status, saga.id, saga.ack})
+        router_push(saga, {:start, saga.id, saga.ack})
         [
             app: saga.app,
             sid: saga.id,
             spid: saga.uuid,
             namespace: saga.namespace,
             status: saga.status,
-            loaded: saga.version,
             timeout: saga.timeout,
         ]
         |> Signal.Logger.info(label: :saga)
-        {:noreply, saga, saga.timeout}
+        {:noreply, saga, {:continue, :process_event}}
     end
 
     # no actions in queue to process
@@ -104,7 +90,7 @@ defmodule Signal.Process.Saga do
     # buffer is empty
     @impl true
     def handle_continue(:process_event, %Saga{buffer: []}=saga) do
-        {:noreply, saga}
+        {:noreply, saga, saga.timeout}
     end
 
     @impl true
@@ -207,14 +193,14 @@ defmodule Signal.Process.Saga do
                       |> sched_next_action()
                   {:noreply, saga, saga.timeout}
 
-              {action_name, params, state} when is_binary(action)  ->
+              {:action, {action_name, params}, state} when is_binary(action)  ->
                   saga = 
                       %Saga{saga | state: state}
                       |> enqueue_action_action(action_uuid, {action_name, params})
                       |> save_saga_state()
                   {:noreply, saga, saga.timeout}
 
-              {:retry, name, params, state} ->
+              {:retry, {name, params}, state} ->
                   saga = 
                       %Saga{saga | state: state}
                       |> requeue_action_inplace(action_uuid, {name, params})
@@ -227,8 +213,9 @@ defmodule Signal.Process.Saga do
                         Invalid saga return value
                         namespace: #{saga.namespace}
                         id: #{saga.id}
+                        callback: #{inspect(saga.module)}.handle_error/2
                         expected: {:ok, state} | {:retry, {name, params}, state}
-                        got: #{invalid_value}
+                        got: #{inspect(invalid_value)}
                     """
           end
     end
@@ -246,7 +233,7 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def handle_info({:action, _id}, %Saga{actions: []}=saga) do
-        {:noreply, saga}
+        {:noreply, saga, saga.timeout}
     end
 
     @impl true
@@ -262,6 +249,7 @@ defmodule Signal.Process.Saga do
         [app: saga.app, action: action]
         |> Signal.Logger.info(label: :saga)
 
+        action_uuid = Map.get(action, "uuid")
         action_name = Map.get(action, "name")
         action_params = Map.get(action, "params")
 
@@ -269,7 +257,7 @@ defmodule Signal.Process.Saga do
         args = [action_tuple, saga.state]
 
         case Kernel.apply(saga.module, :handle_action, args) do
-            {:dispatch, command}->
+            {:dispatch, command} ->
                 {:noreply, saga, {:continue, {:dispatch, command, action}}}
 
             {:ok, state}->
@@ -279,26 +267,35 @@ defmodule Signal.Process.Saga do
                     |> sched_next_action()
                 {:noreply, saga, saga.timeout}
 
+            # Yes you can fire an action from an action ;-)
+            {:action, {name, params}, state} when is_binary(action)  ->
+                  saga = 
+                      %Saga{saga | state: state}
+                      |> enqueue_action_action(action_uuid, {name, params})
+                      |> save_saga_state()
+                  {:noreply, saga, saga.timeout}
+
             invalid_value ->
                 raise """
                     Invalid saga return value
+                    callback: #{inspect(saga.module)}.handle_action/2
                     namespace: #{saga.namespace}
                     id: #{saga.id}
-                    expected: {:dispatch, command} | {:ok, new_state}
-                    got: #{invalid_value}
+                    expected: {:dispatch, command} | {:ok, new_state} | {:action, {action_name, action_params}, state}
+                    got: #{inspect(invalid_value)}
                 """
         end
     end
 
     @impl true
-    def handle_info(:timeout, %Saga{}=saga) do
-        {:noreply, saga, :hibernate}
+    def handle_info(:timeout, %Saga{actions: [], buffer: []}=saga) do
+        {:noreply, saga}
     end
 
     @impl true
     def handle_info(%Event{number: number}, %Saga{ack: ack}=saga) 
     when number <= ack do
-        {:noreply, saga}
+        {:noreply, saga, saga.timeout}
     end
 
     @impl true
@@ -353,7 +350,7 @@ defmodule Signal.Process.Saga do
         %Saga{state: state, module: module} = saga
 
         case Kernel.apply(module, :handle_event, [Event.data(event), state]) do 
-            {action, params, state} when is_binary(action)  ->
+            {:action, {action, params}, state} when is_binary(action)  ->
                 %Saga{saga| state: state, status: :running}
                 |> enqueue_event_action(event, {action, params})
 
@@ -377,10 +374,12 @@ defmodule Signal.Process.Saga do
             invalid_value ->
                 raise """
                     Invalid saga return value
+                    callback: #{inspect(saga.module)}.handle_event/2
                     namespace: #{saga.namespace}
                     id: #{saga.id}
                     event: #{inspect(Event.data(event))}
-                    reply: #{inspect(invalid_value)}
+                    expected: {:stop, state} | {:ok, new_state} | {:action, {action_name, action_params}, state}
+                    got: #{inspect(invalid_value)}
                 """
         end
     end
@@ -391,7 +390,6 @@ defmodule Signal.Process.Saga do
             "state" => payload, 
             "buffer" => buffer,
             "status" => status,
-            "version" => version, 
         } = data
 
         status = String.to_existing_atom(status)
@@ -406,7 +404,6 @@ defmodule Signal.Process.Saga do
             state: state, 
             buffer: buffer, 
             status: status,
-            version: version, 
         }
     end
 
@@ -418,7 +415,6 @@ defmodule Signal.Process.Saga do
             buffer: buffer,
             status: status,
             actions: actions,
-            version: version, 
             namespace: namespace,
         } = saga
 
@@ -437,7 +433,6 @@ defmodule Signal.Process.Saga do
             "ack" => ack, 
             "state" => payload, 
             "status" => status,
-            "version" => version, 
             "actions" => actions,
             "buffer" => event_buffer,
         } 

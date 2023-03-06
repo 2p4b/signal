@@ -14,6 +14,8 @@ defmodule Signal.Store do
 
     @callback save_effect(effect::effect, opts) :: :ok | {:error, term()}
 
+    @callback list_effects(namespace::binary, opts::list) :: list()
+
     @callback delete_effect(uuid::binary, opts) :: :ok | {:error, term()}
 
     @callback get_cursor(opts::list) :: integer

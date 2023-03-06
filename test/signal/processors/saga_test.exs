@@ -153,7 +153,8 @@ defmodule Signal.Processor.SagaTest do
             amount = ev.amount + amt
             if amount == 9000 do
                 bonus = %{"account" => ev.account, "amount" => 1000}
-                {"deposite", bonus, %ActivityNotifier{act | amount: amount} }
+                action = {"deposite", bonus}
+                {:action, action, %ActivityNotifier{act | amount: amount}}
             else
                 {:ok, %ActivityNotifier{act | amount: amount} }
             end
