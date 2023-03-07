@@ -400,7 +400,6 @@ defmodule Signal.Process.Router do
             instance -> 
                 {stopped_instance, needs_flush} = Instance.stop(instance)
 
-
                 instances =
                     if stopped_instance.status === :stopped do
                         Map.delete(instances, id)
@@ -500,14 +499,8 @@ defmodule Signal.Process.Router do
             instances = Map.put(instances, instance.id, instance)
 
             router = 
-                # If event has been pushed to
-                # saga then add the event number
-                # to processing list
-                if instance.syn === event.number do
-                    mark_event_as_processing(router, event.number, false)
-                else
-                    router
-                end
+                router
+                |> mark_event_as_processing(event.number, false)
                 |> struct(%{instances: instances})
 
             {:noreply, router, router.timeout}
