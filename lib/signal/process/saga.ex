@@ -198,7 +198,7 @@ defmodule Signal.Process.Saga do
                       %Saga{saga | state: state}
                       |> enqueue_action_action(action_uuid, {action_name, params})
                       |> save_saga_state()
-                  {:noreply, saga, saga.timeout}
+                  {:noreply, saga}
 
               {:retry, {name, params}, state} ->
                   saga = 
