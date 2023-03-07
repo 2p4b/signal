@@ -132,7 +132,7 @@ defmodule Signal.Process.Router do
         end
 
         def halt(%Instance{}=instance) do
-            %Instance{app: app, ref: ref, uuid: uuid, ack: ack, queue: queue}=instance
+            %Instance{app: app, ref: ref, uuid: uuid, ack: ack}=instance
             Process.demonitor(ref)
             Supervisor.unregister_child(app, uuid)
             Signal.PubSub.broadcast(app, uuid, :sleeping)
@@ -144,7 +144,6 @@ defmodule Signal.Process.Router do
                 pid: nil, 
                 ref: nil, 
                 syn: ack, 
-                queue: queue,
                 status: :sleeping
             }
         end

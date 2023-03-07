@@ -81,6 +81,11 @@ defmodule Signal.Process do
             end
 
             @impl true
+            def handle_info({:sleep, id}, router) do
+                Router.handle_sleep(id, router)
+            end
+
+            @impl true
             def handle_info({:start, id, number}, router) do
                 Router.handle_start({id, number}, router)
             end

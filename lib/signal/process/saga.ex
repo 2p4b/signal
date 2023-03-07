@@ -296,7 +296,13 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def handle_info(:timeout, %Saga{actions: [], buffer: []}=saga) do
+        router_push(saga, {:sleep, saga.id})
         {:noreply, saga}
+    end
+
+    @impl true
+    def handle_info(:sleeping, %Saga{actions: [], buffer: []}=saga) do
+        {:stop, :normal, saga}
     end
 
     @impl true
