@@ -57,13 +57,6 @@ defmodule Signal.Process.Router do
                         {nil, nil}
                 end
 
-            status = 
-                if (is_pid(pid) and is_reference(ref)) do 
-                    :running 
-                else 
-                    :sleeping
-                end
-
             opts = 
                 opts
                 |> Keyword.merge([ack: ack])
@@ -71,9 +64,12 @@ defmodule Signal.Process.Router do
                 |> Keyword.merge([ref: ref])
                 |> Keyword.merge([pid: pid])
                 |> Keyword.merge([uuid: uuid])
-                |> Keyword.merge([status: status])
 
             struct(__MODULE__, opts) 
+        end
+
+        def mark_as_running(%Instance{}=instances) do
+            %Instance{instances| status: :running}
         end
 
         def push_event(%Instance{}=instance, {action, %Event{number: number}=event}) do
@@ -105,20 +101,20 @@ defmodule Signal.Process.Router do
                 and syn == ack 
                 and number > ack 
                 and nevent.number == number
+                and instance.status === :running
 
             cond do
                 push_now ->
                     [
                         process: instance.namespace,
                         saga: instance.id,
-                        status: :running,
                         push: number,
                     ]
                     |> Signal.Logger.info(label: :router)
 
                     instance.app
                     |> Signal.PubSub.broadcast(instance.uuid, {naction, event})
-                    %Instance{instance | syn: number, queue: queue, status: :running}
+                    %Instance{instance | syn: number, queue: queue}
 
                 number > syn  ->
                     [
@@ -298,8 +294,15 @@ defmodule Signal.Process.Router do
                 ]
                 |> Signal.Logger.info(label: :router)
 
-                sched_next(instance)
-                {:noreply, router, router.timeout}
+                updated_instance = 
+                    instance
+                    |> Instance.mark_as_running()
+
+                sched_next(updated_instance)
+
+                instances = Map.put(instances, instance.id, updated_instance)
+
+                {:noreply, %Router{router| instances: instances}, router.timeout}
         end
     end
 
@@ -410,6 +413,7 @@ defmodule Signal.Process.Router do
                     |> Enum.reduce(router, fn {_, %Event{number: number}}, router -> 
                         mark_event_as_processed(router, number)
                     end)
+                    |> acknowledge_processed_events()
                     |> struct(%{instances: instances})
 
                 {:noreply, router, router.timeout}
@@ -566,7 +570,7 @@ defmodule Signal.Process.Router do
         nil
     end
 
-    defp sched_next(%Instance{id: id}) do
+    defp sched_next(%Instance{id: id, status: :running}) do
         Process.send(self(), {:next, id}, [])
     end
 
@@ -592,7 +596,6 @@ defmodule Signal.Process.Router do
         inst
         |> Map.from_struct() 
         |> Map.put(:pid, pid)
-        |> Map.put(:status, :running)
         |> Map.to_list()
         |> Instance.new()
     end

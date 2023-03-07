@@ -43,8 +43,6 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def handle_continue(:load_effect, %Saga{}=saga) do
-        Signal.PubSub.subscribe(saga.app, saga.uuid)
-
         saga =
             case Signal.Store.Adapter.get_effect(saga.app, saga.uuid) do
                 %Effect{}=effect ->
@@ -59,6 +57,7 @@ defmodule Signal.Process.Saga do
             end
             |> sched_next_action()
 
+        Signal.PubSub.subscribe(saga.app, saga.uuid)
         router_push(saga, {:start, saga.id, saga.ack})
         [
             app: saga.app,
