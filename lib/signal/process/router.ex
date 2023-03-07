@@ -35,7 +35,7 @@ defmodule Signal.Process.Router do
             :syn, 
             :ref, 
             :namespace, 
-            status: :running, 
+            status: :sleeping, 
             queue: []
         ]
 
@@ -57,39 +57,57 @@ defmodule Signal.Process.Router do
                         {nil, nil}
                 end
 
+            status = 
+                if (is_pid(pid) and is_reference(ref)) do 
+                    :running 
+                else 
+                    :sleeping
+                end
 
             opts = 
                 opts
-                |> Keyword.merge([syn: ack, ack: ack, uuid: uuid, ref: ref, pid: pid])
+                |> Keyword.merge([ack: ack])
+                |> Keyword.merge([syn: ack])
+                |> Keyword.merge([ref: ref])
+                |> Keyword.merge([pid: pid])
+                |> Keyword.merge([uuid: uuid])
+                |> Keyword.merge([status: status])
 
             struct(__MODULE__, opts) 
         end
 
-        def push_event(%Instance{}=instance, %Event{number: number}=event) do
+        def push_event(%Instance{}=instance, {action, %Event{number: number}=event}) do
 
             %Instance{pid: pid, syn: syn, ack: ack, queue: queue} = instance
 
-            next = List.first(queue, event)
+            {naction, nevent} = List.first(queue, {action, event})
 
             queue = 
                 cond do
                     Enum.empty?(queue) ->
                         # add event to empty queue
-                        List.wrap(event)
+                        List.wrap({action, event})
 
-                    next.number === event.number
-                        # old event at head do nothing
-                            queue
+                    nevent.number === event.number ->
+                        # old event alread in queue 
+                        # at head do nothing
+                        queue
                     true ->
                         # put new event in queue
                         queue
-                        |> Enum.concat(List.wrap(event))
-                        |> Enum.uniq_by(&(Map.get(&1, :number)))
-                        |> Enum.sort(&(Map.get(&1, :number) <= Map.get(&2, :number)))
+                        |> Enum.concat(List.wrap({action, event}))
+                        |> Enum.uniq_by(&(elem(&1,1).number))
+                        |> Enum.sort(&(elem(&1,1).number <= elem(&2,1).number))
                 end
 
+            push_now = 
+                is_pid(pid) 
+                and syn == ack 
+                and number > ack 
+                and nevent.number == number
+
             cond do
-                is_pid(pid) and syn == ack and number > ack and next.number == number ->
+                push_now ->
                     [
                         process: instance.namespace,
                         saga: instance.id,
@@ -99,7 +117,7 @@ defmodule Signal.Process.Router do
                     |> Signal.Logger.info(label: :router)
 
                     instance.app
-                    |> Signal.PubSub.broadcast(instance.uuid, event)
+                    |> Signal.PubSub.broadcast(instance.uuid, {naction, event})
                     %Instance{instance | syn: number, queue: queue, status: :running}
 
                 number > syn  ->
@@ -117,17 +135,68 @@ defmodule Signal.Process.Router do
             end
         end
 
-        def stop(%Instance{}=instance, status) do
-            %Instance{app: app, ref: ref, uuid: uuid, ack: ack}=instance
+        def halt(%Instance{}=instance) do
+            %Instance{app: app, ref: ref, uuid: uuid, ack: ack, queue: queue}=instance
             Process.demonitor(ref)
             Supervisor.unregister_child(app, uuid)
-            Signal.PubSub.broadcast(app, uuid, status)
-            %Instance{instance| pid: nil, ref: nil, syn: ack, status: status}
+            Signal.PubSub.broadcast(app, uuid, :sleeping)
+
+            # drop all apply actions
+            # stop on first start
+            # so instance can restart
+            %Instance{instance| 
+                pid: nil, 
+                ref: nil, 
+                syn: ack, 
+                queue: queue,
+                status: :sleeping
+            }
+        end
+
+        def stop(%Instance{}=instance) do
+            %Instance{
+                app: app, 
+                ref: ref, 
+                ack: ack, 
+                uuid: uuid, 
+                queue: queue
+            } = instance
+
+            # drop all apply actions
+            # stop on first start
+            # so instance can restart
+            flush = Enum.take_while(queue, &(elem(&1, 0) === :apply))
+            fresh_queue = Enum.drop_while(queue, &(elem(&1, 0) === :apply))
+            is_stoppable? = Enum.empty?(fresh_queue)
+
+            if is_stoppable? do
+                Process.demonitor(ref)
+                Supervisor.unregister_child(app, uuid)
+                Signal.PubSub.broadcast(app, uuid, :stopped)
+            else
+                Signal.PubSub.broadcast(app, uuid, :restart)
+            end
+
+            stopped_instance =
+                %Instance{instance| 
+                    pid: if(is_stoppable?, do: nil, else: instance.pid),
+                    ref: if(is_stoppable?, do: nil, else: instance.ref),
+                    syn: if(is_stoppable?, do: ack, else: instance.syn),
+                    queue: fresh_queue,
+                    status: if(is_stoppable?, do: :stopped, else: instance.status)
+                }
+            {stopped_instance, flush}
+        end
+
+        def stoppable?(%Instance{queue: queue}) do
+            queue
+            |> Enum.drop_while(&(elem(&1, 0) === :apply))
+            |> Enum.empty?()
         end
 
         def acknowledge(%Instance{}=instance, number) do
             %Instance{ack: ack, syn: syn, queue: queue} = instance
-            queue = Enum.filter(queue, &(Map.get(&1, :number) > number))
+            queue = Enum.filter(queue, &(elem(&1,1).number) > number)
 
             # Only acknowledge events with greater numbers
             # ie more recent events
@@ -185,7 +254,7 @@ defmodule Signal.Process.Router do
             {:noreply, router, router.timeout}
         else
 
-            instance = Instance.stop(instance, :sleeping)
+            instance = Instance.halt(instance)
 
             case instance.queue do
                 [] ->
@@ -229,9 +298,7 @@ defmodule Signal.Process.Router do
                 ]
                 |> Signal.Logger.info(label: :router)
 
-                unless Enum.empty?(instance.queue) do
-                    sched_next(instance)
-                end
+                sched_next(instance)
                 {:noreply, router, router.timeout}
         end
     end
@@ -302,7 +369,7 @@ defmodule Signal.Process.Router do
                 instances =
                     case instance do
                         %Instance{queue: [], syn: syn, ack: ack} when syn === ack ->
-                            instance = Instance.stop(instance, :sleeping)
+                            instance = Instance.halt(instance)
                             Map.put(instances, instance.id, instance)
 
                         %Instance{queue: _queue} ->
@@ -328,24 +395,21 @@ defmodule Signal.Process.Router do
                 {:noreply, router, router.timeout}
 
             instance -> 
-                instance =
-                    case instance do
-                        %{queue: [], pid: pid} when is_pid(pid) ->
-                            Instance.stop(instance, :stopped)
+                {stopped_instance, needs_flush} = Instance.stop(instance)
 
-                        _ ->
-                            instance
-                    end
 
                 instances =
-                    if instance.status === :stopped do
+                    if stopped_instance.status === :stopped do
                         Map.delete(instances, id)
                     else
-                        instances
+                        Map.put(instances, stopped_instance.id, stopped_instance)
                     end
 
                 router = 
-                    router
+                    needs_flush
+                    |> Enum.reduce(router, fn {_, %Event{number: number}}, router -> 
+                        mark_event_as_processed(router, number)
+                    end)
                     |> struct(%{instances: instances})
 
                 {:noreply, router, router.timeout}
@@ -363,13 +427,7 @@ defmodule Signal.Process.Router do
         {:reply, found, router, router.timeout}
     end
 
-    def handle_event(%Event{}=event, %Router{}=router) do
-        %Router{
-            app: app, 
-            name: namespace,
-            module: module, 
-            instances: instances, 
-        } = router
+    def handle_event(%Event{}=event, %Router{module: module}=router) do
 
         reply = 
             case Kernel.apply(module, :handle, [Event.data(event)]) do
@@ -388,23 +446,30 @@ defmodule Signal.Process.Router do
                     """
             end
 
-        {action, id} = reply
+        {:noreply, router, {:continue, {:route, event, reply}}}
+    end
 
-        instance =  Map.get(instances, id)
+    def handle_route({%Event{}=event, {action, id}}, %Router{}=router) do
+        %Router{
+            app: app, 
+            name: namespace,
+            instances: instances, 
+        } = router
+
         [
             process: router.name,
             routing: event.topic,
             number: event.number,
-            handle: reply,
+            routing: {action, id},
         ]
         |> Signal.Logger.info(label: :router)
 
         target =
-            case {action, instance} do
-                {:start, %Instance{}}  ->
+            case {action, Map.get(instances, id)} do
+                {:start, %Instance{}=instance}  ->
                     instance
 
-                {:apply, %Instance{}} ->
+                {:apply, %Instance{}=instance} ->
                     instance
 
                 {:start, nil}  ->
@@ -426,7 +491,7 @@ defmodule Signal.Process.Router do
             instance = 
                 router
                 |> wake_process(target)
-                |> Instance.push_event(event)
+                |> Instance.push_event({action, event})
 
             instances = Map.put(instances, instance.id, instance)
 
@@ -454,19 +519,14 @@ defmodule Signal.Process.Router do
     end
 
     def handle_next(id, %Router{instances: instances}=router) do
-
         case Map.get(instances, id) do
-            nil ->
-                nil
+            %Instance{queue: [{action, %Event{}=event}|_]} ->
+                reply = {action, id}
+                {:noreply, router, {:continue, {:route, event, reply}}}
 
-            %Instance{queue: []} ->
-                nil
-
-            %Instance{queue: [%Event{}=event|_]} ->
-                send(self(), event)
+            _ ->
+                {:noreply, router, router.timeout}
         end
-
-        {:noreply, router, router.timeout}
     end
 
     defp acknowledge_processed_events(%Router{processing: []}=router) do
@@ -500,6 +560,10 @@ defmodule Signal.Process.Router do
         else
             router
         end
+    end
+
+    defp sched_next(%Instance{queue: []}) do
+        nil
     end
 
     defp sched_next(%Instance{id: id}) do

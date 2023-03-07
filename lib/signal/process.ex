@@ -56,6 +56,11 @@ defmodule Signal.Process do
             end
 
             @impl true
+            def handle_continue({:route, event, reply}, router) do
+                Router.handle_route({event, reply}, router)
+            end
+
+            @impl true
             def handle_info({:next, id}, router) do
                 Router.handle_next(id, router)
             end

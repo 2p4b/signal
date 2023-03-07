@@ -167,6 +167,7 @@ defmodule Signal.Process.Saga do
                 saga = 
                     saga
                     |> drop_action(action_uuid)
+                    |> save_saga_state()
                     |> sched_next_action()
                 {:noreply, saga, saga.timeout}
 
@@ -221,9 +222,15 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info(:stopped, %Saga{actions: [], status: :stop}=saga) do
+    def handle_info(:stopped, %Saga{actions: [], buffer: [], status: :stop}=saga) do
         shutdown_saga(saga)
         {:stop, :normal, saga}
+    end
+
+    @impl true
+    def handle_info(:restart, %Saga{actions: [], buffer: [], status: :stop}=saga) do
+        shutdown_saga(saga)
+        {:noreply, %{saga| status: :running}, {:continue, :load_effect}}
     end
 
     @impl true
@@ -244,7 +251,7 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def handle_info({:action, _action_uuid}, %Saga{}=saga) do
-        [action| actions] = saga.actions
+        [action| _actions] = saga.actions
 
         [app: saga.app, action: action]
         |> Signal.Logger.info(label: :saga)
@@ -262,7 +269,8 @@ defmodule Signal.Process.Saga do
 
             {:ok, state}->
                 saga =
-                    %Saga{saga| state: state, actions: actions}
+                    %Saga{saga| state: state}
+                    |> drop_action(action_uuid)
                     |> save_saga_state()
                     |> sched_next_action()
                 {:noreply, saga, saga.timeout}
@@ -293,13 +301,13 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info(%Event{number: number}, %Saga{ack: ack}=saga) 
+    def handle_info({_, %Event{number: number}}, %Saga{ack: ack}=saga) 
     when number <= ack do
         {:noreply, saga, saga.timeout}
     end
 
     @impl true
-    def handle_info(%Event{number: number}=event, %Saga{id: id}=saga) do
+    def handle_info({_, %Event{number: number}=event}, %Saga{id: id}=saga) do
         saga = 
             saga
             |> queue_event(event)
@@ -390,6 +398,7 @@ defmodule Signal.Process.Saga do
             "state" => payload, 
             "buffer" => buffer,
             "status" => status,
+            "actions" => actions,
         } = data
 
         status = String.to_existing_atom(status)
@@ -404,6 +413,7 @@ defmodule Signal.Process.Saga do
             state: state, 
             buffer: buffer, 
             status: status,
+            actions: actions,
         }
     end
 
