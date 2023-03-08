@@ -262,16 +262,14 @@ defmodule Signal.Process.Router do
 
                     pid = start_process(router, id, ack) 
 
-                    instance =
+                    new_instance =
                         instance
                         |> Map.from_struct()
                         |> Map.put(:pid, pid)
                         |> Map.to_list()
                         |> Instance.new()
 
-                    sched_next(instance)
-
-                    instances =  Map.put(instances, instance.id, instance)
+                    instances =  Map.put(instances, new_instance.id, new_instance)
 
                     {:noreply, %Router{router|instances: instances}, router.timeout}
             end
