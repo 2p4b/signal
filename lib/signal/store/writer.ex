@@ -1,4 +1,5 @@
 defmodule Signal.Store.Writer do
+    alias Signal.PubSub
     alias Signal.Transaction
     alias Signal.Store.Writer
     alias Signal.Stream.Stage
@@ -8,7 +9,7 @@ defmodule Signal.Store.Writer do
 
     require Logger
 
-    defstruct [index: 0, app: nil, streams: %{}, brokers: []]
+    defstruct [index: 0, app: nil, streams: %{}]
 
     @doc """
     Starts a new execution queue.
@@ -39,19 +40,6 @@ defmodule Signal.Store.Writer do
     end
 
     @impl true
-    def handle_call({:attach, _opts}, {pid, _tag}, %Writer{}=writer) do
-        %Writer{brokers: brokers, index: index} = writer
-        brokers = brokers ++ List.wrap(pid)
-        {:reply, {:ok, index}, %Writer{writer| brokers: brokers}}
-    end
-
-    @impl true
-    def handle_call({:detach, _opts}, {pid, _tag}, %Writer{brokers: brokers}=writer) do
-        brokers = Enum.filter(brokers, &(&1 !== pid))
-        {:reply, :ok, %Writer{writer| brokers: brokers}}
-    end
-
-    @impl true
     def handle_call({:commit, %Transaction{}=transaction, opts}, _from, writer) do
         # { streams, events }
         transaction = prepare_transaction(writer, transaction)
@@ -66,13 +54,13 @@ defmodule Signal.Store.Writer do
         end
     end
 
-    def push_broker_events(%Writer{brokers: brokers}, %Transaction{staged: staged}) do
+    def push_broker_events(%Writer{}=writer, %Transaction{}=trnx) do
+        %Writer{app: app} = writer
+        %Transaction{staged: staged} = trnx
         staged
         |> Enum.each(fn %Stage{events: events} -> 
             Enum.each(events, fn event -> 
-                Enum.each(brokers, fn broker -> 
-                    Process.send(broker, event, [])
-                end)
+                PubSub.broadcast_event(app, event)
             end)
         end)
     end
@@ -104,18 +92,6 @@ defmodule Signal.Store.Writer do
         application
         |> name()
         |> GenServer.call(:index)
-    end
-
-    def attach(application, opts \\ []) do
-        application
-        |> name()
-        |> GenServer.call({:attach, opts})
-    end
-
-    def detach(application, opts \\ []) do
-        application
-        |> name()
-        |> GenServer.call({:detach, opts})
     end
 
     def commit(application, transaction, opts \\ []) do

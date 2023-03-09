@@ -62,13 +62,8 @@ defmodule Signal.Command.Dispatcher do
         if await do
             aggregates = 
                 histories
-                |> Enum.map(fn %History{events: [sample | _], version: version} -> 
+                |> Enum.map(fn %History{stream: stream, version: version} -> 
                     state_opts = [version: version, timeout: :infinity]
-                    stream =
-                        sample
-                        |> Event.payload() 
-                        |> Signal.Stream.stream()
-
                     app
                     |> Signal.Application.supervisor(Task)
                     |> Task.Supervisor.async_nolink(fn -> 

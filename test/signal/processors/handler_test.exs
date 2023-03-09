@@ -49,8 +49,8 @@ defmodule Signal.Processor.HandlerTest do
             application: TestApp,
             topics: [Deposited]
 
-        def init(sub, _opts) do
-            {:ok, sub}
+        def init(consumer, _opts) do
+            {:ok, consumer}
         end
 
         def handle_call(:intercept, {pid, _ref}, _state) do
@@ -109,10 +109,10 @@ defmodule Signal.Processor.HandlerTest do
             |> Transaction.new()
 
             assert :ok == Signal.Store.Writer.commit(TestApp, staged1, [])
-            assert_receive(%Deposited{ amount: 5000 }, 1000)
+            assert_receive(%Deposited{ amount: 5000 }, 2000)
 
             assert :ok == Signal.Store.Writer.commit(TestApp, staged2, [])
-            assert_receive(%Deposited{ amount: 4000 }, 1000)
+            assert_receive(%Deposited{ amount: 4000 }, 10000)
         end
 
     end

@@ -14,6 +14,11 @@ defmodule Signal.Store.Adapter do
         Kernel.apply(store, :save_effect, [effect, opts])
     end
 
+    def list_effects(application, namespace, opts\\[]) do
+        store = application_store(application)
+        Kernel.apply(store, :list_effects, [namespace, opts])
+    end
+
     def delete_effect(application, uuid, opts\\[]) do
         store = application_store(application)
         Kernel.apply(store, :delete_effect, [uuid, opts])
@@ -30,7 +35,8 @@ defmodule Signal.Store.Adapter do
     end
 
     def get_event(application, number, opts\\[]) do 
-        case list_events(application, [range: [number, number]], opts) do
+        opts = Keyword.merge(opts, [range: [number, number]])
+        case list_events(application, opts) do
             [head| _] ->
                 head
 
@@ -44,7 +50,8 @@ defmodule Signal.Store.Adapter do
     end
 
     def get_stream_event(application, stream_id, version, opts\\[]) do
-        case list_stream_events(application, stream_id, [range: [version, version]], opts) do
+        opts = Keyword.merge(opts, [range: [version, version]])
+        case list_stream_events(application, stream_id, opts) do
             [head| _] ->
                 head
 
@@ -57,24 +64,24 @@ defmodule Signal.Store.Adapter do
         end
     end
 
-    def read_events(application, callback, params\\[], opts\\[]) do
+    def read_events(application, callback, opts\\[]) do
         store = application_store(application)
-        Kernel.apply(store, :read_events, [callback, params, opts])
+        Kernel.apply(store, :read_events, [callback, opts])
     end
 
-    def read_stream_events(application, stream_id, callback, params\\[], opts\\[]) do
+    def read_stream_events(application, stream_id, callback, opts\\[]) do
         store = application_store(application)
-        Kernel.apply(store, :read_stream_events, [stream_id, callback, params, opts])
+        Kernel.apply(store, :read_stream_events, [stream_id, callback, opts])
     end
 
-    def list_events(application, params\\[], opts\\[]) do
+    def list_events(application, opts\\[]) do
         store = application_store(application)
-        Kernel.apply(store, :list_events, [params, opts])
+        Kernel.apply(store, :list_events, [opts])
     end
 
-    def list_stream_events(application, stream_id, params\\[], opts\\[]) do
+    def list_stream_events(application, stream_id, opts\\[]) do
         store = application_store(application)
-        Kernel.apply(store, :list_stream_events, [stream_id, params, opts])
+        Kernel.apply(store, :list_stream_events, [stream_id, opts])
     end
 
     def handler_position(application, handle, opts\\[]) do

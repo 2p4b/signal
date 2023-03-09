@@ -14,6 +14,8 @@ defmodule Signal.Store do
 
     @callback save_effect(effect::effect, opts) :: :ok | {:error, term()}
 
+    @callback list_effects(namespace::binary, opts::list) :: list()
+
     @callback delete_effect(uuid::binary, opts) :: :ok | {:error, term()}
 
     @callback get_cursor(opts::list) :: integer
@@ -30,13 +32,13 @@ defmodule Signal.Store do
 
     @callback get_snapshot(id::binary, opts::list) :: snapshot()
 
+    @callback list_events(opts::list) :: list()
+
     @callback read_events(reader::term, opts::list) :: :ok
 
-    @callback list_events(params::list, opts::list) :: list()
+    @callback list_stream_events(sid::binary, opts::list) :: list()
 
     @callback read_stream_events(sid::binary, reader::term, opts::list) :: :ok
-
-    @callback list_stream_events(sid::binary, params::list, opts::list) :: list()
 
     @callback stream_position(id::binary, opts::list) :: integer()
 

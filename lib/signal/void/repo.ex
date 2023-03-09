@@ -54,6 +54,15 @@ defmodule Signal.Void.Repo do
     end
 
     @impl true
+    def handle_call({:list_effects, namespace}, _from, %Repo{}=store) do
+        effects = 
+            store.effects
+            |> Map.filter(&(Map.get(elem(&1, 1), :namespace) == namespace))
+            |> Map.values()
+        {:reply, effects, store} 
+    end
+
+    @impl true
     def handle_call({:save_effect, effect}, _from, %Repo{}=repo) do
         effects = Map.put(repo.effects, effect.uuid, effect)
         {:reply, :ok, %Repo{repo| effects: effects}} 

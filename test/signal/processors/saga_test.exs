@@ -142,29 +142,36 @@ defmodule Signal.Processor.SagaTest do
             Process.send(pid, event, [])
         end
 
-        def apply(%AccountOpened{pid: pid}=ev, %ActivityNotifier{}=act) do
+        def handle_event(%AccountOpened{pid: pid}=ev, %ActivityNotifier{}=act) do
             state = %ActivityNotifier{act | pid: pid}
             acknowledge(state, ev)
             {:ok, state}
         end
 
-        def apply(%Deposited{}=ev, %ActivityNotifier{amount: amt}=act) do
+        def handle_event(%Deposited{}=ev, %ActivityNotifier{amount: amt}=act) do
             acknowledge(act, ev)
             amount = ev.amount + amt
             if amount == 9000 do
-                bonus = %Deposite{account: "saga.123", amount: 1000}
-                {:dispatch, bonus , %ActivityNotifier{act | amount: amount} }
+                bonus = %{"account" => ev.account, "amount" => 1000}
+                action = {"deposite", bonus}
+                {:action, action, %ActivityNotifier{act | amount: amount}}
             else
                 {:ok, %ActivityNotifier{act | amount: amount} }
             end
         end
 
-        def apply(%AccountClosed{}=ev, %ActivityNotifier{}=act) do
+        def handle_event(%AccountClosed{}=ev,  %ActivityNotifier{}=act) do
             acknowledge(act, ev)
-            {:shutdown, act}
+            {:stop, act}
         end
 
-        def error(%Deposite{}, _error, %ActivityNotifier{}=acc) do
+        def handle_action({"deposite", params}, _process) do
+            amount = Map.get(params, "amount")
+            account = Map.get(params, "account")
+            {:dispatch, %Deposite{amount: amount, account: account}}
+        end
+
+        def handle_error({%Deposite{}, _}, _event,  %ActivityNotifier{}=acc) do
             {:ok, acc}
         end
 
@@ -190,18 +197,18 @@ defmodule Signal.Processor.SagaTest do
 
             TestApp.dispatch(Deposite.new([amount: 5000]))
 
-            assert_receive(%AccountOpened{account: "saga.123"}, 1000)
+            assert_receive(%AccountOpened{account: "saga.123"}, 3000)
 
-            assert_receive(%Deposited{amount: 5000}, 1000)
+            assert_receive(%Deposited{amount: 5000}, 3000)
 
             TestApp.dispatch(Deposite.new([amount: 4000]))
 
-            assert_receive(%Deposited{amount: 4000}, 1000)
-            assert_receive(%Deposited{amount: 1000}, 1000)
+            assert_receive(%Deposited{amount: 4000}, 3000)
+            assert_receive(%Deposited{amount: 1000}, 3000)
 
             TestApp.dispatch(CloseAccount.new([]), await: true)
 
-            assert_receive(%AccountClosed{}, 1000)
+            assert_receive(%AccountClosed{}, 3000)
 
             Process.sleep(500)
             refute TestApp.process_alive?(ActivityNotifier, "saga.123")

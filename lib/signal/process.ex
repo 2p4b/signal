@@ -4,7 +4,7 @@ defmodule Signal.Process do
         app = Keyword.get(opts, :application)
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
-        stop_timeout = Keyword.get(opts, :stop_timeout, 100)
+        timeout = Keyword.get(opts, :timeout, 5000)
 
         quote location: :keep do
 
@@ -15,11 +15,11 @@ defmodule Signal.Process do
             alias Signal.Process.Router
             @before_compile unquote(__MODULE__)
 
-            @stop_timeout unquote(stop_timeout)
+            @timeout unquote(timeout)
 
             @app unquote(app)
 
-            @name (if unquote(name) do 
+            @name (if not(is_nil(unquote(name))) and is_binary(unquote(name)) do 
                 unquote(name) 
             else 
                 Signal.Helper.module_to_string(__MODULE__) 
@@ -40,18 +40,24 @@ defmodule Signal.Process do
             @impl true
             def init(opts) when is_list(opts) do
                 params = [
+                    app: @app,
                     name: @name,
                     topics: @topics,
+                    timeout: @timeout,
                     module: __MODULE__,
-                    application: @app,
                 ] 
                 Router.init(params ++ opts)
             end
 
 
             @impl true
-            def handle_info(:boot, router) do
+            def handle_continue(:boot, router) do
                 Router.handle_boot(router)
+            end
+
+            @impl true
+            def handle_continue({:route, event, reply}, router) do
+                Router.handle_route({event, reply}, router)
             end
 
             @impl true
@@ -70,8 +76,28 @@ defmodule Signal.Process do
             end
 
             @impl true
-            def handle_cast({:ack, id, number, status}, router) do
-                Router.handle_ack({status, id, number}, router)
+            def handle_info({:stop, id}, router) do
+                Router.handle_stop(id, router)
+            end
+
+            @impl true
+            def handle_info({:sleep, id}, router) do
+                Router.handle_sleep(id, router)
+            end
+
+            @impl true
+            def handle_info({:start, id, number}, router) do
+                Router.handle_start({id, number}, router)
+            end
+
+            @impl true
+            def handle_info({:ack, id, number, status}, router) do
+                Router.handle_ack({id, number}, router)
+            end
+
+            @impl true
+            def handle_info(:timeout, router) do
+                Router.handle_timeout(router)
             end
 
             @impl true
