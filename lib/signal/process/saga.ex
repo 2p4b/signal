@@ -255,16 +255,12 @@ defmodule Signal.Process.Saga do
         [app: saga.app, action: action]
         |> Signal.Logger.info(label: :saga)
 
-<<<<<<< HEAD
-        reply = Kernel.apply(module, :apply, [Event.data(event), state])
-=======
         action_uuid = Map.get(action, "uuid")
         action_name = Map.get(action, "name")
         action_params = Map.get(action, "params")
 
         action_tuple = {action_name, action_params}
         args = [action_tuple, saga.state]
->>>>>>> wip
 
         case Kernel.apply(saga.module, :handle_action, args) do
             {:dispatch, command} ->
