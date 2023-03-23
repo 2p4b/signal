@@ -22,13 +22,15 @@ defmodule Signal.Impl.Stream do
                     @stream_module stream_mod
                     if is_atom(@field) do
                         def id(command, opts\\[]) do
+                            opts = [context: command] ++ opts ++ @stream_opts
                             command
                             |> Map.get(@field)
-                            |> Signal.Helper.stream_id(opts ++ @stream_opts)
+                            |> Signal.Helper.stream_id(opts)
                         end
                     else
-                        def id(_command, opts\\[]) do
-                            Signal.Helper.stream_id(@field, opts ++ @stream_opts)
+                        def id(command, opts\\[]) do
+                            opts = [context: command] ++ opts ++ @stream_opts
+                            Signal.Helper.stream_id(@field, opts)
                         end
                     end
 
