@@ -18,10 +18,11 @@ defmodule Signal.Process.Saga do
         :namespace,
         :channel,
         ack: 0, 
+        processed: 0,
         buffer: [],
         actions: [],
         timeout: 5000,
-        status: :start,
+        stopped: false
     ]
 
     @doc """
@@ -64,7 +65,7 @@ defmodule Signal.Process.Saga do
             sid: saga.id,
             spid: saga.uuid,
             namespace: saga.namespace,
-            status: saga.status,
+            stopped: saga.stopped,
             timeout: saga.timeout,
         ]
         |> Signal.Logger.info(label: :saga)
@@ -74,14 +75,14 @@ defmodule Signal.Process.Saga do
     # no actions in queue to process
     # so continue to stopping saga
     @impl true
-    def handle_continue(:process_event, %Saga{status: :stop, actions: []}=saga) do
+    def handle_continue(:process_event, %Saga{stopped: true, actions: []}=saga) do
         {:noreply, saga, {:continue, :stop}}
     end
 
     # stop processing events
     # so ignore signal
     @impl true
-    def handle_continue(:process_event, %Saga{status: :stop}=saga) do
+    def handle_continue(:process_event, %Saga{stopped: true}=saga) do
         {:noreply, saga}
     end
 
@@ -112,7 +113,7 @@ defmodule Signal.Process.Saga do
             type: saga.module,
             sid: saga.id,
             uuid: saga.uuid,
-            status: saga.status,
+            stopped: saga.stopped,
             processing: [
                 topic: event.topic,
                 number: event.number,
@@ -130,7 +131,7 @@ defmodule Signal.Process.Saga do
     end
 
 
-    def handle_continue(:stop, %Saga{actions: [], buffer: [], status: :stop}=saga) do
+    def handle_continue(:stop, %Saga{actions: [], buffer: [],  stopped: true}=saga) do
         router_push(saga, {:stop, saga.id})
         {:noreply, saga, :hibernate}
     end
@@ -221,19 +222,19 @@ defmodule Signal.Process.Saga do
     end
 
     @impl true
-    def handle_info(:stopped, %Saga{actions: [], buffer: [], status: :stop}=saga) do
+    def handle_info(:stopped, %Saga{actions: [], buffer: [], stopped: true}=saga) do
         shutdown_saga(saga)
         {:stop, :normal, saga}
     end
 
     @impl true
-    def handle_info(:restart, %Saga{actions: [], buffer: [], status: :stop}=saga) do
+    def handle_info(:restart, %Saga{actions: [], buffer: [], stopped: true}=saga) do
         shutdown_saga(saga)
-        {:noreply, %{saga| status: :running}, {:continue, :load_effect}}
+        {:noreply, %{saga| stopped: false}, {:continue, :load_effect}}
     end
 
     @impl true
-    def handle_info({:action, :stop}, %Saga{actions: [], status: :stop}=saga) do
+    def handle_info({:action, :stop}, %Saga{actions: [], stopped: true}=saga) do
         {:noreply, saga, {:continue, :stop}}
     end
 
@@ -361,14 +362,15 @@ defmodule Signal.Process.Saga do
     defp process_event(%Saga{}=saga, %Event{}=event) do
 
         %Saga{state: state, module: module} = saga
+        %Event{number: number} = event
 
         case Kernel.apply(module, :handle_event, [Event.data(event), state]) do 
             {:action, {action, params}, state} when is_binary(action)  ->
-                %Saga{saga| state: state, status: :running}
+                %Saga{saga| state: state, stopped: false}
                 |> enqueue_event_action(event, {action, params})
 
             {:ok, state} ->
-                %Saga{saga | state: state, status: :running}
+                %Saga{saga | state: state, stopped: false}
 
 
             {:stop, state} ->
@@ -377,12 +379,12 @@ defmodule Signal.Process.Saga do
                     type: saga.module,
                     sid: saga.id,
                     event: event.topic,
-                    status: :stopped,
+                    stopped: true,
                     number: event.number,
                 ]
                 |> Signal.Logger.info(label: :saga)
 
-                %Saga{saga | state: state, status: :stop}
+                %Saga{saga | state: state, stopped: true}
 
             invalid_value ->
                 raise """
@@ -395,6 +397,7 @@ defmodule Signal.Process.Saga do
                     got: #{inspect(invalid_value)}
                 """
         end
+        |> Map.put(:processed, number)
     end
 
     defp load_saga_state(%Saga{}=saga, %Effect{data: data}) do
@@ -402,11 +405,10 @@ defmodule Signal.Process.Saga do
             "ack" => ack, 
             "state" => payload, 
             "buffer" => buffer,
-            "status" => status,
+            "stopped" => stopped,
             "actions" => actions,
+            "processed" => processed,
         } = data
-
-        status = String.to_existing_atom(status)
 
         {:ok, state} = 
             saga.module
@@ -417,8 +419,9 @@ defmodule Signal.Process.Saga do
             ack: ack, 
             state: state, 
             buffer: buffer, 
-            status: status,
+            stopped: stopped,
             actions: actions,
+            processed: processed,
         }
     end
 
@@ -428,8 +431,9 @@ defmodule Signal.Process.Saga do
             ack: ack, 
             state: state, 
             buffer: buffer,
-            status: status,
+            stopped: stopped,
             actions: actions,
+            processed: processed,
             namespace: namespace,
         } = saga
 
@@ -439,16 +443,15 @@ defmodule Signal.Process.Saga do
                 number when is_integer(number) -> number
             end)
 
-        status = Atom.to_string(status)
-
         {:ok, payload} = Codec.encode(state)
 
         data = %{
             "id" => id,
             "ack" => ack, 
             "state" => payload, 
-            "status" => status,
+            "stopped" => stopped,
             "actions" => actions,
+            "processed" => processed,
             "buffer" => event_buffer,
         } 
 
@@ -502,7 +505,7 @@ defmodule Signal.Process.Saga do
         %Saga{saga | actions: actions}
     end
 
-    defp sched_next_action(%Saga{actions: [], status: :stop}=saga) do
+    defp sched_next_action(%Saga{actions: [], stopped: true}=saga) do
         send(self(), {:action, :stop})
         saga
     end
