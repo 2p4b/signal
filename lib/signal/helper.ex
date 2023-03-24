@@ -5,7 +5,7 @@ defmodule Signal.Helper do
         id
     end
     def stream_id(id, [context: _]) when is_binary(id) do
-        id
+        stream_id(id)
     end
     def stream_id(id, opts) when is_binary(id) do
         name = Keyword.fetch!(opts, :name)

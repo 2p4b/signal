@@ -8,11 +8,12 @@ defmodule Signal.Impl.Stream do
                             {module, field, []}
 
                         {module, field, opts} when is_list(opts) ->
-                            {module, field, []}
+                            {module, field, opts}
 
                         _ ->
                             raise """
-                            Compiler Error steam must be tuple/2 or tuple/3 see doc
+                            Compiler Error stream must be tuple/2 or tuple/3 see doc
+                                    {Aggregate.Module, :iden, opts\\\\[]}
                             """
                     end
 
