@@ -9,7 +9,6 @@ defmodule Signal.Command.CommandTest do
     end
 
     defmodule Event do
-
         use Signal.Event,
             stream: { TestAggregate, :uuid}
 
@@ -20,7 +19,6 @@ defmodule Signal.Command.CommandTest do
     end
 
     defmodule Command do
-
         use Signal.Command, 
             stream: {TestAggregate, :uuid}
 
@@ -36,7 +34,6 @@ defmodule Signal.Command.CommandTest do
         def execute(%Command{uuid: uuid}, _params) do
             {:ok, uuid}
         end
-
     end
 
 

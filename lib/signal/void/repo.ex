@@ -75,17 +75,10 @@ defmodule Signal.Void.Repo do
     end
 
     @impl true
-    def handle_call({:commit, transaction}, from, %Repo{}=repo) do
+    def handle_call({:commit, transaction}, _from, %Repo{}=repo) do
         repo = 
             transaction.staged
             |> Enum.reduce(repo, &(handle_publish(&2, &1)))
-
-        {:reply, :ok, repo} =
-            transaction.effects
-            |> Enum.reduce({:reply, :ok, repo}, fn effect, {_, _, repo} -> 
-               handle_call({:save_effect, effect}, from, repo)
-            end)
-
         {:reply, :ok, repo}
     end
 

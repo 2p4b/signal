@@ -10,7 +10,6 @@ defmodule Signal.Command.QueueTest do
 
         queue default: [timeout: :infinity]
         queue :thread, timeout: 500
-
     end
 
     setup_all do

@@ -12,7 +12,6 @@ defmodule Signal.Events.EventTest do
             field :id,      :string,   default: "event.id"
             field :uuid,    :string,   default: "event.uuid"
         end
-
     end
 
     describe "Event" do
