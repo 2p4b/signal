@@ -4,7 +4,6 @@ defmodule Signal.Processor.SagaTest do
     alias Signal.Void.Store
 
     defmodule Account do
-
         use Signal.Aggregate
 
         schema do
@@ -15,11 +14,9 @@ defmodule Signal.Processor.SagaTest do
         def apply(_event, _meta, %Account{}=act) do
             {:ok, act}
         end
-
     end
 
     defmodule Deposited do
-
         use Signal.Event,
             stream: {Account, :account}
 
@@ -50,7 +47,6 @@ defmodule Signal.Processor.SagaTest do
     end
 
     defmodule OpenAccount do
-
         use Signal.Command,
             stream: {Account, :account}
 
@@ -65,7 +61,6 @@ defmodule Signal.Processor.SagaTest do
     end
 
     defmodule Deposite do
-
         use Signal.Command,
             stream: {Account, :account}
 

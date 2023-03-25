@@ -21,7 +21,6 @@ defmodule Signal.Events.ProducerTest do
         def apply(%Aggregate{}=aggr, _event) do
             aggr
         end
-
     end
 
     defmodule EventOne do
@@ -75,7 +74,6 @@ defmodule Signal.Events.ProducerTest do
         def execute(%Command{uuid: uuid}, _params) do
             {:ok, uuid}
         end
-
     end
 
     setup_all do

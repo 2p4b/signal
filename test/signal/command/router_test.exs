@@ -43,7 +43,6 @@ defmodule Signal.Command.RouterTest do
         end
 
         defmodule Router do
-
             use Signal.Router
             import Signal.Task
 
@@ -66,7 +65,6 @@ defmodule Signal.Command.RouterTest do
                 consistent: true
 
             register PipelineCommand, via: :pipeline
-
         end
 
 
