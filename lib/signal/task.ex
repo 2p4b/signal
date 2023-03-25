@@ -11,7 +11,6 @@ defmodule Signal.Task do
         :command_type,
         :causation_id,
         :correlation_id,
-        effects: [],
         handles: [],
         indices: [],
         assigns: %{},
