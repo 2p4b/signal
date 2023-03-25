@@ -3,7 +3,6 @@ defmodule Signal.Transaction do
         uuid: nil,
         cursor: 0,
         staged: [],
-        effects: [],
     ]
 
     def new(staged, opts \\ [])
@@ -12,12 +11,10 @@ defmodule Signal.Transaction do
         new(List.wrap(staged), opts)
     end
 
-    def new(staged, opts) do
-        effects = Keyword.get(opts, :effects, [])
+    def new(staged, _opts) when is_list(staged) do
         %Signal.Transaction{
             uuid: UUID.uuid4(),
             staged: staged,
-            effects: effects
         }
     end
 

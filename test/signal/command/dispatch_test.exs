@@ -15,7 +15,6 @@ defmodule Signal.Command.DispatchTest do
     end
 
     defmodule Account do
-
         use Blueprint.Struct
 
         schema do
@@ -25,7 +24,6 @@ defmodule Signal.Command.DispatchTest do
     end
 
     defmodule Deposited do
-
         use Signal.Event,
             stream: {Account, :account}
 
@@ -33,11 +31,9 @@ defmodule Signal.Command.DispatchTest do
             field :account, :string,   default: ""
             field :amount,  :number,  default: 0
         end
-
     end
 
     defmodule Deposite do
-
         use Signal.Command,
             stream: {Account, :account}
 
@@ -49,7 +45,6 @@ defmodule Signal.Command.DispatchTest do
         def handle(%Deposite{}=deposite, _params, %Account{number: "123"}) do
             Deposited.from(deposite)
         end
-
     end
 
     defimpl Signal.Stream.Reducer, for: Account do

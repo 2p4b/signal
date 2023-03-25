@@ -625,15 +625,15 @@ defmodule Signal.Process.Router do
             |> Enum.reduce(router.instances, fn %Effect{data: data}, instances -> 
                 id = Map.get(data, "id")
                 ack = Map.get(data, "ack")
-                status = Map.get(data, "status")
                 buffer = Map.get(data, "buffer")
                 actions = Map.get(data, "actions")
+                stopped = Map.get(data, "stopped")
                 instance =
                     case {actions, buffer} do
                         # No events and actions
                         # and process is not stopping
                         # then assume process as sleeping
-                        {[], []} when status !== "stop" ->
+                        {[], []} when stopped === false ->
                             common
                             |> Keyword.merge([id: id, ack: ack])
                             |> Instance.new()

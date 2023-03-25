@@ -93,7 +93,6 @@ defmodule Signal.Stream.Producer do
         %Action{
             result: result,
             command: command, 
-            effects: effects, 
         } = action
 
         {app_module, tenant} =  app
@@ -108,7 +107,7 @@ defmodule Signal.Stream.Producer do
         if is_map(event_streams) do
             case stage_event_streams(producer, action, event_streams) do
                 {:ok, staged} ->
-                    transaction = Transaction.new(staged, effects: effects)
+                    transaction = Transaction.new(staged)
                     case Writer.commit(app_module, transaction, [tenant: tenant]) do
                         :ok ->
                             confirm_staged(staged)

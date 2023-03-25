@@ -8,11 +8,12 @@ defmodule Signal.Impl.Stream do
                             {module, field, []}
 
                         {module, field, opts} when is_list(opts) ->
-                            {module, field, []}
+                            {module, field, opts}
 
                         _ ->
                             raise """
-                            Compiler Error steam must be tuple/2 or tuple/3 see doc
+                            Compiler Error stream must be tuple/2 or tuple/3 see doc
+                                    {Aggregate.Module, :iden, opts\\\\[]}
                             """
                     end
 
@@ -22,13 +23,15 @@ defmodule Signal.Impl.Stream do
                     @stream_module stream_mod
                     if is_atom(@field) do
                         def id(command, opts\\[]) do
+                            opts = [context: command] ++ opts ++ @stream_opts
                             command
                             |> Map.get(@field)
-                            |> Signal.Helper.stream_id(opts ++ @stream_opts)
+                            |> Signal.Helper.stream_id(opts)
                         end
                     else
-                        def id(_command, opts\\[]) do
-                            Signal.Helper.stream_id(@field, opts ++ @stream_opts)
+                        def id(command, opts\\[]) do
+                            opts = [context: command] ++ opts ++ @stream_opts
+                            Signal.Helper.stream_id(@field, opts)
                         end
                     end
 

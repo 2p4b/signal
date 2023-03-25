@@ -25,15 +25,11 @@ defmodule Signal.ApplicationTest do
     end
 
     defmodule Router do
-
         use Signal.Router
-
         register Command
-
     end
 
     defmodule App do
-
         use Signal.Application,
             store: Signal.Void.Store
 
@@ -46,7 +42,6 @@ defmodule Signal.ApplicationTest do
         end
 
         router Router, via: :combined
-
     end
 
     setup_all do

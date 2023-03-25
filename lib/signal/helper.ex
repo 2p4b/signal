@@ -1,27 +1,35 @@
 defmodule Signal.Helper do
 
-    def stream_id(id, opts \\ []) when is_binary(id) do
-        case Keyword.fetch(opts, :prefix) do
-            {:ok, prefix} ->
-                  [prefix, id] 
-                  |> Enum.join() 
-                  |> String.trim()
-            _ ->
-                  id
-        end
+    def stream_id(id, opts \\ [])
+    def stream_id(id, []) when is_binary(id) do
+        id
+    end
+    def stream_id(id, [context: _]) when is_binary(id) do
+        stream_id(id)
+    end
+    def stream_id(id, opts) when is_binary(id) do
+        name = Keyword.fetch!(opts, :name)
+
+        hash_func = Keyword.get(opts, :hash, :md5)
+
+        namespace = 
+            case Keyword.get(opts, :type, :uuid) do
+                :uuid ->
+                    id
+
+                ns when ns in [:dns, :url, :oid, :x500, nil] ->
+                    namespaced_uuid(ns, id, hash_func)
+            end
+
+        namespaced_uuid(namespace, name, hash_func)
     end
 
-    def stream_tuple(module, id, opts \\ []) when is_atom(module) do
-        case Keyword.fetch(opts, :prefix) do
-            {:ok, prefix} ->
-                  stream_id = 
-                      [prefix, id] 
-                      |> Enum.join() 
-                      |> String.trim()
-                  {stream_id, module}
-            _ ->
-                  {id, module}
-        end
+    def namespaced_uuid(namespace, name, :md5) do
+        UUID.uuid3(namespace, name)
+    end
+
+    def namespaced_uuid(namespace, name, :sha) do
+        UUID.uuid5(namespace, name)
     end
 
     def module_to_string(module) when is_atom(module) do
