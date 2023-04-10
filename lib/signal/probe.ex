@@ -162,7 +162,7 @@ defmodule Signal.Probe do
                         version = index + 1
 
                         metadata =  
-                            Signal.Stream.Event.Metadata
+                            Signal.Event.Metadata
                             |> struct([number: version])
 
                         apply_args = 
