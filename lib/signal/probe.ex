@@ -134,84 +134,62 @@ defmodule Signal.Probe do
             end
 
             # apply the given events to the aggregate state
-            defp evolve(aggregate, event, from \\ 0)
+            defp evolve(aggregate, event)
 
-            defp evolve(aggregate, event, from) when is_atom(aggregate) do
-                evolve(struct(aggregate, []), event, from)
+            defp evolve(aggregate, event) when is_atom(aggregate) do
+                evolve(struct(aggregate, []), event)
             end
 
-            defp evolve(aggregate, event, from) when is_struct(event) do
-                evolve(aggregate, [event], from)
+            defp evolve(aggregate, event) when is_struct(event) do
+                evolve(aggregate, [event])
             end
 
-            defp evolve(aggregate, events, from) when is_list(events) do
-                {aggregate, _version} =
-                    events
-                    |> Enum.reduce({aggregate, from}, fn event, {aggregate, index} -> 
+            defp evolve(aggregate, events) when is_list(events) do
+                Enum.reduce(events, aggregate, fn event, aggregate -> 
 
-                        unless reduces?(aggregate, event) do
-                            {_sid, aggregate_module} = Signal.Stream.stream(event)
-                            raise ArgumentError, message: """
-                                Event requires aggregate of type 
-                                #{inspect(aggregate_module)}
-                                #{inspect(event)} 
+                    unless reduces?(aggregate, event) do
+                        {_sid, aggregate_module} = Signal.Stream.stream(event)
+                        raise ArgumentError, message: """
+                            Event requires aggregate of type 
+                            #{inspect(aggregate_module)}
+                            #{inspect(event)} 
+                        """
+                    end
+
+                    case Signal.Stream.Reducer.apply(aggregate, event) do
+                        {:ok, state}  ->
+                            state
+
+                        {:ok, state, timeout} when is_number(timeout)  ->
+                            state
+
+                        {:snapshot, state} ->
+                            state
+
+                        {:snapshot, state, :sleep} ->
+                            state
+
+                        {:snapshot, state, timeout} when is_number(timeout) ->
+                            state
+
+                        {:sleep, state} ->
+                            state
+
+                        {:sleep, state, timeout} when is_number(timeout) ->
+                            state
+
+                        {:error, error} ->
+                            raise RuntimeError, message: """
+                                Error reducing event
+                                #{inspect(error)}
+                                Aggregte:
+                                    #{inspect(aggregate)}
+                                    
+                                Event:
+                                    #{inspect(event)} 
                             """
-                        end
-
-
-                        version = index + 1
-
-                        metadata =  
-                            Signal.Event.Metadata
-                            |> struct([number: version])
-
-                        apply_args = 
-                            case Signal.Stream.Reducer.impl_for(event) do
-                                nil ->
-                                    [aggregate, metadata, event]
-
-                                _impl ->
-                                    [event, metadata, aggregate]
-                            end
-
-                        aggregate =
-                            case Kernel.apply(Signal.Stream.Reducer, :apply, apply_args) do
-                                {:ok, state}  ->
-                                    state
-
-                                {:ok, state, timeout} when is_number(timeout)  ->
-                                    state
-
-                                {:snapshot, state} ->
-                                    state
-
-                                {:snapshot, state, :sleep} ->
-                                    state
-
-                                {:snapshot, state, timeout} when is_number(timeout) ->
-                                    state
-
-                                {:sleep, state} ->
-                                    state
-
-                                {:sleep, state, timeout} when is_number(timeout) ->
-                                    state
-
-                                {:error, error} ->
-                                    raise RuntimeError, message: """
-                                        Error reducing event
-                                        #{inspect(error)}
-                                        Aggregte:
-                                            #{inspect(aggregate)}
-                                            
-                                        Event:
-                                            #{inspect(event)} 
-                                    """
-                            end
-
-                        {aggregate, version}
-                    end)
-                aggregate
+                    end
+                end)
             end
 
             # check if aggerate reduces an event or command
