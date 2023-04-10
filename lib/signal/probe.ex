@@ -1,10 +1,8 @@
-defmodule Signal.TestCase do
+defmodule Signal.Probe do
     @moduledoc """
     This module defines the test case to be used by tests.
     """
-
     use ExUnit.CaseTemplate
-    alias Signal.Stream.Reducer
 
     using do
         quote do
@@ -168,7 +166,7 @@ defmodule Signal.TestCase do
                             |> struct([number: version])
 
                         apply_args = 
-                            case Reducer.impl_for(event) do
+                            case Signal.Stream.Reducer.impl_for(event) do
                                 nil ->
                                     [aggregate, metadata, event]
 
@@ -177,7 +175,7 @@ defmodule Signal.TestCase do
                             end
 
                         aggregate =
-                            case Kernel.apply(Reducer, :apply, apply_args) do
+                            case Kernel.apply(Signal.Stream.Reducer, :apply, apply_args) do
                                 {:ok, state}  ->
                                     state
 
