@@ -166,7 +166,7 @@ defmodule Signal.Processor.SagaTest do
             {:dispatch, %Deposite{amount: amount, account: account}}
         end
 
-        def handle_error({%Deposite{}, _}, _event,  %ActivityNotifier{}=acc) do
+        def handle_error({_error, %Deposite{}}, _action,  %ActivityNotifier{}=acc) do
             {:ok, acc}
         end
 

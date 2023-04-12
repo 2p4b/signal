@@ -183,7 +183,7 @@ defmodule Signal.Process.Saga do
           action_uuid = Map.get(action, "uuid")
           action_params = Map.get(action, "params")
 
-          args = [{action_name, action_params, command, error}, saga.state]
+          args = [{error, command}, {action_name, action_params}, saga.state]
 
           case Kernel.apply(saga.module, :handle_error, args)  do
               {:ok, state} ->
