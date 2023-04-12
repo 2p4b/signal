@@ -7,16 +7,22 @@ defmodule Signal.Handler do
     defstruct [:app, :state, :module, :consumer]
 
     defmacro __using__(opts) do
+        using = Keyword.get(opts, :__using__, __MODULE__)
         app = Keyword.get(opts, :app)
         name = Keyword.get(opts, :name)
         start = Keyword.get(opts, :start)
         topics = Keyword.get(opts, :topics)
+
         quote do
             use GenServer, restart: :transient
             alias Signal.Event
             alias Signal.Handler
 
             @app unquote(app)
+
+            if is_nil(@app) or not(is_atom(@app)) do
+                Signal.Exception.raise_invalid_app(__MODULE__, unquote(using))
+            end
 
             @signal_start unquote(start)
 

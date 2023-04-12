@@ -19,6 +19,10 @@ defmodule Signal.Process do
 
             @app unquote(app)
 
+            if is_nil(@app) or not(is_atom(@app)) do
+                Signal.Exception.raise_invalid_app(__MODULE__, Signal.Process)
+            end
+
             @name (if not(is_nil(unquote(name))) and is_binary(unquote(name)) do 
                 unquote(name) 
             else 

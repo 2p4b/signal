@@ -1,5 +1,17 @@
 defmodule Signal.Exception do
 
+    def raise_invalid_app(target, using) do
+        raise(OptionParser.ParseError, message: """ 
+
+            #{inspect(target)}
+                use #{inspect(using)},
+                    ...
+                    app: (option must be a Signal App module)
+                    ...
+
+            """)
+    end
+
     defmodule InvalidStreamError do
         defexception [:stream, :signal, :message]
 
