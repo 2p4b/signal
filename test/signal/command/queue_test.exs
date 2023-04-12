@@ -14,7 +14,7 @@ defmodule Signal.Command.QueueTest do
 
     setup_all do
         {:ok, _pid} = start_supervised(Store)
-        {:ok, _pid} = start_supervised({TestApplication, [name: :queue]})
+        {:ok, _pid} = start_supervised({TestApplication, []})
         :ok
     end
 
@@ -33,7 +33,7 @@ defmodule Signal.Command.QueueTest do
             type = :thread
 
             queue =
-                {TestApplication, :queue}
+                TestApplication
                 |> Signal.Execution.Supervisor.prepare_queue(id, type)
 
             assert is_tuple(queue)

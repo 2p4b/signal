@@ -1,17 +1,12 @@
 defmodule Signal.Application do
 
     defmacro __using__(opts) do
-        name  = Keyword.get(opts, :name)
         store = Keyword.get(opts, :store)
         quote generated: true, location: :keep do
             use Supervisor
 
             import unquote(__MODULE__)
             import Signal.Router, only: [via: 1, pipe: 2, pipeline: 2]
-
-            @app __MODULE__
-
-            @name (if unquote(name) do unquote(name) else __MODULE__ end)
 
             @store unquote(store)
 
@@ -20,23 +15,19 @@ defmodule Signal.Application do
             Module.register_attribute(__MODULE__, :signal_routers, accumulate: true)
 
             def start_link(init_arg) do
-                name = Keyword.get(init_arg, :name, @name)
-                Supervisor.start_link(__MODULE__, init_arg, name: name)
+                Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
             end
 
             def init(init_arg) do
-                name = Keyword.get(init_arg, :name, @name)
-                app = {__MODULE__, name}
-
-                default_args = [app: app, store: @store]
+                default_args = [app: __MODULE__, store: @store]
 
                 bus = Signal.PubSub.event_bus(__MODULE__)
 
                 children = [
                     { Phoenix.PubSub, name: bus},
-                    { Signal.Tracker, [app: __MODULE__]},
-                    { Signal.Store.Writer, [app: __MODULE__, store: @store]},
-                    { Task.Supervisor, supervisor_args(Task, name)},
+                    { Signal.Tracker, default_args},
+                    { Signal.Store.Writer, default_args},
+                    { Task.Supervisor, supervisor_args(Task)},
                     { Signal.Registry.Supervisor, default_args},
                     { Signal.Aggregates.Supervisor, default_args },
                     { Signal.Execution.Supervisor, default_args },
@@ -44,7 +35,7 @@ defmodule Signal.Application do
                     { Signal.Event.Supervisor, default_args },
                     { Signal.Stream.Supervisor, default_args },
                 ]
-                opts = [strategy: :one_for_one, name: Signal.Application.name({__MODULE__, name}, Supervisor)]
+                opts = [strategy: :one_for_one, name: __MODULE__]
                 Supervisor.init(children, opts)
             end
 
@@ -83,26 +74,20 @@ defmodule Signal.Application do
                 opts = Keyword.put_new_lazy(opts, :version, fn -> 
                     stream_position(elem(stream, 0), [])
                 end)
-                tenant = Keyword.get(opts, :tenant, __MODULE__)
-                {__MODULE__, tenant}
+                __MODULE__
                 |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
                 |> Signal.Aggregates.Aggregate.state(opts)
             end
 
             def revise_aggregate(stream, {version, state}, opts\\[]) do
-                tenant = Keyword.get(opts, :tenant, __MODULE__)
-                {__MODULE__, tenant}
+                __MODULE__
                 |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
                 |> Signal.Aggregates.Aggregate.revise({version, state}, opts)
             end
 
-            defp supervisor_args(type, name) do
-                [name: Signal.Application.supervisor({__MODULE__, name}, type)]
-            end
-
-            defp registry_args(type, name) do
-                [keys: :unique, name: Signal.Application.registry({__MODULE__, name}, type)]
-            end
+           defp supervisor_args(type) do
+               [name: Signal.Application.supervisor(type, __MODULE__)]
+           end
 
         end
     end
@@ -112,36 +97,24 @@ defmodule Signal.Application do
         |> Base.encode16()
     end
 
-    def supervisor({module, name}, type) do
-        if module == name do
-            Module.concat([module, type, Supervisor])
-        else
-            Module.concat([module, type, Supervisor, name])
-        end
+    def supervisor(superv, app) do
+        Module.concat([__MODULE__, app, superv, Supervisor])
     end
 
-    def registry({module, name}, registry) do
-        if module == name do
-            Module.concat([module, registry, Registry])
-        else
-            Module.concat([module, registry, Registry, name])
-        end
+    def registry(reg, app) do
+        Module.concat([__MODULE__, app, reg, Registry])
     end
 
-    def name({module, name}, value) do
-        if module == name do
-            Module.concat(module, value)
-        else
-            Module.concat([module, name, value])
-        end
+    def name(name, app) do
+        Module.concat([__MODULE__, app, name])
     end
 
-    def registry_application(registry) when is_atom(registry) do
-        registry
-        |> Module.split()
-        |> Enum.drop(-2)
-        |> Module.concat()
-    end
+   #def registry_application(registry) when is_atom(registry) do
+   #    registry
+   #    |> Module.split()
+   #    |> Enum.drop(-2)
+   #    |> Module.concat()
+   #end
 
     defmacro router(router_module, opts \\ []) do
         quote do
@@ -182,27 +155,13 @@ defmodule Signal.Application do
 
         quote generated: true do
 
-            def options(opts) when is_list(opts) do
-                case Keyword.fetch(opts, :app) do
-                    {:ok, app} when is_atom(app) and not(app in [nil, true, false]) ->
-                        app = {__MODULE__, app}
-                        Keyword.merge(opts, [app: app])
-
-                    :error ->
-                        app = {__MODULE__, __MODULE__}
-                        Keyword.merge(opts, [app: app])
-
-                    _ -> 
-                        opts
-                end
-            end
 
             def handler(command, opts\\[]) when is_struct(command) do
                 error_value = {:error, :unroutable, command}
 
                 Enum.find_value(@signal_routers, error_value, fn {router, ropts} -> 
                     if Kernel.apply(router, :dispatchable?, [command]) do
-                        {router, ropts ++ options(opts)}
+                        {router, ropts}
                     end
                 end)
             end
@@ -210,8 +169,9 @@ defmodule Signal.Application do
             def dispatch(command, opts \\ [])
             def dispatch(command, opts) when is_struct(command) and is_list(opts) do
                 case handler(command, opts) do
-                    {router, options} ->
-                        Kernel.apply(router, :dispatch, [command, options])
+                    {router, r_opts} ->
+                        opts = Keyword.put(r_opts, :app, __MODULE__)
+                        Kernel.apply(router, :dispatch, [command, opts])
 
                     error ->
                         error

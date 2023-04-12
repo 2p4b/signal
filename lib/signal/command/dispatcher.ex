@@ -64,8 +64,8 @@ defmodule Signal.Command.Dispatcher do
                 histories
                 |> Enum.map(fn %History{stream: stream, version: version} -> 
                     state_opts = [version: version, timeout: :infinity]
-                    app
-                    |> Signal.Application.supervisor(Task)
+                    Task
+                    |> Signal.Application.supervisor(app)
                     |> Task.Supervisor.async_nolink(fn -> 
                         app
                         |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)

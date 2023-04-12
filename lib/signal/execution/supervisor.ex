@@ -30,12 +30,12 @@ defmodule Signal.Execution.Supervisor do
         end
     end
 
-    defp queue_args({app_module, _app_name}=app, name, opts) when is_list(opts) do
+    defp queue_args(app, name, opts) when is_list(opts) do
         {_, _, {_registry, id, type}} = name
 
         [ app: app, id: id, name: name, type: type ]
         ++
-        Kernel.apply(app_module, :queue, [type]) 
+        Kernel.apply(app, :queue, [type]) 
         ++ 
         opts
     end

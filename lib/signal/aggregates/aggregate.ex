@@ -42,7 +42,7 @@ defmodule Signal.Aggregates.Aggregate do
     @impl true
     def handle_continue(:load_aggregate, %Aggregate{}=aggregate) do
         %Aggregate{
-            app: {application, _tenant}, 
+            app: application,
             stream: {stream_id, _}
         } = aggregate
 
@@ -344,11 +344,9 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp acknowledge(%Aggregate{}=aggregate, %Event{number: number}) do
         %Aggregate{
-            app: app, 
+            app: application, 
             consumer: consumer,
         } = aggregate
-
-        {application, _tenant} = app
 
         application
         |> Signal.Event.Broker.acknowledge(consumer, number)
@@ -358,13 +356,11 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp snapshot(%Aggregate{}=aggregate) do
         %Aggregate{
-            app: app, 
+            app: application, 
             state: state,
             stream: stream,
             version: version
         } = aggregate
-
-        {application, _tenant} = app
 
         {stream_id, _type} = stream
 
@@ -399,7 +395,6 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     defp listen(%Aggregate{app: app, stream: stream, version: vsn}=aggr) do
-        {application, _tenant} = app
         {stream_id, _stream_type} = stream
 
         streams = List.wrap(stream_id)
@@ -409,16 +404,13 @@ defmodule Signal.Aggregates.Aggregate do
                 0
             else
                 %Signal.Event{number: start} = 
-                    application
-                    |> Signal.Store.Adapter.get_stream_event(stream_id, vsn)
+                    Signal.Store.Adapter.get_stream_event(app, stream_id, vsn)
                 start
             end
 
         opts = [start: start, track: false, streams: streams]
 
-        consumer = 
-            application
-            |> Signal.Event.Broker.subscribe(stream_id, opts)
+        consumer = Signal.Event.Broker.subscribe(app, stream_id, opts)
 
         %Aggregate{aggr| consumer: consumer}
     end

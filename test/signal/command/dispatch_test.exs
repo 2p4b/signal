@@ -69,7 +69,7 @@ defmodule Signal.Command.DispatchTest do
                 |> Deposite.new()
                 |> Task.new([
                     timeout: :infinity,
-                    app: {TestApplication, TestApplication}
+                    app: TestApplication
                 ])
                 |> Signal.Command.Dispatcher.execute()
 
@@ -83,7 +83,7 @@ defmodule Signal.Command.DispatchTest do
                 |> Deposite.new()
                 |> Task.new([
                     timeout: :infinity,
-                    app: {TestApplication, TestApplication}
+                    app: TestApplication
                 ])
                 |> Signal.Command.Dispatcher.process()
 
@@ -103,7 +103,7 @@ defmodule Signal.Command.DispatchTest do
                     await: true,
                     timeout: :infinity,
                     consistent: true,
-                    app: {TestApplication, TestApplication}
+                    app: TestApplication
                 ])
                 |> Signal.Command.Dispatcher.dispatch()
 

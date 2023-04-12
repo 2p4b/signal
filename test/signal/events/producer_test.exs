@@ -87,7 +87,7 @@ defmodule Signal.Events.ProducerTest do
         test "should handle command" do
             action =
                 Command.new([])
-                |> Signal.Task.new([app: {TestApp, TestApp}])
+                |> Signal.Task.new([app: TestApp])
                 |> Signal.Command.Action.from()
 
             {:ok, histories}  = Producer.process(action)

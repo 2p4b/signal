@@ -6,15 +6,7 @@ defmodule Signal.Superviser do
             @registry unquote(registry)
 
             defp name(module) when is_atom(module) do
-                Module.concat([module, __MODULE__])
-            end
-
-            defp name({module, app_name}) do
-                if module == app_name do
-                    Module.concat([module, __MODULE__])
-                else
-                    Module.concat([module, __MODULE__, app_name])
-                end
+                Module.concat([__MODULE__, module])
             end
 
             defp name(args) when is_list(args) do
@@ -27,13 +19,8 @@ defmodule Signal.Superviser do
                     {:via, Registry, {registry(application), id, value}}
                 end
 
-                defp registry(app) when is_atom(app) do
-                    registry({app, app})
-                end
-
-                defp registry({_module, _name}=app) do
-                    app
-                    |> Signal.Application.registry(@registry)
+                defp registry(app) do
+                    Signal.Application.registry(@registry, app)
                 end
 
                 def unregister_child(app, id) do

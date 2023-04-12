@@ -38,7 +38,6 @@ defmodule Signal.Aggregates.Supervisor do
 
     defp child_args(app, via_name) do
         {:via, _reg, {_mreg, _pname, stream}} = via_name
-        {app_module, _app_name} = app
         {id, aggregate} = stream
         state = struct!(aggregate, [])
         config = Signal.Aggregate.Config.config(state) 
@@ -47,7 +46,7 @@ defmodule Signal.Aggregates.Supervisor do
             name: via_name,
             state: state,
             stream: stream,
-            store: Kernel.apply(app_module, :store, []),
+            store: Kernel.apply(app, :store, []),
             app: app,
         ] 
         |> Enum.concat(config)

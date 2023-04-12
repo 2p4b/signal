@@ -51,8 +51,8 @@ defmodule Signal.Stream.Producer do
         %Producer{app: app} = state
 
         channel =
-            app
-            |> Signal.Application.supervisor(Task)
+            Task
+            |> Signal.Application.supervisor(app)
             |> Task.Supervisor.async_nolink(fn ->
                 receive do
                     {:ok, index} ->
@@ -95,8 +95,6 @@ defmodule Signal.Stream.Producer do
             command: command, 
         } = action
 
-        {app_module, tenant} =  app
-
         aggregate = aggregate_state(producer, Signal.Sync.sync(command, result))
 
         event_streams =
@@ -108,7 +106,7 @@ defmodule Signal.Stream.Producer do
             case stage_event_streams(producer, action, event_streams) do
                 {:ok, staged} ->
                     transaction = Transaction.new(staged)
-                    case Writer.commit(app_module, transaction, [tenant: tenant]) do
+                    case Writer.commit(app, transaction, []) do
                         :ok ->
                             confirm_staged(staged)
 
@@ -146,7 +144,7 @@ defmodule Signal.Stream.Producer do
     when is_map(stream_events) do
         %Producer{app: app, stream: stream} = producer
 
-        task_supervisor = Signal.Application.supervisor(app, Task)
+        task_supervisor = Signal.Application.supervisor(Task, app)
 
         stream_stages =
             stream_events
@@ -215,8 +213,7 @@ defmodule Signal.Stream.Producer do
     end
 
     defp calibrate(%Producer{app: app, stream: {stream_id, _}}=prod) do
-        {application, _tenant} = app
-        case Signal.Store.Adapter.stream_position(application, stream_id) do
+        case Signal.Store.Adapter.stream_position(app, stream_id) do
             nil ->
                 %Producer{prod | index: 0}
 
@@ -342,7 +339,8 @@ defmodule Signal.Stream.Producer do
 
     @impl true
     def terminate(reason, state) do
-        Map.from_struct(state)
+        state
+        |> Map.from_struct()
         |> Map.to_list()
         |> Enum.concat([shutdown: reason])
         |> Signal.Logger.info(label: :producer)

@@ -59,7 +59,7 @@ defmodule Signal.Events.AggregateTest do
         {:ok, _pid} = start_supervised(TestApp)
         stream = Signal.Stream.stream(Deposited.new())
         {:via, _, _} =
-            {TestApp, TestApp}
+            TestApp
             |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
         :ok
     end
@@ -73,7 +73,7 @@ defmodule Signal.Events.AggregateTest do
             stream = Signal.Stream.stream(deposited)
 
             aggregate =
-                {TestApp, TestApp}
+                TestApp
                 |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
 
             state = Signal.Aggregates.Aggregate.state(aggregate)
