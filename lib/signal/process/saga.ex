@@ -237,6 +237,16 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def handle_info(:restart, %Saga{actions: [], buffer: [], stopped: true}=saga) do
+        [
+            app: saga.app,
+            sid: saga.id,
+            spid: saga.uuid,
+            namespace: saga.namespace,
+            status: :restarting,
+            timeout: saga.timeout,
+        ]
+        |> Signal.Logger.info(label: :saga)
+        Signal.PubSub.unsubscribe(saga.app, saga.uuid)
         shutdown_saga(saga)
         {:noreply, %{saga| stopped: false}, {:continue, :load_effect}}
     end
