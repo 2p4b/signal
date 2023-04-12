@@ -209,6 +209,14 @@ defmodule Signal.Process.Saga do
                       |> sched_next_action()
                   {:noreply, saga}
 
+              {:stop, state} ->
+                  saga = 
+                      %Saga{saga | state: state, stopped: true}
+                      |> drop_action(action_uuid)
+                      |> save_saga_state()
+                      |> sched_next_action()
+                  {:noreply, saga}
+
                 invalid_value ->
                     raise """
                         Invalid saga return value
