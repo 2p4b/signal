@@ -2,8 +2,8 @@ defmodule Signal.PubSub do
     alias Signal.Event
     alias Phoenix.PubSub
 
-    def event_bus(application) do
-        Module.concat(application, Signal.PubSub)
+    def event_bus(app) do
+        Module.concat(app, Signal.PubSub)
     end
 
     def dispatch(subscriptions, _writer, message) do
@@ -11,38 +11,38 @@ defmodule Signal.PubSub do
         Enum.each(subscriptions, &(send(elem(&1, 0), message)))
     end
 
-    def subscribe_to_events(application, opts\\[]) do
-        subscribe(application, "event", [metadata: opts])
+    def subscribe_to_events(app, opts\\[]) do
+        subscribe(app, "event", [metadata: opts])
     end
 
-    def unsubscribe_from_events(application) do
-        unsubscribe(application, "event")
+    def unsubscribe_from_events(app) do
+        unsubscribe(app, "event")
     end
 
-    def broadcast_event(application, %Event{}=event) do
-        broadcast(application, "event", event, Signal.PubSub)
+    def broadcast_event(app, %Event{}=event) do
+        broadcast(app, "event", event, Signal.PubSub)
     end
 
-    def broadcast(application, topic, payload, dispatcher\\nil) do
+    def broadcast(app, topic, payload, dispatcher\\nil) do
         if is_nil(dispatcher) do
-            application
+            app
             |> event_bus()
             |> PubSub.broadcast!(topic, payload)
         else
-            application
+            app
             |> event_bus()
             |> PubSub.broadcast!(topic, payload, dispatcher)
         end
     end
 
-    def subscribe(application, topic, opts \\ []) do
-        application
+    def subscribe(app, topic, opts \\ []) do
+        app
         |> event_bus()
         |> PubSub.subscribe(topic, opts)
     end
 
-    def unsubscribe(application, topic) do
-        application
+    def unsubscribe(app, topic) do
+        app
         |> event_bus()
         |> PubSub.unsubscribe(topic)
     end

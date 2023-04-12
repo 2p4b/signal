@@ -46,7 +46,7 @@ defmodule Signal.Processor.HandlerTest do
 
     defmodule TestHandler do
         use Signal.Handler,
-            application: TestApp,
+            app: TestApp,
             topics: [Deposited]
 
         def init(consumer, _opts) do

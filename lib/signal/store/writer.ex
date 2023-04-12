@@ -17,12 +17,8 @@ defmodule Signal.Store.Writer do
     def start_link(opts) do
         name = 
             case Keyword.get(opts, :app) do
-                nil ->
-                    Keyword.get(opts, :name, __MODULE__)
-
-                app ->
-                    name = Keyword.get(opts, :name, __MODULE__)
-                    Module.concat(app, name)
+                nil -> Keyword.get(opts, :name, __MODULE__)
+                app -> writer_name(app)
             end
         GenServer.start_link(__MODULE__, opts, name: name)
     end
@@ -84,33 +80,22 @@ defmodule Signal.Store.Writer do
         %Transaction{trxn | staged: staged, cursor: index}
     end
 
-    def name(application) when is_atom(application) do
-        Module.concat(application, __MODULE__)
+    def writer_name(nil) do
+        __MODULE__
     end
 
-    def index(application) do
-        application
-        |> name()
+    def writer_name(app) when is_atom(app) do
+        Module.concat(__MODULE__, app)
+    end
+
+    def index(app) do
+        writer_name(app)
         |> GenServer.call(:index)
     end
 
-    def commit(application, transaction, opts \\ []) do
-        application
-        |> name()
+    def commit(app, transaction, opts \\ []) do
+        writer_name(app)
         |> GenServer.call({:commit, transaction, opts})
-        #|> Enum.map(fn event -> 
-            ##appilcation.broadcast(event)
-            #info = """
-
-            #[PUBLISHER] 
-            #published #{event.topic}
-            #stream: #{event.stream_id}
-            #number: #{event.number}
-            #position: #{event.position}
-        #"""
-            #Logger.info(info)
-        #end)
-        #:ok
     end
 
 end

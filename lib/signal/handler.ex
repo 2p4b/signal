@@ -7,7 +7,7 @@ defmodule Signal.Handler do
     defstruct [:app, :state, :module, :consumer]
 
     defmacro __using__(opts) do
-        app = Keyword.get(opts, :application)
+        app = Keyword.get(opts, :app)
         name = Keyword.get(opts, :name)
         start = Keyword.get(opts, :start)
         topics = Keyword.get(opts, :topics)
@@ -36,10 +36,10 @@ defmodule Signal.Handler do
             """
             def start_link(opts) do
                 opts = [
+                    app: @app,
                     name: @name,
                     start: @signal_start,
                     topics: @topics, 
-                    application: @app
                 ] ++ opts 
                 GenServer.start_link(__MODULE__, opts, name: __MODULE__)
             end
@@ -83,15 +83,15 @@ defmodule Signal.Handler do
 
 
     def init(module, opts) do
+        app = Keyword.get(opts, :app)
         name = Keyword.get(opts, :name)
         start = Keyword.get(opts, :start)
         topics = Keyword.get(opts, :topics)
-        application = Keyword.get(opts, :application)
-        consumer = subscribe(application, name, topics, start)
+        consumer = subscribe(app, name, topics, start)
         init_params = []
         case Kernel.apply(module, :init, [consumer, init_params]) do
             {:ok, state} ->
-                params = [state: state, app: application, consumer: consumer, module: module]
+                params = [state: state, app: app, consumer: consumer, module: module]
                 {:ok, struct(__MODULE__, params)} 
             error -> 
                 error
@@ -107,14 +107,14 @@ defmodule Signal.Handler do
     def handle_event(handler, event) do
         %Event{number: number} = event
         %Handler{
-            app: application, 
+            app: app, 
             module: module, 
             state: state, 
             consumer: consumer,
         } = handler
 
         [
-            app: application,
+            app: app,
             handler: module,
             processing: event.topic,
             topic: event.topic,
@@ -133,13 +133,13 @@ defmodule Signal.Handler do
                     error
 
                 response when not is_tuple(response) ->
-                    application
+                    app
                     |> Signal.Event.Broker.acknowledge(consumer, number)
                     {:noreply, response}
 
 
                response -> 
-                    application
+                    app
                     |> Signal.Event.Broker.acknowledge(consumer, number)
                     response
             end

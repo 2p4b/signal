@@ -16,19 +16,19 @@ defmodule Signal.Aggregates.Supervisor do
         DynamicSupervisor.start_child(name(args), {Signal.Aggregates.Aggregate, args})
     end
 
-    def prepare_aggregate(application, {id, type}=stream) 
+    def prepare_aggregate(app, {id, type}=stream) 
     when is_binary(id) and is_atom(type) do
         pname = process_name(stream)
-        case Registry.lookup(registry(application), pname) do
+        case Registry.lookup(registry(app), pname) do
             [{_pid, _type}] ->
-                via_tuple(application, {pname, stream})            
+                via_tuple(app, {pname, stream})            
 
             [] ->
-                via_name = via_tuple(application, {pname, stream})
-                application
+                via_name = via_tuple(app, {pname, stream})
+                app
                 |> child_args(via_name) 
                 |> start_child()
-                prepare_aggregate(application, stream)
+                prepare_aggregate(app, stream)
         end
     end
 

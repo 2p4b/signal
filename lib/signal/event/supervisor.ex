@@ -16,36 +16,36 @@ defmodule Signal.Event.Supervisor do
         DynamicSupervisor.init(strategy: :one_for_one)
     end
 
-    def prepare_broker(application, id, opts \\ []) when is_binary(id) do
-        case Registry.lookup(registry(application), id) do
+    def prepare_broker(app, id, opts \\ []) when is_binary(id) do
+        case Registry.lookup(registry(app), id) do
             [{_pid, _type}] ->
-                via_tuple(application, {id, []})            
+                via_tuple(app, {id, []})            
 
             [] ->
                 via_name =
-                    application
+                    app
                     |> via_tuple({id, []})
 
-                application
+                app
                 |> child_args(id, via_name)
                 |> start_child()
 
-                prepare_broker(application, id, opts)
+                prepare_broker(app, id, opts)
         end
     end
 
-    defp child_args(application, id, via_name) do
+    defp child_args(app, id, via_name) do
         [
             handle: id,
-            app: application,
+            app: app,
             name: via_name
         ] 
     end
 
-    def broker(application, id)  when is_binary(id) do
-        case Registry.lookup(registry(application), id) do
+    def broker(app, id)  when is_binary(id) do
+        case Registry.lookup(registry(app), id) do
             [{_pid, _type}] ->
-                via_tuple(application, {id, []})
+                via_tuple(app, {id, []})
 
             [] ->
                 nil

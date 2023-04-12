@@ -108,7 +108,7 @@ defmodule Signal.Processor.SagaTest do
     defmodule ActivityNotifier do
 
         use Signal.Process,
-            application: TestApp,
+            app: TestApp,
             topics: [AccountOpened, Deposited, AccountClosed]
 
         schema do

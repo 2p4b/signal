@@ -533,7 +533,7 @@ defmodule Signal.Process.Router do
 
     defp acknowledge_processed_events(%Router{}=router) do
         %Router{
-            app: application, 
+            app: app, 
             consumer:  consumer,
             processing: [{number, true}| processing]
         } = router
@@ -543,7 +543,7 @@ defmodule Signal.Process.Router do
             |> Signal.Logger.info(label: :router)
 
             consumer = 
-                application
+                app
                 |> Broker.acknowledge(consumer, number)
 
             %Router{router| 
@@ -596,7 +596,7 @@ defmodule Signal.Process.Router do
 
     defp subscribe_router(%Router{}=router) do
         %Router{
-            app: application, 
+            app: app, 
             name: name, 
             uuid: uuid,
             topics: topics, 
@@ -605,10 +605,10 @@ defmodule Signal.Process.Router do
         subopts = [topics: topics, start: :cursor, track: true]
 
         consumer = 
-            application
+            app
             |> Broker.subscribe(name, subopts)
 
-        application
+        app
         |> Signal.PubSub.subscribe(uuid)
 
         %Router{router | consumer: consumer}

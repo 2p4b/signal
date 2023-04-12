@@ -15,20 +15,20 @@ defmodule Signal.Stream.Supervisor do
         DynamicSupervisor.init(strategy: :one_for_one)
     end
 
-    def prepare_producer(application, {id, type}=stream) 
+    def prepare_producer(app, {id, type}=stream) 
     when is_atom(type) and is_binary(id) do
-        case Registry.lookup(registry(application), id) do
+        case Registry.lookup(registry(app), id) do
             [{_pid, _id}] ->
-                via_tuple(application, {id, stream})            
+                via_tuple(app, {id, stream})            
 
             [] ->
-                via_name = via_tuple(application, {id, stream})
+                via_name = via_tuple(app, {id, stream})
 
-                application
+                app
                 |> producer_args(stream, via_name)
                 |> start_child()
 
-                prepare_producer(application, stream)
+                prepare_producer(app, stream)
         end
     end
 

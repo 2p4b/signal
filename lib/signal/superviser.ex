@@ -15,8 +15,8 @@ defmodule Signal.Superviser do
 
             if @registry do
 
-                defp via_tuple(application, {id, value}) when is_binary(id) do
-                    {:via, Registry, {registry(application), id, value}}
+                defp via_tuple(app, {id, value}) when is_binary(id) do
+                    {:via, Registry, {registry(app), id, value}}
                 end
 
                 defp registry(app) do

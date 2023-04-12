@@ -5,7 +5,7 @@ defmodule Signal.Execution.Queue do
     alias Signal.Command.Handler
     alias Signal.Execution.Queue
 
-    defstruct [:application, :id, type: :default, timeout: (5 * 1000)]
+    defstruct [:app, :id, type: :default, timeout: (5 * 1000)]
 
     @doc """
     Starts a new execution queue.

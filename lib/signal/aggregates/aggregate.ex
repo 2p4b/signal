@@ -42,12 +42,12 @@ defmodule Signal.Aggregates.Aggregate do
     @impl true
     def handle_continue(:load_aggregate, %Aggregate{}=aggregate) do
         %Aggregate{
-            app: application,
+            app: app,
             stream: {stream_id, _}
         } = aggregate
 
         record = 
-            application
+            app
             |> Signal.Store.Adapter.get_snapshot(stream_id)
 
         aggregate = 
@@ -344,11 +344,11 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp acknowledge(%Aggregate{}=aggregate, %Event{number: number}) do
         %Aggregate{
-            app: application, 
+            app: app, 
             consumer: consumer,
         } = aggregate
 
-        application
+        app
         |> Signal.Event.Broker.acknowledge(consumer, number)
 
         %{aggregate| ack: number, consumer: %{ consumer| ack: number} }
@@ -356,7 +356,7 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp snapshot(%Aggregate{}=aggregate) do
         %Aggregate{
-            app: application, 
+            app: app, 
             state: state,
             stream: stream,
             version: version
@@ -379,7 +379,7 @@ defmodule Signal.Aggregates.Aggregate do
             [id: stream_id, version: version, data: data]
             |> Snapshot.new()
 
-        application
+        app
         |> Signal.Store.Adapter.record_snapshot(snapshot)
 
         aggregate

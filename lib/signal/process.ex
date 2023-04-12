@@ -1,7 +1,7 @@
 defmodule Signal.Process do
     
     defmacro __using__(opts) do
-        app = Keyword.get(opts, :application)
+        app = Keyword.get(opts, :app)
         name = Keyword.get(opts, :name)
         topics = Keyword.get(opts, :topics)
         timeout = Keyword.get(opts, :timeout, 5000)
