@@ -22,6 +22,7 @@ defmodule Signal.Task do
         Task
         |> struct(opts)
         |> apply_cause()
+        |> apply_timestamp()
         |> apply_correlation()
         |> apply_assigments()
         |> apply_command(command)
@@ -30,7 +31,6 @@ defmodule Signal.Task do
     defp apply_cause(%Task{causation_id: nil}=task) do
         %Task{task | causation_id: UUID.uuid4()}
     end
-
     defp apply_cause(%Task{}=task) do
         task
     end
@@ -38,8 +38,14 @@ defmodule Signal.Task do
     defp apply_correlation(%Task{correlation_id: nil}=task) do
         %Task{task | correlation_id: UUID.uuid4()}
     end
-
     defp apply_correlation(%Task{}=task) do
+        task
+    end
+
+    defp apply_timestamp(%Task{timestamp: nil}=task) do
+        %Task{task | timestamp: DateTime.utc_now()}
+    end
+    defp apply_timestamp(%Task{}=task) do
         task
     end
 
