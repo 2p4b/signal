@@ -60,7 +60,7 @@ defmodule Signal.Command.Dispatcher do
         opts = [result: result, assigns: assigns, events: events]
 
         if await do
-            aggregates = 
+            states = 
                 histories
                 |> Enum.map(fn %History{stream: stream, version: version} -> 
                     state_opts = [version: version, timeout: :infinity]
@@ -83,7 +83,7 @@ defmodule Signal.Command.Dispatcher do
                     end
                 end)
 
-            struct(Result, opts ++ [aggregates: aggregates])
+            struct(Result, opts ++ [states: states])
         else
             struct(Result, opts)
         end

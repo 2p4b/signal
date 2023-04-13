@@ -108,7 +108,7 @@ defmodule Signal.Command.DispatchTest do
                 |> Signal.Command.Dispatcher.dispatch()
 
             assert match?(%Result{
-                aggregates: [%Account{number: "123"}],
+                states: [%Account{number: "123"}],
                 assigns: %{},
                 result: nil,
             }, result)
