@@ -1,5 +1,5 @@
 %{
-  "blueprint": {:git, "https://github.com/mfoncho/blueprint.git", "232c6118cd9a2e711603c2c4e971a05a9fdbbcda", []},
+  "blueprint": {:git, "https://github.com/mfoncho/blueprint.git", "c01247383be78561b0824423345a00b294dc1b5e", []},
   "certifi": {:hex, :certifi, "2.9.0", "6f2a475689dd47f19fb74334859d460a2dc4e3252a3324bd2111b8f0429e7e21", [:rebar3], [], "hexpm", "266da46bdb06d6c6d35fde799bcb28d36d985d424ad7c08b5bb48f5b5cdd4641"},
   "combine": {:hex, :combine, "0.10.0", "eff8224eeb56498a2af13011d142c5e7997a80c8f5b97c499f84c841032e429f", [:mix], [], "hexpm", "1b1dbc1790073076580d0d1d64e42eae2366583e7aecd455d1215b0d16f2451b"},
   "ex_machina": {:hex, :ex_machina, "2.6.0", "cda776bc3afab6bce63355394e3398b7da68a0e0db855edf635ddd51513756e0", [:mix], [{:ecto, "~> 2.2 or ~> 3.0", [hex: :ecto, repo: "hexpm", optional: true]}, {:ecto_sql, "~> 3.0", [hex: :ecto_sql, repo: "hexpm", optional: true]}], "hexpm", "5c8fa8b44d710dfb46ef389d8570f7279b6843c6c74ae5bf2ce07fa9719945e7"},
