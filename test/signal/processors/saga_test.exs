@@ -56,7 +56,7 @@ defmodule Signal.Processor.SagaTest do
         end
 
         def handle(%OpenAccount{}=cmd, _params, %Account{}) do
-            AccountOpened.from(cmd)
+            AccountOpened.from_struct(cmd)
         end
     end
 
@@ -70,7 +70,7 @@ defmodule Signal.Processor.SagaTest do
         end
 
         def handle(%Deposite{}=deposite, _params, %Account{}) do
-            Deposited.from(deposite)
+            Deposited.from_struct(deposite)
         end
     end
 
@@ -83,7 +83,7 @@ defmodule Signal.Processor.SagaTest do
         end
 
         def handle(%CloseAccount{}=cmd, _params, %Account{}) do
-            AccountClosed.from(cmd)
+            AccountClosed.from_struct(cmd)
         end
     end
 

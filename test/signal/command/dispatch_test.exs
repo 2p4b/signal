@@ -43,7 +43,7 @@ defmodule Signal.Command.DispatchTest do
         end
 
         def handle(%Deposite{}=deposite, _params, %Account{number: "123"}) do
-            Deposited.from(deposite)
+            Deposited.from_struct(deposite)
         end
     end
 

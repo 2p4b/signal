@@ -28,7 +28,7 @@ defmodule Signal.Command.CommandTest do
         end
             
         def handle(%Command{}=command, _params, _aggregate) do
-            Event.from(command)
+            Event.from_struct(command)
         end
 
         def execute(%Command{uuid: uuid}, _params) do

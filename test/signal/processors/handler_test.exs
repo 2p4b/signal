@@ -40,7 +40,7 @@ defmodule Signal.Processor.HandlerTest do
         end
 
         def handle(%Deposite{}=deposite, _params, %Accounts{number: "123", balance: 0}) do
-            Deposited.from(deposite)
+            Deposited.from_struct(deposite)
         end
     end
 
