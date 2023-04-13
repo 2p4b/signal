@@ -156,7 +156,7 @@ defmodule Signal.Application do
         quote generated: true do
 
 
-            def handler(command, opts\\[]) when is_struct(command) do
+            def handler(command) when is_struct(command) do
                 error_value = {:error, :unroutable, command}
 
                 Enum.find_value(@signal_routers, error_value, fn {router, ropts} -> 
@@ -168,9 +168,12 @@ defmodule Signal.Application do
 
             def dispatch(command, opts \\ [])
             def dispatch(command, opts) when is_struct(command) and is_list(opts) do
-                case handler(command, opts) do
+                case handler(command) do
                     {router, r_opts} ->
-                        opts = Keyword.put(r_opts, :app, __MODULE__)
+                        opts = 
+                            r_opts
+                            |> Keyword.merge(opts)
+                            |> Keyword.put(:app, __MODULE__)
                         Kernel.apply(router, :dispatch, [command, opts])
 
                     error ->
