@@ -106,6 +106,7 @@ defmodule Signal.Process.Router do
             cond do
                 push_now ->
                     [
+                        app: instance.app,
                         process: instance.namespace,
                         saga: instance.id,
                         push: number,
@@ -118,6 +119,7 @@ defmodule Signal.Process.Router do
 
                 number > syn  ->
                     [
+                        app: instance.app,
                         process: instance.namespace,
                         saga: instance.id,
                         status: instance.status,
@@ -284,6 +286,7 @@ defmodule Signal.Process.Router do
 
             instance ->
                 [
+                    app: router.app,
                     process: router.name,
                     saga: id,
                     status: :started,
@@ -305,6 +308,7 @@ defmodule Signal.Process.Router do
 
     def handle_ack({id, number}, %Router{instances: instances}=router) do
         [
+            app: router.app,
             process: router.name,
             saga: id,
             status: :running,
@@ -353,6 +357,7 @@ defmodule Signal.Process.Router do
         %Router{instances: instances}=router
 
         [
+            app: router.app,
             process: router.name,
             saga: id,
             status: :sleeping,
@@ -384,6 +389,7 @@ defmodule Signal.Process.Router do
     def handle_stop(id, %Router{}=router) do
         %Router{instances: instances}=router
         [
+            app: router.app,
             process: router.name,
             saga: id,
             status: :stopped,
@@ -457,6 +463,7 @@ defmodule Signal.Process.Router do
         } = router
 
         [
+            app: router.app,
             process: router.name,
             routing: event.topic,
             number: event.number,
@@ -539,7 +546,11 @@ defmodule Signal.Process.Router do
         } = router
 
         if number > consumer.ack  do
-            [process: router.name, ack: number]
+            [
+                app: router.app,
+                process: router.name, 
+                ack: number
+            ]
             |> Signal.Logger.info(label: :router)
 
             consumer = 

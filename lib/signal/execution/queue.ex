@@ -38,6 +38,7 @@ defmodule Signal.Execution.Queue do
 
         qid = Signal.Queue.queue(command)
 
+        opts = opts ++ [app: app]
         case qid  do
             id when is_binary(id) ->
                 type = Keyword.get(opts, :type, :default)
@@ -56,10 +57,11 @@ defmodule Signal.Execution.Queue do
         end
     end
 
-    def execute(command, assigns, _opts \\ []) do
+    def execute(command, assigns, opts \\ []) do
         try do
             {elapsed, results} = Timer.apply(Handler, :execute, [command, assigns])
             [
+                app: Keyword.fetch!(opts, :app),
                 command: command.__struct__, 
                 queue: Signal.Queue.queue(command), 
                 time: elapsed

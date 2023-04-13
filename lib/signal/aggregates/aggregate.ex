@@ -223,6 +223,7 @@ defmodule Signal.Aggregates.Aggregate do
         case event do
             %Event{position: position} when position == (version + 1) ->
                 [
+                    app: aggregate.app,
                     stream: aggregate.stream,
                     version: aggregate.version,
                     reducing: event.topic,
@@ -367,6 +368,7 @@ defmodule Signal.Aggregates.Aggregate do
         {:ok, payload} = Codec.encode(state)
 
         [
+            app: aggregate.app,
             stream: stream,
             status: :snapshoting,
             version: version,
@@ -418,6 +420,7 @@ defmodule Signal.Aggregates.Aggregate do
     @impl true
     def terminate(reason, %Aggregate{}=aggregate) do
         [
+            app: aggregate.app,
             stream: aggregate.stream,
             status: :terminated,
             reason: reason,

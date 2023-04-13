@@ -1,15 +1,30 @@
 defmodule Signal.Logger do
     require Logger
 
-    def info(fields, opts \\ [])
-    def info(fields, opts) when is_map(fields) do
-        fields
-        |> Map.to_list()
-        |> info(opts)
+    @levels [:debug, :info, :notice, :warning, :error, :critical, :alert, :emergency]
+    @contexts [:broker, :saga, :aggregate, :router, :handler, :queue, :producer]
+    @base_logger [log: @contexts]
+
+    def info(data, opts \\ []) do
+        print(data, :info, opts)
     end
 
-    def info(fields, opts) when is_list(fields) do
-        fields
+    def print(data, level \\ :info, opts \\ []) 
+    def print(data, level, opts) when is_map(data) do
+        data
+        |> Map.to_list()
+        |> print(level, opts)
+    end
+    def print(data, level, opts)
+    when is_list(data) and is_list(opts) and is_atom(level) do
+        app = Keyword.get(data, :app)
+        context = Keyword.get(opts, :label)
+        text = dump_data(data) |> add_label(context)
+        log(text, context, app, level)
+    end
+
+    def dump_data(data) do
+        data
         |> Enum.reduce([], fn {key, value}, acc -> 
             fname = String.Chars.to_string(key) 
             key_value =
@@ -20,22 +35,34 @@ defmodule Signal.Logger do
         end)
         |> Enum.concat([""])
         |> Enum.join("\n")
-        |> info(opts)
     end
 
-    def info(text, opts) when is_binary(text) do
-        case Keyword.fetch(opts, :label) do
-            {:ok, label} ->
-                name = 
-                    label
-                    |> String.Chars.to_string() 
-                    |> String.upcase()
+    def add_label(text, nil) do
+        text
+    end
 
-                ["[", name, "]", "\n", text]
-                |> Enum.join()
+    def add_label(text, label) when is_atom(label) do
+        name = 
+            label
+            |> String.Chars.to_string() 
+            |> String.upcase()
 
-            _ -> text
+        ["[", name, "]", "\n", text]
+        |> Enum.join()
+    end
+
+    def log(data, context, app, level \\ :info) 
+    when level in @levels and is_atom(context) and is_atom(app) and not(is_nil(app)) and not(is_nil(context)) do
+        loggers =
+            :signal
+            |> Application.get_env(app, @base_logger)
+            |> Keyword.get(:log, @contexts)
+
+        if is_atom(context) and is_list(loggers) do
+            if Enum.member?(loggers, context) do
+                Logger.log(level, data)
+            end
         end
-        |> Logger.info()
     end
+
 end
