@@ -54,6 +54,7 @@ The `handle` callback accepts three arguements the
 - The results of the command execution if `execute` callback is defined or the pipline params
 - The command Stream Aggregate `%Account{}`
 
+#### command stream syncronization
 The `sync: true` option is used to specify if the command requires the most recent Stream aggregate version.
 while `sync: false` will use the available stream aggregate version without any gaurantee all available stream events have been applied to the aggregate, this might be a desired option when the most recent aggregate state is not important in event creation and or performance is a priority
 
