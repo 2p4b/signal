@@ -13,8 +13,6 @@ defmodule Signal.Process do
 
             use Blueprint.Struct
 
-            @before_compile unquote(__MODULE__)
-
             @signal__process__app unquote(app)
 
             @signal__process__start unquote(start)
