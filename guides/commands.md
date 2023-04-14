@@ -22,15 +22,17 @@ defmodule App.Bank.Commands.Deposite do
         field: :timstamp,   :datetime
     end
 
-    # [optional] Executes events
+    # [optional] Executes command
     def execute(%Deposite{}=deposite, pipeline_params) do
         # Database access
         # Http remote resource access
-        {:ok, ...excution_result}
+        # {:error, reason} stop command processing and return error to dispatcher
+        {:ok, execution_result}
     end
 
     # Handle the command and return events or error tuple
-    def handle(%Deposite{}=deposite, result, %Account{}=account) do
+    def handle(%Deposite{}=deposite, execution_result, %Account{}=account) do
+        # {:error, reason} stop command processing and return error to dispatcher
         %Deposited{...}
     end
 
@@ -48,12 +50,11 @@ The `handle` callback handles the command, after it's executed and sent
 to the stream (`{Account, :account_id}`) producer to generated event(s)
 
 The `handle` callback accepts three arguements the 
-- 1) The command being handled `%Deposite{}`
-- 2) The results of the command execution if `execute` callback is defined or the pipline params
-- 3) The command Stream Aggregate `%Account{}`
+- The command being handled `%Deposite{}`
+- The results of the command execution if `execute` callback is defined or the pipline params
+- The command Stream Aggregate `%Account{}`
 
-The `sync: true` option is used to specify if the command requires the most recent aggregate version 
-
-
+The `sync: true` option is used to specify if the command requires the most recent Stream aggregate version.
+while `sync: false` will use the available stream aggregate version without any gaurantee all available stream events have been applied to the aggregate, this might be a desired option when the most recent aggregate state is not important in event creation and or performance is a priority
 
 

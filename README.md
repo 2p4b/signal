@@ -1,6 +1,6 @@
 # Signal
 
-Use Signal to build and Event Driven Elixir application
+Use Signal to build an Event Driven Elixir application
 
 Supports:
 - Command Dispatching
