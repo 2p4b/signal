@@ -1,7 +1,7 @@
 ## Projector
 
 A Projector is an Event Handler with only the `project` callback behaviour 
-but without a state 
+and without a state 
 
 Once the `project` callback returns the event is acknowleged
 raising or throwing exceptions prevents the event from being acknowleged
