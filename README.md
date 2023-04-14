@@ -24,4 +24,5 @@ end
 ### Guides
 - [Getting started](guides/getting_started.md)
 - [Commands](guides/commands.md)
+- [Events](guides/event.md)
 
