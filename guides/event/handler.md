@@ -8,9 +8,10 @@ values as `GenServer.handle_info`
 ```elixir
 defmodule App.Bank.TransactionLogger do
     alias App.Bank.Events.Deposited
+    alias App.Bank.Events.Widthdrawn
     use Signal.Handler,
         app: App.Signal,
-        topics: [Deposited]
+        topics: [Deposited, Widthdrawn, ...]
 
     def init(opts) do
         {:ok, state}

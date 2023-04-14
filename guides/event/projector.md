@@ -11,12 +11,17 @@ Well that will crash the Projector process too soo.....
 defmodule App.Bank.TransactionLogger do
     alias App.Database
     alias App.Bank.Events.Deposited
+    alias App.Bank.Events.Widthdrawn
     use Signal.Projector,
         app: App.Signal,
-        topics: [Deposited]
+        topics: [Deposited, ...]
 
     # Project events to a Datastore
     def project(%Deposited{}) do
+        App.Database.white_transaction(...)    
+    end
+
+    def project(%Widthdrawn{}) do
         App.Database.white_transaction(...)    
     end
 
