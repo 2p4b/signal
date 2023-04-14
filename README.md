@@ -25,4 +25,5 @@ end
 - [Getting started](guides/getting_started.md)
 - [Commands](guides/commands.md)
 - [Events](guides/event.md)
+- [Router](guides/router.md)
 
