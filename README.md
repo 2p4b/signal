@@ -25,6 +25,8 @@ end
 - [Getting started](guides/getting_started.md)
 - [Commands](guides/commands.md)
 - [Events](guides/event.md)
+    - [Event Handler](guides/handler.md)
+    - [Event Projector](guides/projector.md)
 - [Router](guides/router.md)
 - [Aggregate](guides/aggregate.md)
 
