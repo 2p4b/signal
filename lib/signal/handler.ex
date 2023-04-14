@@ -16,9 +16,6 @@ defmodule Signal.Handler do
         shutdown = Keyword.get(opts, :shutdown, 1)
 
         quote do
-            alias Signal.Event
-            alias Signal.Handler
-
             @signal__handler__app unquote(app)
 
             @signal__handler__restart unquote(restart)
