@@ -26,15 +26,15 @@ defmodule Signal.Handler do
                 Signal.Exception.raise_invalid_app(__MODULE__, unquote(using))
             end
 
-            @signal_handler_start unquote(start)
+            @signal__handler__start unquote(start)
 
-            @signal_handler_name (if unquote(name) do 
+            @signal__handler__name (if unquote(name) do 
                 unquote(name) 
             else 
                 Signal.Helper.module_to_string(__MODULE__) 
             end)
 
-            @signal_handler_topics (unquote(topics) |> Enum.map(fn 
+            @signal__handler__topics (unquote(topics) |> Enum.map(fn 
                 topic when is_binary(topic) -> topic 
                 topic when is_atom(topic) -> Signal.Helper.module_to_string(topic)
             end))
@@ -49,10 +49,10 @@ defmodule Signal.Handler do
             def child_spec(opts) do
                 opts = [
                     app: @signal__handler__app,
-                    name: @signal_handler_name,
+                    name: @signal__handler__name,
                     module: __MODULE__,
-                    start: @signal_handler_start,
-                    topics: @signal_handler_topics, 
+                    start: @signal__handler__start,
+                    topics: @signal__handler__topics, 
                 ] 
                 |> Keyword.put(:opts, opts)
 
