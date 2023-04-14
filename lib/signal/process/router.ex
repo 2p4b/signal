@@ -2,6 +2,7 @@ defmodule Signal.Process.Router do
 
     @router_namespace "$router"
 
+    use GenServer
     alias Signal.Event
     alias Signal.Effect
     alias Signal.Event.Broker
@@ -209,6 +210,7 @@ defmodule Signal.Process.Router do
 
     end
 
+    @impl true
     def init(opts) do
         name = Keyword.fetch!(opts, :name)
         uuid = Effect.uuid(@router_namespace, name)
@@ -221,8 +223,63 @@ defmodule Signal.Process.Router do
         {:ok, struct(__MODULE__, opts), {:continue, :boot}}
     end
 
-    def handle_boot(%Router{}=router) do
 
+    @impl true
+    def handle_continue(:boot, router) do
+        Router.handle_boot(router)
+    end
+
+    @impl true
+    def handle_continue({:route, event, reply}, router) do
+        Router.handle_route({event, reply}, router)
+    end
+
+    @impl true
+    def handle_info({:next, id}, router) do
+        Router.handle_next(id, router)
+    end
+
+    @impl true
+    def handle_info({:DOWN, ref, :process, _obj, _rsn}, router) do
+        Router.handle_down(ref, router)
+    end
+
+    @impl true
+    def handle_info(%Event{}=event, router) do
+        Router.handle_event(event, router)
+    end
+
+    @impl true
+    def handle_info({:stop, id}, router) do
+        Router.handle_stop(id, router)
+    end
+
+    @impl true
+    def handle_info({:sleep, id}, router) do
+        Router.handle_sleep(id, router)
+    end
+
+    @impl true
+    def handle_info({:start, id, number}, router) do
+        Router.handle_start({id, number}, router)
+    end
+
+    @impl true
+    def handle_info({:ack, id, number, _status}, router) do
+        Router.handle_ack({id, number}, router)
+    end
+
+    @impl true
+    def handle_info(:timeout, router) do
+        Router.handle_timeout(router)
+    end
+
+    @impl true
+    def handle_call({:alive, id}, _from, router) do
+        Router.handle_alive(id, router)
+    end
+
+    def handle_boot(%Router{}=router) do
         router = 
             router
             |> load_router_instances()

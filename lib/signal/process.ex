@@ -3,118 +3,68 @@ defmodule Signal.Process do
     defmacro __using__(opts) do
         app = Keyword.get(opts, :app)
         name = Keyword.get(opts, :name)
+        start = Keyword.get(opts, :start)
         topics = Keyword.get(opts, :topics)
         timeout = Keyword.get(opts, :timeout, 5000)
+        restart = Keyword.get(opts, :restart, :transient)
+        shutdown = Keyword.get(opts, :shutdown, 1)
 
         quote location: :keep do
 
-            use GenServer
             use Blueprint.Struct
-            alias Signal.Helper
-            alias Signal.Event
-            alias Signal.Process.Router
+
             @before_compile unquote(__MODULE__)
 
-            @timeout unquote(timeout)
+            @signal__process__app unquote(app)
 
-            @app unquote(app)
+            @signal__process__start unquote(start)
 
-            if is_nil(@app) or not(is_atom(@app)) do
+            @signal__process__timeout unquote(timeout)
+
+            @signal__process__restart unquote(restart)
+
+            @signal__process__shutdown unquote(shutdown)
+
+            if is_nil(@signal__process__app) or not(is_atom(@signal__process__app)) do
                 Signal.Exception.raise_invalid_app(__MODULE__, Signal.Process)
             end
 
-            @name (if not(is_nil(unquote(name))) and is_binary(unquote(name)) do 
+            @signal__process__name (if not(is_nil(unquote(name))) and is_binary(unquote(name)) do 
                 unquote(name) 
             else 
                 Signal.Helper.module_to_string(__MODULE__) 
             end)
 
-            @topics (unquote(topics) |> Enum.map(fn 
+            @signal__process__topics (unquote(topics) |> Enum.map(fn 
                 topic when is_binary(topic) -> topic 
                 topic when is_atom(topic) -> Signal.Helper.module_to_string(topic)
             end))
 
-            @doc """
-            Starts a new execution queue.
-            """
+
             def start_link(opts) do
-                GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+                GenServer.start_link(Signal.Process.Router, opts, name: __MODULE__)
             end
 
-            @impl true
-            def init(opts) when is_list(opts) do
-                params = [
-                    app: @app,
-                    name: @name,
-                    topics: @topics,
-                    timeout: @timeout,
+            def child_spec(opts) do
+                opts = [
+                    app: @signal__process__app,
+                    name: @signal__process__name,
                     module: __MODULE__,
+                    start: @signal__process__start,
+                    topics: @signal__process__topics, 
+                    timeout: @signal__process__timeout,
                 ] 
-                Router.init(params ++ opts)
-            end
+                |> Keyword.put(:opts, opts)
 
-
-            @impl true
-            def handle_continue(:boot, router) do
-                Router.handle_boot(router)
-            end
-
-            @impl true
-            def handle_continue({:route, event, reply}, router) do
-                Router.handle_route({event, reply}, router)
-            end
-
-            @impl true
-            def handle_info({:next, id}, router) do
-                Router.handle_next(id, router)
-            end
-
-            @impl true
-            def handle_info({:DOWN, ref, :process, _obj, _rsn}, router) do
-                Router.handle_down(ref, router)
-            end
-
-            @impl true
-            def handle_info(%Event{}=event, router) do
-                Router.handle_event(event, router)
-            end
-
-            @impl true
-            def handle_info({:stop, id}, router) do
-                Router.handle_stop(id, router)
-            end
-
-            @impl true
-            def handle_info({:sleep, id}, router) do
-                Router.handle_sleep(id, router)
-            end
-
-            @impl true
-            def handle_info({:start, id, number}, router) do
-                Router.handle_start({id, number}, router)
-            end
-
-            @impl true
-            def handle_info({:ack, id, number, status}, router) do
-                Router.handle_ack({id, number}, router)
-            end
-
-            @impl true
-            def handle_info(:timeout, router) do
-                Router.handle_timeout(router)
-            end
-
-            @impl true
-            def handle_call({:alive, id}, _from, router) do
-                Router.handle_alive(id, router)
+                %{
+                    id: __MODULE__,
+                    start: {__MODULE__, :start_link, [opts]},
+                    restart: @signal__process__restart,
+                    shutdown: @signal__process__shutdown
+                }
             end
 
         end
     end
 
-    defmacro __before_compile__(_env) do
-        quote generated: true do
-            def handle(_event), do: :skip
-        end
-    end
 end
