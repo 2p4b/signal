@@ -14,7 +14,7 @@ defmodule App.Bank.TransactionLogger do
     alias App.Bank.Events.Widthdrawn
     use Signal.Projector,
         app: App.Signal,
-        topics: [Deposited, ...]
+        topics: [Deposited, Widthdrawn, ...]
 
     # Project events to a Datastore
     def project(%Deposited{}) do
