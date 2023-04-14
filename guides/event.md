@@ -12,9 +12,9 @@ defmodule App.Bank.Events.Deposited do
         stream: {Account, :account_id}
 
     schema do
-        field: :account_id, :uuid
-        field: :amount,     :float
-        field: :timstamp,   :datetime
+        field :account_id, :uuid
+        field :amount,     :float
+        field :timstamp,   :datetime
     end
 
     # Apply event and return next aggregate state

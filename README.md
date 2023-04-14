@@ -26,4 +26,5 @@ end
 - [Commands](guides/commands.md)
 - [Events](guides/event.md)
 - [Router](guides/router.md)
+- [Aggregate](guides/aggregate.md)
 
