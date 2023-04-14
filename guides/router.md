@@ -23,6 +23,7 @@ end
 
 ### terminology
 **pipe**: A pip is a stage in execution of a command task
+
 **pipeline**: A pipeline is a collection of pipes and/or pipelines
 
 
