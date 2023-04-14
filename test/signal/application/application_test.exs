@@ -12,14 +12,16 @@ defmodule Signal.ApplicationTest do
 
     defmodule PipeOne do
         import Signal.Task
-        def handle(task) do
+        @behaviour Signal.Pipe
+        def pipe(task) do
             {:ok, assign(task, :one, 1)}
         end
     end
 
     defmodule PipeTwo do
         import Signal.Task
-        def handle(task) do
+        @behaviour Signal.Pipe
+        def pipe(task) do
             {:ok, assign(task, :two, 2)}
         end
     end

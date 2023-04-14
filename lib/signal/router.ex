@@ -38,7 +38,7 @@ defmodule Signal.Router do
             case unquote(middleware) do
                 middleware when is_atom(middleware) ->
                     def unquote(name)(command) do
-                        Kernel.apply(unquote(middleware), :handle, [command])
+                        Kernel.apply(unquote(middleware), :pipe, [command])
                     end
 
                 middleware when is_function(middleware) ->

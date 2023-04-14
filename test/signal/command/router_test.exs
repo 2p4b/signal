@@ -26,14 +26,18 @@ defmodule Signal.Command.RouterTest do
 
         defmodule PipeOne do
             import Signal.Task
-            def handle(task) do
+            @behaviour Signal.Pipe
+
+            def pipe(task) do
                 {:ok, assign(task, :one, 1)}
             end
         end
 
         defmodule PipeTwo do
             import Signal.Task
-            def handle(task) do
+            @behaviour Signal.Pipe
+
+            def pipe(task) do
                 {:ok, assign(task, :two, 2)}
             end
         end
@@ -61,8 +65,7 @@ defmodule Signal.Command.RouterTest do
 
             register PipeCommand,
                 await: true,
-                via: :pipe_one,
-                consistent: true
+                via: :pipe_one
 
             register PipelineCommand, via: :pipeline
         end
