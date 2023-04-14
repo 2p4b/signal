@@ -11,7 +11,7 @@ defmodule App.Bank.Events.Deposited do
     use Signal.Command,
         stream: {Account, :account_id}
 
-    schema [required: true] do
+    schema do
         field: :account_id, :uuid
         field: :amount,     :float
         field: :timstamp,   :datetime
