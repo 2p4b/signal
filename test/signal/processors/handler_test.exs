@@ -49,8 +49,8 @@ defmodule Signal.Processor.HandlerTest do
             app: TestApp,
             topics: [Deposited]
 
-        def init(consumer, _opts) do
-            {:ok, consumer}
+        def init(opts) do
+            {:ok, opts}
         end
 
         def handle_call(:intercept, {pid, _ref}, _state) do
