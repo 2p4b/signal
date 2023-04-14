@@ -40,7 +40,7 @@ defimpl Signal.Command.Handler, for: Any do
             defmodule #{inspect(type)} do
                 use Signal.Command
 
-                blueprint do
+                schema do
                     ...
                 end
 

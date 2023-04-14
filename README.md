@@ -1,21 +1,27 @@
 # Signal
 
-**TODO: Add description**
+Use Signal to build and Event Driven Elixir application
+
+Supports:
+- Command Dispatching
+- Stream Event reduction with Aggregates
+- Event Handlers with atleast once event delivery
+- Saga Process
+
+Signal makes heavy use of the [Blueprint](https://github.com/mfoncho/blueprint.git)
+for struct definition, validation, encoding and decoding
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `signal` to your list of dependencies in `mix.exs`:
-
 ```elixir
 def deps do
-  [
-    {:signal, "~> 0.1.0"}
-  ]
+    [
+        {:signal, git: "https://github.com/mfoncho/signal.git"}
+    ]
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/signal>.
+### Guides
+- [Getting started](guides/getting_started.md)
+- [Commands](guides/commands.md)
 
