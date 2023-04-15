@@ -114,7 +114,7 @@ end
 ```
 ### Definition
 
-The `use Signal..Process` accepts seven Keyword list options
+The `use Signal.Process` accepts seven Keyword list options
 
 ```elixir
     use Signal.Process, [...options]
