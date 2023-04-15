@@ -57,6 +57,17 @@ defmodule App.Bank.Events.Deposited do
 end
 ```
 
+### Definition
+
+The `use Signal.Event` accepts seven Keyword list options
+
+```elixir
+    use Signal.Event, [...options]
+```
+- `:stream` [required] command event stream tag
+
+
+
 #### Apply event
 The `apply` callback is called from the event stream aggregate process (`{Account, :account_id}`)
 and return the next stream aggregate state

@@ -38,14 +38,29 @@ defmodule App.Bank.Commands.Deposite do
 
 end
 ```
-#### execution queue
+
+### Definition
+
+The `use Signal.Command` Keyword list options
+
+```elixir
+    use Signal.Command, [...options]
+```
+- `:sync` [optional] sync stream aggregate
+- `:queue` [optional] execution queue id
+- `:stream` [required] command event stream tag
+
+
+### callbacks
+
+#### execution queue execute/2
 The `execute` callback is executed before the `handle` callback.
 If a queue is defined the command will be executed in the specified queue.
 In the sample `App.Bank.Commands.Deposite` each command is executed in a process
 queue with the id of the `:account_id` if no queue is defined or is `nil` the command
 will be executed on the dispatch caller process
 
-#### command handle
+#### command handle/3
 The `handle` callback handles the command, after it's executed and sent
 to the stream (`{Account, :account_id}`) producer to generated event(s)
 
