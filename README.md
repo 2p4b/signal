@@ -29,4 +29,5 @@ end
     - [Event Projector](guides/projector.md)
 - [Router](guides/router.md)
 - [Aggregate](guides/aggregate.md)
+- [Processes and Sagas](guides/process.md)
 
