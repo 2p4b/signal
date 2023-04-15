@@ -7,7 +7,7 @@ firing actions, dispatching commands
 
 **Yes Each Saga is just a state machine**
 
-All sagas of a given process **MUST** have a unique id
+All sagas within a process name **MUST** have a unique id
                                     
 Use case:
 Say two users in a bank want to send money to each other. A Process is
@@ -113,3 +113,41 @@ defmodule App.Bank.Process.TransferProcess do
 end
 ```
 
+#### handle/1
+We start a Process saga by calling `handle/1` to route the 
+event to the right Saga instance
+
+- `{:start, saga_id}` will start a saga instance with the id within the process namespace. If a saga alread exist with the id the event will be routed to the existing saga instance
+- `{:apply, saga_id}` will route the event to saga instance with the id, if no saga exists withing the namespace with the same id the event will be ignored
+- `:skip` will ignore the event
+
+#### handle_event/2
+`handle_event/2` callback is called once and event is routed  to a saga instance
+
+- `{:ok, state}` save the saga new state 
+- `{:action, {action_name, action_params}, state}` fire and action with new saga state. All actions are placed in an FIFO action queue
+- `{:stop, state}` stop the saga process from processing any more events, Once all actions in the queue are processed the saga state is deleted
+
+
+
+#### handle_action/2
+`handle_action/2` processes the actions FIFO queue one at a time
+
+- `{:ok, state}` save the saga new state 
+- `{:dipatch, command}` dispatch new command
+- `{:action, {action_name, action_params}, state}` puts action in the FIFO queue, if there are any actions in the action queue, those actions will handled first
+
+- `{:retry, {action_name, action_params}, state}` puts action back in FIFO queue at the same position, and will be handled immediately before any existing actions
+
+
+#### handle_error/3
+`handle_error/3` handles errors from dispatch command
+
+```elixir
+    def handle_error({reason, command}, {action_name, action_params}, process)
+```
+
+- `{:ok, state}` save the saga new state 
+- `{:action, {action_name, action_params}, state}` puts action in the FIFO queue, if there are any actions in the action queue, those actions will handled first
+- `{:retry, {action_name, action_params}, state}` puts action back in FIFO queue at the same position, and will be handled immediately before any existing actions
+- `{:stop, state}` stop the saga process from processing any more events, Once all actions in the queue are processed the saga state is deleted
