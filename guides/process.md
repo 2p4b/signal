@@ -121,7 +121,7 @@ The `use Signal.Process` accepts seven Keyword list options
 ```
 
 - `:app` Signal application module
-- `:name` process name if none it given the Module name will be used as process name
+- `:name` process name defaults to Module name as process name
 - `:start` starts processing events from current cursor position, `:beginning` starts processing events from event number 0
 - `:topics` list, events to listern, event name can be string or atom
 - `:timeout` number of microseconds of inactivity before saga hibernation
