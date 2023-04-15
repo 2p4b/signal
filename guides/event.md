@@ -64,6 +64,7 @@ The `use Signal.Event` accepts seven Keyword list options
 ```elixir
     use Signal.Event, [...options]
 ```
+- `:topic` [optional]  event topic
 - `:stream` [required] command event stream tag
 
 
