@@ -8,7 +8,7 @@ defmodule Signal.Projector do
             import Signal.Handler
             Signal.Handler.__using__(unquote(opts))
 
-            def init(_, opts) do
+            def init(opts) do
                 {:ok, opts}
             end
 
