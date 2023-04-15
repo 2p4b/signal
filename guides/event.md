@@ -9,6 +9,7 @@ defmodule App.Bank.Events.Deposited do
 
     # [required] :stream
     use Signal.Command,
+        topic: "App.Bank.Events.Deposited",
         stream: {Account, :account_id}
 
     schema do
@@ -64,7 +65,7 @@ The `use Signal.Event` accepts seven Keyword list options
 ```elixir
     use Signal.Event, [...options]
 ```
-- `:topic` [optional]  event topic
+- `:topic` [optional]  event topic default module name
 - `:stream` [required] command event stream tag
 
 
