@@ -11,7 +11,7 @@ defmodule App.Bank.TransactionLogger do
     alias App.Bank.Events.Widthdrawn
     use Signal.Handler,
         app: App.Signal,
-        topics: [Deposited, Widthdrawn, ...]
+        topics: [Deposited, Widthdrawn, "App.Bank.Events.Credited", ...]
 
     def init(opts) do
         {:ok, state}
@@ -36,3 +36,37 @@ defmodule App.Bank.TransactionLogger do
 
 end
 ```
+
+### Definition
+
+The `use Signal.Handler` Keyword list options
+
+```elixir
+    use Signal.Handler, [...options]
+```
+
+- `:app` Signal application module
+- `:name` handler name if none it given the Module name will be used as process name
+- `:start` starts processing events from current cursor position, `:beginning` starts processing events from event number 0
+- `:topics` list, events to listern, event name can be string or atom
+- `:timeout` number of microseconds of inactivity before handler hibernation
+- `:shutdown`  how to shut down a handler, either immediately or by giving it time to shut down
+- `:restart` when the handler should be restarted, defaults to :transient
+
+
+### Callbacks
+
+#### handle_event/2
+Invoked to handle all events
+
+#### handle_info/2
+[GenServer.handle_info/2](https://hexdocs.pm/elixir/1.12/GenServer.html#c:handle_info/2)
+
+#### handle_call/3
+[GenServer.handle_call/3](https://hexdocs.pm/elixir/1.12/GenServer.html#c:handle_call/3)
+
+#### handle_continue/2
+[GenServer.handle_continue/2](https://hexdocs.pm/elixir/1.12/GenServer.html#c:handle_continue/2)
+
+#### handle_cast/2
+[GenServer.handle_cast/2](https://hexdocs.pm/elixir/1.12/GenServer.html#c:handle_cast/2)
