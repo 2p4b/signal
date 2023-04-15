@@ -112,6 +112,24 @@ defmodule App.Bank.Process.TransferProcess do
 
 end
 ```
+### Definition
+
+The `use Signal..Process` accepts seven Keyword list options
+
+```elixir
+    use Signal.Process, [...options]
+```
+
+- `:app` Signal application module
+- `:name` process name if none it given the Module name will be used as process name
+- `:start` starts processing events from current cursor position, `:beginning` starts processing events from event number 0
+- `:topics` list, events to listern, event name can be string or atom
+- `:timeout` number of microseconds of inactivity before saga hibernation
+- `:shutdown`  how to shut down a saga, either immediately or by giving it time to shut down
+- `:restart` when the saga should be restarted, defaults to :transient
+
+
+### Callbacks
 
 #### handle/1
 We start a Process saga by calling `handle/1` to route the 
