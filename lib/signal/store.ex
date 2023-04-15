@@ -2,21 +2,23 @@ defmodule Signal.Store do
 
     @type opts :: list()
     
-    @type snapshot :: term()
+    @type event :: Signal.Event.t()
 
-    @type effect :: term()
+    @type effect :: Signal.Effect.t()
 
-    @type event :: term()
+    @type snapshot :: Signal.Snapshot.t()
+
+    @type reason :: binary | atom()
 
     @type iden :: {id::binary, type::binary} | binary()
 
     @callback get_effect(uuid::binary, opts) :: effect
 
-    @callback save_effect(effect::effect, opts) :: :ok | {:error, term()}
+    @callback save_effect(effect::effect, opts) :: :ok | {:error, reason}
 
     @callback list_effects(namespace::binary, opts::list) :: list()
 
-    @callback delete_effect(uuid::binary, opts) :: :ok | {:error, term()}
+    @callback delete_effect(uuid::binary, opts) :: :ok | {:error, reason}
 
     @callback get_cursor(opts::list) :: integer
 
