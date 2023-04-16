@@ -29,13 +29,13 @@ defmodule App.Signal do
 
     pipe [...]
 
-    pipeline do
+    pipeline :validate do
         [...pipes]
     end
 
     router App.Accounts.Router
 
-    router App.Bank.Router, via: :pipename
+    router App.Bank.Router, via: :validate
 
 end
 ```
