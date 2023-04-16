@@ -18,6 +18,28 @@ defmodule App.Bank.Router do
 end
 ```
 
+## Adding router to Signal application
+
+Routers can be added to signal app with `router/2` 
+
+```elixir
+defmodule App.Signal do
+    use Signal.Application,
+        store: EventStore 
+
+    pipe [...]
+
+    pipeline do
+        [...pipes]
+    end
+
+    router App.Accounts.Router
+
+    router App.Bank.Router, via: :pipename
+
+end
+```
+
 
 ## Piplines/Middleware
 
