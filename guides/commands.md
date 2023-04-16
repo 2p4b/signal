@@ -74,3 +74,15 @@ The `sync: true` option is used to specify if the command requires the most rece
 while `sync: false` will use the available stream aggregate version without any gaurantee all available stream events have been applied to the aggregate, this might be a desired option when the most recent aggregate state is not important in event creation and or performance is a priority
 
 
+### Dispatch
+
+Once the command has been registered in a [router](router.md) the command can be dispatched using the signal application
+
+```elixir
+    alias Signal.Result
+    alias App.Bank.Commands.Deposite
+
+    with {:ok, %Result{}} <- App.Signal.dispatch(%Deposite{}) do
+        ...
+    end
+```
