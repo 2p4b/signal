@@ -1,5 +1,7 @@
 defmodule Signal.Result do
 
+    alias Signal.Result
+
     defstruct [:index, :assigns, :result, states: [], events: []]
 
     def ok(arg) do
@@ -15,5 +17,11 @@ defmodule Signal.Result do
 
     def error?(returned) when is_tuple(returned), do: elem(returned, 0) == :error
     def error?(_), do: false
+
+    def assigned(%Result{assigns: assigns}, value), do: Map.get(assigns, value)
+    def assigns(%Result{assigns: assigns}), do: assigns
+    def states(%Result{states: states}), do: states
+    def result(%Result{result: result}), do: result
+    def events(%Result{events: events}), do: events
 
 end
