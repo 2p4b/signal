@@ -28,3 +28,25 @@ defmodule App.Bank.TransactionLogger do
 end
 ```
 
+### Definition
+
+The `use Signal.Projector` Keyword list options
+
+```elixir
+    use Signal.Projector, [...options]
+```
+
+- `:app` Signal application module
+- `:name` projector name if none it given the Module name will be used as process name
+- `:start` starts processing events from current cursor position, `:beginning` starts processing events from event number 0
+- `:topics` list, events to listern, event name can be string or atom
+- `:timeout` number of microseconds of inactivity before projector hibernation
+- `:shutdown`  how to shut down a projector, either immediately or by giving it time to shut down
+- `:restart` when the projector should be restarted, defaults to :transient
+
+
+### Callbacks
+
+#### procject/1
+Invoked on all events
+
