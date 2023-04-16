@@ -9,6 +9,34 @@ defmodule Signal.Logger do
         print(data, :info, opts)
     end
 
+    def notice(data, opts \\ []) do
+        print(data, :notice, opts)
+    end
+
+    def debug(data, opts \\ []) do
+        print(data, :debug, opts)
+    end
+
+    def warning(data, opts \\ []) do
+        print(data, :warning, opts)
+    end
+
+    def error(data, opts \\ []) do
+        print(data, :error, opts)
+    end
+
+    def critical(data, opts \\ []) do
+        print(data, :critical, opts)
+    end
+
+    def alert(data, opts \\ []) do
+        print(data, :alert, opts)
+    end
+
+    def emergency(data, opts \\ []) do
+        print(data, :emergency, opts)
+    end
+
     def print(data, level \\ :info, opts \\ []) 
     def print(data, level, opts) when is_map(data) do
         data
