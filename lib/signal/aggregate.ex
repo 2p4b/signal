@@ -15,13 +15,10 @@ defmodule Signal.Aggregate do
     end
 
     defmacro __using__(opts) do
-        strict = Keyword.get(opts, :strict, false)
         timeout = Keyword.get(opts, :timeout, Signal.Timer.seconds(5))
         quote do
             use Blueprint.Struct
-            @module __MODULE__
-            @timeout unquote(timeout)
-            @apply_strict unquote(strict)
+            @signal__aggregate__timeout unquote(timeout)
             @before_compile unquote(__MODULE__)
         end
     end
@@ -30,41 +27,64 @@ defmodule Signal.Aggregate do
 
         quote generated: true, location: :keep do
 
-            with timeout <- @timeout do
+            with timeout <- @signal__aggregate__timeout do
                 defimpl Signal.Aggregate.Config do
-                    @timeout timeout
+                    @signal__config__timeout timeout
                     def config(_) do
-                        [timeout: @timeout]
+                        [timeout: @signal__config__timeout]
                     end
                 end
             end
 
-            if (Module.defines?(__MODULE__, {:apply, 2}, :def) or @apply_strict === false) do
-                with module <- @module do
-                    defimpl Signal.Stream.Reducer do
-                        @pmodule module
-                        def apply(agg, event) do 
-                            # Check if the event has a custom reduction
-                            # function and use that else reduce the
-                            # event with the aggregate reduce func
-                            case Signal.Stream.Reducer.impl_for(event) do
-                                nil ->
-                                    Kernel.apply(@pmodule, :apply, [event, agg])
+            defimpl Signal.Stream.Reducer do
+                def apply(aggr, event) do 
+                    # Check if the event has a custom reduction
+                    # function and use that else reduce the
+                    # event with the aggregate reduce func
+                    case Signal.Stream.Reducer.impl_for(event) do
+                        nil ->
+                            %{__struct__: emod} = event
+                            %{__struct__: amod} = aggr
+                            etype = inspect(emod)
+                            atype = inspect(amod)
+                            raise """ 
+                            #{atype} can not reduce event #{etype}
 
-                                _impl ->
-                                    Signal.Stream.Reducer.apply(event, agg)
-                            end
-                        end
+                            No stream reducer implemented for %#{etype}{...}
+
+                            Options
+
+                            - 1) using Signal.Event with an apply/2 callback
+
+                                defmodule #{etype} do
+                                    use Signal.Event,
+                                        stream: {#{atype}, ...}
+                                    
+                                    def apply(%#{etype}{}, %#{atype}{}) do
+                                        ....
+                                    end
+                                end
+
+                            - 2) define a stream reducer protocol for **ALL AGGREGATE STREAM EVENTS**
+                                defmodule #{atype} do
+                                    defstruct [...]
+
+                                    defimple Signal.Stream.Reducer do
+                                        def apply(%#{etype}{}, %#{atype}{}) do
+                                            ....
+                                        end
+                                    end
+                                end
+                                
+                            Note the second option (2) will intercept ALL events
+                            regardless of if the event was defined with `use Signal.Event`
+
+                            """
+                        _impl ->
+                            Signal.Stream.Reducer.apply(event, aggr)
                     end
                 end
             end
-
-            if @apply_strict === false do
-                def apply(_event, state) do
-                    {:ok, state}
-                end
-            end
-
         end
     end
 

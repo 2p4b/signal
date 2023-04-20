@@ -5,7 +5,7 @@ defmodule Signal.Projector do
             |> Keyword.put(:__using__, Signal.Projector)
             |> Keyword.put_new_lazy(:start, fn -> :beginning end)
         quote [location: :keep, line: 3] do
-            import Signal.Handler
+            require Signal.Handler
             Signal.Handler.__using__(unquote(opts))
 
             def init(opts) do

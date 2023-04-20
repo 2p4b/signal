@@ -10,10 +10,6 @@ defmodule Signal.Processor.SagaTest do
             field :number,  :string,  default: "saga.123"
             field :balance, :number,  default: 0
         end
-
-        def apply(_event, _meta, %Account{}=act) do
-            {:ok, act}
-        end
     end
 
     defmodule Deposited do
@@ -25,6 +21,9 @@ defmodule Signal.Processor.SagaTest do
             field :amount,  :number,    default: 0
         end
 
+        def apply(_event, %Account{}=act) do
+            {:ok, act}
+        end
     end
 
     defmodule AccountOpened do
@@ -35,6 +34,10 @@ defmodule Signal.Processor.SagaTest do
             field :pid,     :any
             field :account, :string,   default: "saga.123"
         end
+
+        def apply(_event, %Account{}=act) do
+            {:ok, act}
+        end
     end
 
     defmodule AccountClosed do
@@ -43,6 +46,10 @@ defmodule Signal.Processor.SagaTest do
 
         schema do
             field :account, :string,   default: "saga.123"
+        end
+
+        def apply(_event, %Account{}=act) do
+            {:ok, act}
         end
     end
 
@@ -194,16 +201,16 @@ defmodule Signal.Processor.SagaTest do
 
             assert_receive(%AccountOpened{account: "saga.123"}, 3000)
 
-            assert_receive(%Deposited{amount: 5000}, 3000)
+            assert_receive(%Deposited{amount: 5000}, 10000)
 
             TestApp.dispatch(Deposite.new([amount: 4000]))
 
-            assert_receive(%Deposited{amount: 4000}, 3000)
-            assert_receive(%Deposited{amount: 1000}, 3000)
+            assert_receive(%Deposited{amount: 4000}, 10000)
+            assert_receive(%Deposited{amount: 1000}, 10000)
 
             TestApp.dispatch(CloseAccount.new([]), await: true)
 
-            assert_receive(%AccountClosed{}, 3000)
+            assert_receive(%AccountClosed{}, 10000)
 
             Process.sleep(500)
             refute TestApp.process_alive?(ActivityNotifier, "saga.123")

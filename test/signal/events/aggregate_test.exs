@@ -10,14 +10,11 @@ defmodule Signal.Events.AggregateTest do
     end
 
     defmodule Account do
-        use Signal.Aggregate,
-            strict: true
-
+        use Blueprint.Struct
         schema do
             field :number,      :number,    default: "123"
             field :balance,     :number,    default: 0
         end
-
     end
 
     defmodule Deposite do
