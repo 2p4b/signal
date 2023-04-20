@@ -181,10 +181,6 @@ defmodule Signal.Processor.SagaTest do
 
     setup_all do
         start_supervised(Store)
-        :ok
-    end
-
-    setup do
         {:ok, _pid} = start_supervised(TestApp)
         {:ok, _pid} = start_supervised(ActivityNotifier)
         :ok
