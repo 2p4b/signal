@@ -11,7 +11,7 @@ defmodule Signal.Process do
 
         quote location: :keep do
 
-            use Blueprint.Struct
+            use Blueprint.Schema
 
             @signal__process__app unquote(app)
 

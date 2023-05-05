@@ -11,7 +11,7 @@ defmodule Signal.Processor.HandlerTest do
     end
 
     defmodule Accounts do
-        use Blueprint.Struct
+        use Blueprint.Schema
 
         schema do
             field :number,      :string,    default: "123"

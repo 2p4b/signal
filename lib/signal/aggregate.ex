@@ -17,7 +17,7 @@ defmodule Signal.Aggregate do
     defmacro __using__(opts) do
         timeout = Keyword.get(opts, :timeout, Signal.Timer.seconds(5))
         quote do
-            use Blueprint.Struct
+            use Blueprint.Schema
             @signal__aggregate__timeout unquote(timeout)
             @before_compile unquote(__MODULE__)
         end

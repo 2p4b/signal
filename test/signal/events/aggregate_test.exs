@@ -10,7 +10,7 @@ defmodule Signal.Events.AggregateTest do
     end
 
     defmodule Account do
-        use Blueprint.Struct
+        use Blueprint.Schema
         schema do
             field :number,      :number,    default: "123"
             field :balance,     :number,    default: 0
