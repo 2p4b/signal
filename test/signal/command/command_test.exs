@@ -57,6 +57,22 @@ defmodule Signal.Command.CommandTest do
         end
 
         @tag :command
+        test "command name" do
+            command = Command.new()
+            assert Signal.Helper.atom_to_string(Command) === Signal.Name.name(command)
+        end
+
+        @tag :command
+        test "command codec" do
+            command = Command.new()
+            encoded = Signal.Codec.encode(command)
+            decoded = Signal.Codec.load(%Command{}, encoded |> elem(1))
+            assert Signal.Result.ok?(encoded)
+            assert Signal.Result.ok?(decoded)
+            assert match?(^command, decoded |> elem(1))
+        end
+
+        @tag :command
         test "executes command" do
             assigns = %{}
             command = Command.new()

@@ -79,14 +79,14 @@ defmodule Signal.Events.AggregateTest do
 
             event1 =
                 struct(Event, [])
-                |> Map.put(:topic, Signal.Topic.topic(deposited))
+                |> Map.put(:topic, Signal.Name.name(deposited))
                 |> Map.put(:data, Map.from_struct(deposited))
                 |> Map.put(:number, 1)
                 |> Map.put(:position, 1)
 
             event2 =
                 struct(Event, [])
-                |> Map.put(:topic, Signal.Topic.topic(deposited))
+                |> Map.put(:topic, Signal.Name.name(deposited))
                 |> Map.put(:data, Map.from_struct(deposited))
                 |> Map.put(:number, 2)
                 |> Map.put(:position, 2)
@@ -104,7 +104,7 @@ defmodule Signal.Events.AggregateTest do
 
             event3 =
                 struct(Event, [])
-                |> Map.put(:topic, Signal.Topic.topic(deposited))
+                |> Map.put(:topic, Signal.Name.name(deposited))
                 |> Map.put(:data, Map.from_struct(deposited))
                 |> Map.put(:number, 3)
                 |> Map.put(:position, 3)

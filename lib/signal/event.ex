@@ -6,7 +6,6 @@ defmodule Signal.Event do
             use Blueprint.Schema
             @module __MODULE__
             @before_compile unquote(__MODULE__)
-            @topic Keyword.fetch(unquote(opts), :topic)
             @stream_opts Keyword.get(unquote(opts), :stream)
         end
     end
@@ -14,15 +13,15 @@ defmodule Signal.Event do
     defmacro __before_compile__(_env) do
         quote generated: true, location: :keep do
 
-            with {:ok, topic} <- Module.get_attribute(__MODULE__, :topic) do
-                defimpl Signal.Topic, for: __MODULE__ do
+            with {:ok, topic} <- Module.get_attribute(__MODULE__, :topic, __MODULE__) do
+                defimpl Signal.Name, for: __MODULE__ do
                     @topic (if is_binary(topic) do 
                         topic
                     else 
                         Signal.Helper.module_to_string(topic) 
                     end)
 
-                    def topic(_event) do 
+                    def name(_event) do 
                         @topic
                     end
                 end
@@ -100,7 +99,7 @@ defmodule Signal.Event do
                 fallback to map instance
                 """
                 Logger.error(msg)
-                %{__struct__: module}
+                Map.put(payload, :__struct__, module)
 
             exception ->
                 reraise(exception, __STACKTRACE__)

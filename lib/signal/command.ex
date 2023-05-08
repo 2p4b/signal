@@ -7,16 +7,31 @@ defmodule Signal.Command  do
             @module __MODULE__
             @before_compile unquote(__MODULE__)
             @sync Keyword.get(unquote(opts), :sync)
-            @version Keyword.get(unquote(opts), :version)
-            @queue_specs Keyword.get(unquote(opts), :queue)
-            @stream_opts Keyword.get(unquote(opts), :stream)
+            @queue Keyword.get(unquote(opts), :queue)
+            @stream Keyword.get(unquote(opts), :stream)
+            @name Keyword.get(unquote(opts), :name, __MODULE__)
         end
     end
 
     defmacro __before_compile__(_env) do
         quote generated: true, location: :keep do
 
-            with field when is_atom(field) <- Module.get_attribute(__MODULE__,:queue) do
+            with {:ok, name} <- Module.get_attribute(__MODULE__, :name) do
+                defimpl Signal.Name, for: __MODULE__ do
+                    @name (if is_binary(name) do 
+                        name
+                    else 
+                        Signal.Helper.module_to_string(name) 
+                    end)
+
+                    def name(_event) do 
+                        @name
+                    end
+                end
+            end
+
+            with field when is_atom(field) 
+                 <- Module.get_attribute(__MODULE__, :queue) do
                 defimpl Signal.Queue, for: __MODULE__ do
                     @field field
                     def queue(command) do 
@@ -25,7 +40,8 @@ defmodule Signal.Command  do
                 end
             end
 
-            with sync when is_boolean(sync) <- Module.get_attribute(__MODULE__,:sync) do
+            with sync when is_boolean(sync) 
+                 <- Module.get_attribute(__MODULE__, :sync) do
                 defimpl Signal.Sync, for: __MODULE__ do
                     @csync sync
                     def sync(_command, _results) do 
@@ -35,7 +51,7 @@ defmodule Signal.Command  do
             end
 
             with stream_opts when is_tuple(stream_opts) 
-                 <- Module.get_attribute(__MODULE__,:stream_opts) do
+                 <- Module.get_attribute(__MODULE__, :stream) do
                 require Signal.Impl.Stream
                 Signal.Impl.Stream.impl(stream_opts)
             end

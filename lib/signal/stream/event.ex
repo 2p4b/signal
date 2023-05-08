@@ -24,7 +24,7 @@ defmodule Signal.Stream.Event do
         |> Keyword.put_new(:causation_id, uuid)
         |> Keyword.put_new(:correlation_id, uuid)
         |> Keyword.put_new_lazy(:topic, fn -> 
-            Signal.Topic.topic(data)
+            Signal.Name.name(data)
         end)
         |> Keyword.put_new_lazy(:timestamp, fn -> 
             DateTime.utc_now()
