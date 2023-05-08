@@ -32,10 +32,7 @@ defmodule Signal.Void.Repo do
 
     @impl true
     def handle_call({:get_event, number}, _from, %Repo{}=store) do
-        event = 
-            store.events
-            |> Enum.find(&(Map.get(&1, :number) == number))
-        {:reply, event, store} 
+        {:reply, Enum.at(store.events, number - 1), store} 
     end
 
     @impl true
@@ -79,6 +76,7 @@ defmodule Signal.Void.Repo do
         repo = 
             transaction.staged
             |> Enum.reduce(repo, &(handle_publish(&2, &1)))
+            |> Map.put(:cursor, transaction.cursor)
         {:reply, :ok, repo}
     end
 
@@ -149,7 +147,7 @@ defmodule Signal.Void.Repo do
 
         GenServer.call(__MODULE__, {:state, :events}, 5000)
         |> Enum.filter(fn event -> 
-                event.stream_id === sid and event.position in range and Signal.Store.Helper.event_is_valid?(event, [], topics)
+                event.position in range and Signal.Store.Helper.event_is_valid?(event, [sid], topics)
         end)
     end
 
@@ -165,7 +163,10 @@ defmodule Signal.Void.Repo do
         if is_integer(max) do 
             max 
         else 
-            get_cursor() 
+            case get_cursor() do
+                0 -> 1
+                value -> value
+            end
         end
     end
 
@@ -181,8 +182,8 @@ defmodule Signal.Void.Repo do
                     Range.new(cast_max(upper), lower)
             end
         range
-        |> Enum.find_value(fn number -> 
-            event = get_stream_event(sid, number)
+        |> Enum.find_value(fn position -> 
+            event = get_stream_event(sid, position)
             if event do
                 if Signal.Store.Helper.event_is_valid?(event, streams, topics) do
                     case callback.(event) do
@@ -226,23 +227,23 @@ defmodule Signal.Void.Repo do
     end
 
     def record_snapshot(%Snapshot{}=snapshot, _opts) do
-        GenServer.call(__MODULE__, {:record, snapshot}, 500)
+        GenServer.call(__MODULE__, {:record, snapshot}, 5000)
     end
 
     def get_snapshot(id, opts) do
-        GenServer.call(__MODULE__, {:snapshot, id, opts}, 500)
+        GenServer.call(__MODULE__, {:snapshot, id, opts}, 5000)
     end
 
     def delete_snapshot(id, opts) do
-        GenServer.call(__MODULE__, {:delete_snapshot, id, opts}, 500)
+        GenServer.call(__MODULE__, {:delete_snapshot, id, opts}, 5000)
     end
 
     def handler_position(handler, opts\\[]) do
-        GenServer.call(__MODULE__, {:handler_position, handler, opts}, 500)
+        GenServer.call(__MODULE__, {:handler_position, handler, opts}, 5000)
     end
 
     def handler_acknowledge(handler, number, opts\\[]) do
-        GenServer.call(__MODULE__, {:handler_acknowledge, handler, number, opts}, 500)
+        GenServer.call(__MODULE__, {:handler_acknowledge, handler, number, opts}, 5000)
     end
 
     def stream_position(stream, _opts \\ []) when is_tuple(stream) do
