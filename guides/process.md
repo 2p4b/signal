@@ -2,8 +2,7 @@
 
 An Process is a long running Saga that syncronizes aggregate states.
 Processes in turn do have their own state.
-Process performs syncronization by listerning to event,
-firing actions, dispatching commands
+Process performs syncronization by listerning to event, dispatching commands
 
 **Yes Each Saga is just a state machine**
 
@@ -62,27 +61,29 @@ defmodule App.Bank.Process.TransferProcess do
         # Blueprint struct casting
         process = __MODULE__.from_struct(trxn)
 
-        params = 
+        debit_command = 
             Map.new()
             |> Map.put("type", "transfer")
             |> Map.put("amount", process.amount)
             |> Map.put("transaction_id", process.transaction_id)
             |> Map.put("sender_account_id", process.sender_account_id)
             |> Map.put("recipient_account_id", process.recipient_account_id)
+            |> Debit.new()
 
-        {:action, {"debit-sender-account", params}, process}, 
+        {:dispatch, debit_command, process}, 
     end
 
     def handle_event(%Debited{}, process) do
         process = %__MODULE__{process| sender_debited: true}
-        params = 
+        credit_command = 
             Map.new()
             |> Map.put("type", "transfer")
             |> Map.put("amount", process.amount)
             |> Map.put("account_id", process.recipient_account_id)
             |> Map.put("transaction_id", process.transaction_id)
+            |> Credit.new()
 
-        {:action, {"credit-recipient-account", params}, process}, 
+        {:dispatch, credit_command, process}, 
     end
 
     def handle_event(%Credited{}, process) do
@@ -90,24 +91,16 @@ defmodule App.Bank.Process.TransferProcess do
         {:stop, process}
     end
 
-    def handle_action({"debit-sender-account", params}, process) do
-        {:dispatch, Debit.new(params)}
-    end
-
-    def handle_action({"credit-recipient-account", params}, process) do
-        {:dispatch, Credit.new(params)}
-    end
-
     # Stop process if :insufficient_funds error is returned 
     # from Debit dispatch command
-    def handle_error({:insufficient_funds, %Debit{}}, _action, process) do
+    def handle_error(%Debit{}, :insufficient_funds, process) do
         ## Do some reporting maybe and stop the saga
         {:stop, process}
     end
 
     # Keep retrying to credit recipient account
-    def handle_error({reason, %Credit{}}, action, process) do
-        {:retry, action, process}
+    def handle_error(%Credit{}=command, error, process) do
+        {:dispatch, command, process}
     end
 
 end
@@ -143,29 +136,18 @@ event to the right Saga instance
 `handle_event/2` callback is called once and event is routed  to a saga instance
 
 - `{:ok, state}` save the saga new state 
-- `{:action, {action_name, action_params}, state}` fire and action with new saga state. All actions are placed in an FIFO action queue
+- `{:dispatch, command, state}` command will be placed in the dispatch queue and set process state
 - `{:stop, state}` stop the saga process from processing any more events, Once all actions in the queue are processed the saga state is deleted
 
-
-
-#### handle_action/2
-`handle_action/2` processes the actions FIFO queue one at a time
-
-- `{:ok, state}` save the saga new state 
-- `{:dipatch, command}` dispatch new command
-- `{:action, {action_name, action_params}, state}` puts action in the FIFO queue, if there are any actions in the action queue, those actions will handled first
-
-- `{:retry, {action_name, action_params}, state}` puts action back in FIFO queue at the same position, and will be handled immediately before any existing actions
 
 
 #### handle_error/3
 `handle_error/3` handles errors from dispatch command
 
 ```elixir
-    def handle_error({reason, command}, {action_name, action_params}, process)
+    def handle_error(command, error, process)
 ```
 
 - `{:ok, state}` save the saga new state 
-- `{:action, {action_name, action_params}, state}` puts action in the FIFO queue, if there are any actions in the action queue, those actions will handled first
-- `{:retry, {action_name, action_params}, state}` puts action back in FIFO queue at the same position, and will be handled immediately before any existing actions
+- `{:dispatch, command, state}` command will be placed in the same position in the dispatch queue and set process state
 - `{:stop, state}` stop the saga process from processing any more events, Once all actions in the queue are processed the saga state is deleted
