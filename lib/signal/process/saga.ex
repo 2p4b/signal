@@ -177,11 +177,9 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def handle_continue({:action_error, action, command, error}, %Saga{}=saga) do
-          action_name = Map.get(action, "name")
-          action_uuid = Map.get(action, "uuid")
-          action_params = Map.get(action, "params")
 
-          args = [{error, command}, {action_name, action_params}, saga.state]
+          action_uuid = Map.get(action, "uuid")
+          args = [command, error, saga.state]
 
           case Kernel.apply(saga.module, :handle_error, args)  do
               {:ok, state} ->

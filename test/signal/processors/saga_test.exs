@@ -167,7 +167,7 @@ defmodule Signal.Processor.SagaTest do
             {:stop, act}
         end
 
-        def handle_error({_error, %Deposite{}}, _action,  %ActivityNotifier{}=acc) do
+        def handle_error(%Deposite{}, _error,  %ActivityNotifier{}=acc) do
             {:ok, acc}
         end
 
