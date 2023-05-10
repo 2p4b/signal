@@ -213,7 +213,7 @@ defmodule Signal.Process.Saga do
                         namespace: #{saga.namespace}
                         id: #{saga.id}
                         callback: #{inspect(saga.module)}.handle_error/2
-                        expected: {:ok, state} | {:retry, {name, params}, state}
+                        expected: {:ok, state} | {:dispatch, command, state}
                         got: #{inspect(invalid_value)}
                     """
           end
