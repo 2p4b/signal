@@ -153,24 +153,18 @@ defmodule Signal.Processor.SagaTest do
         def handle_event(%Deposited{}=ev, %ActivityNotifier{amount: amt}=act) do
             acknowledge(act, ev)
             amount = ev.amount + amt
+            state = %ActivityNotifier{act | amount: amount}
             if amount == 9000 do
                 bonus = %{"account" => ev.account, "amount" => 1000}
-                action = {"deposite", bonus}
-                {:action, action, %ActivityNotifier{act | amount: amount}}
+                {:dispatch, Deposite.new(bonus), state}
             else
-                {:ok, %ActivityNotifier{act | amount: amount} }
+                {:ok, state}
             end
         end
 
         def handle_event(%AccountClosed{}=ev,  %ActivityNotifier{}=act) do
             acknowledge(act, ev)
             {:stop, act}
-        end
-
-        def handle_action({"deposite", params}, _process) do
-            amount = Map.get(params, "amount")
-            account = Map.get(params, "account")
-            {:dispatch, %Deposite{amount: amount, account: account}}
         end
 
         def handle_error({_error, %Deposite{}}, _action,  %ActivityNotifier{}=acc) do

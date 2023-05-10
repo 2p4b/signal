@@ -5,6 +5,7 @@ defmodule Signal.Process.Saga do
     alias Signal.Codec
     alias Signal.Effect
     alias Signal.Result
+    alias Signal.Logger
     alias Signal.Process.Saga
     alias Signal.Process.Supervisor
 
@@ -25,6 +26,10 @@ defmodule Signal.Process.Saga do
         stopped: false
     ]
 
+    def start(app, {id, module}, opts \\ []) do
+        Supervisor.prepare_saga(app, {id, module}, opts)    
+    end
+
     @doc """
     Starts a new process.
     """
@@ -36,10 +41,6 @@ defmodule Signal.Process.Saga do
     @impl true
     def init(opts) do
         {:ok, struct(__MODULE__, opts), {:continue, :load_effect}}
-    end
-
-    def start(app, {id, module}, opts \\ []) do
-        Supervisor.prepare_saga(app, {id, module}, opts)    
     end
 
     @impl true
@@ -142,9 +143,7 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def handle_continue({:dispatch, command, action}, %Saga{}=saga) do
-        action_name = Map.get(action, "name")
         action_uuid = Map.get(action, "uuid")
-        action_cause = Map.get(action, "cause")
         causation_id = Map.get(action, "causation_id")
 
         opts = [
@@ -154,11 +153,10 @@ defmodule Signal.Process.Saga do
 
         [
             app: saga.app,
-            type: saga.module,
             sid: saga.id,
-            cause: action_cause,
-            action: action_name,
+            type: saga.module,
             dispatch: command.__struct__,
+            causation_id: causation_id,
         ]
         |> Signal.Logger.info(label: :saga)
 
@@ -194,17 +192,11 @@ defmodule Signal.Process.Saga do
                       |> sched_next_action()
                   {:noreply, saga, saga.timeout}
 
-              {:action, {action_name, params}, state} when is_binary(action)  ->
+              {:dispatch, command, state} ->
+                  new_action = recreate_command_action(action, command)
                   saga = 
                       %Saga{saga | state: state}
-                      |> enqueue_action_action(action_uuid, {action_name, params})
-                      |> save_saga_state()
-                  {:noreply, saga}
-
-              {:retry, {name, params}, state} ->
-                  saga = 
-                      %Saga{saga | state: state}
-                      |> requeue_action_inplace(action_uuid, {name, params})
+                      |> requeue_action(new_action)
                       |> save_saga_state()
                       |> sched_next_action()
                   {:noreply, saga}
@@ -274,43 +266,9 @@ defmodule Signal.Process.Saga do
         [app: saga.app, action: action]
         |> Signal.Logger.info(label: :saga)
 
-        action_uuid = Map.get(action, "uuid")
-        action_name = Map.get(action, "name")
-        action_params = Map.get(action, "params")
+        command = create_action_command(action)
 
-        action_tuple = {action_name, action_params}
-        args = [action_tuple, saga.state]
-
-        case Kernel.apply(saga.module, :handle_action, args) do
-            {:dispatch, command} ->
-                {:noreply, saga, {:continue, {:dispatch, command, action}}}
-
-            {:ok, state}->
-                saga =
-                    %Saga{saga| state: state}
-                    |> drop_action(action_uuid)
-                    |> save_saga_state()
-                    |> sched_next_action()
-                {:noreply, saga, saga.timeout}
-
-            # Yes you can fire an action from an action ;-)
-            {:action, {name, params}, state} when is_binary(action)  ->
-                  saga = 
-                      %Saga{saga | state: state}
-                      |> enqueue_action_action(action_uuid, {name, params})
-                      |> save_saga_state()
-                  {:noreply, saga, saga.timeout}
-
-            invalid_value ->
-                raise """
-                    Invalid saga return value
-                    callback: #{inspect(saga.module)}.handle_action/2
-                    namespace: #{saga.namespace}
-                    id: #{saga.id}
-                    expected: {:dispatch, command} | {:ok, new_state} | {:action, {action_name, action_params}, state}
-                    got: #{inspect(invalid_value)}
-                """
-        end
+        {:noreply, saga, {:continue, {:dispatch, command, action}}}
     end
 
     @impl true
@@ -383,9 +341,10 @@ defmodule Signal.Process.Saga do
         %Event{number: number} = event
 
         case Kernel.apply(module, :handle_event, [Event.data(event), state]) do 
-            {:action, {action, params}, state} when is_binary(action)  ->
+            {:dispatch, command, state} when is_struct(command)  ->
+                action = create_command_action(event, command)
                 %Saga{saga| state: state, stopped: false}
-                |> enqueue_event_action(event, {action, params})
+                |> enqueue_action(action)
 
             {:ok, state} ->
                 %Saga{saga | state: state, stopped: false}
@@ -479,47 +438,49 @@ defmodule Signal.Process.Saga do
         |> Effect.new()
     end
 
-    defp enqueue_action_action(%Saga{}=saga, action_uuid, {name, params}) do
-        action = Enum.find(saga.actions, &(Map.get(&1, "uuid") == action_uuid))
-        params = encode_action_params(params)
-
-        updated_action = 
-            action
-            |> Map.put("name", name)
-            |> Map.put("params", params)
-
-        actions = 
-            saga
-            |> drop_action(action_uuid)
-            |> Map.get(:actions)
-            |> Enum.concat(List.wrap(updated_action))
-
-        send(self(), {:action, action_uuid})
-        %Saga{saga | actions: actions}
+    defp create_command_action(%Event{}=event, command) do
+        name = Signal.Name.name(command)
+        uuid = UUID.uuid5(event.uuid, name)
+        {:ok, data} = Codec.encode(command)
+        %{
+            "tries" => 0,
+            "name" => name,
+            "uuid" => uuid,
+            "data" => data,
+            "causation_id" => event.uuid,
+            "timestamp" => DateTime.utc_now()
+        }
     end
 
-    defp enqueue_event_action(%Saga{}=saga, event, {name, params}) do
-        action = make_event_action(saga, event, name, params)
+    defp recreate_command_action(action, command) do
+        name = Signal.Name.name(command)
+        uuid = 
+            action
+            |> Map.get("causation_id")
+            |> UUID.uuid5(name)
+        {:ok, data} = Codec.encode(command)
+        action
+        |> Map.put("uuid", uuid)
+        |> Map.put("name", name)
+        |> Map.put("data", data)
+        |> Map.put("timestamp", DateTime.utc_now())
+    end
+
+    defp enqueue_action(%Saga{}=saga, action) do
         send(self(), {:action, Map.get(action, "uuid")})
         %Saga{saga | actions: saga.actions ++ List.wrap(action)}
     end
 
-    defp requeue_action_inplace(%Saga{}=saga, id, {name, params}) do
-        params = encode_action_params(params)
+    defp requeue_action(%Saga{}=saga, action) do
+        action_uuid = Map.get(action, "uuid")
         index = 
             saga.actions
-            |> Enum.find_index(&(Map.get(&1, "uuid") == id))
+            |> Enum.find_index(&(Map.get(&1, "uuid") == action_uuid))
 
-        action = 
-            saga.actions
-            |> Enum.at(index)
-            |> Map.put("name", name)
-            |> Map.put("params", params)
-            |> Map.update!("tries", &(&1+1))
+        updated_action = Map.update!(action, "tries", &(&1+1))
 
-        actions = List.replace_at(saga.actions, index, action)
-
-        send(self(), {:action, Map.get(action, "uuid")})
+        actions = List.replace_at(saga.actions, index, updated_action)
+        send(self(), {:action, Map.get(action, action_uuid)})
         %Saga{saga | actions: actions}
     end
 
@@ -544,48 +505,39 @@ defmodule Signal.Process.Saga do
         %Saga{saga | actions: actions}
     end
 
-    defp make_event_action(%Saga{}=saga, %Event{}=event, name, params) do
-        uuid = UUID.uuid5(saga.uuid, event.uuid)
-        %{
-            "name" => name,
-            "uuid" => uuid,
-            "tries" => 0,
-            "cause" => event.topic,
-            "params" => encode_action_params(params),
-            "timestamp" => DateTime.utc_now(),
-            "causation_id" => event.uuid,
-        }
-    end
-
-    defp encode_action_params(params) when is_map(params) do
-        {:ok, data} = Codec.encode(params)
-        data
-    end
-
-    defp encode_action_params(%DateTime{}=v) do
-        String.Chars.to_string(v)
-    end
-
-    defp encode_action_params(v) 
-    when is_binary(v) or is_integer(v) or is_float(v)  do
-        v
-    end
-
-    defp encode_action_params(nil) do
-        nil
-    end
-
-    defp encode_action_params(v) when is_atom(v) do
-        Atom.to_string(v)
-    end
-
-    defp encode_action_params(v) do
-        raise ArgumentError, message: "unable to encode action params:\n #{v}"
-    end
-    
     def router_push(%Saga{}=saga, payload) do
         Signal.PubSub.broadcast(saga.app, saga.channel, payload)
         saga
+    end
+
+    defp create_action_command(action) do
+        name = Map.get(action, "name")
+        module = Signal.Helper.string_to_module(name)
+        payload = Map.get(action, "data")
+
+        try do
+            {:ok, data} =
+                module
+                |> struct([])
+                |> Codec.load(payload)
+            data
+        rescue
+            _ ->
+                msg = """
+                Could not construct command: #{name}
+                Ensure command is defined
+                Example:
+                    defmodule #{name} do
+                        use Signal.Command
+
+                        schema do
+                            ...
+                        end
+                    end
+                """
+                Logger.error(msg)
+                raise(RuntimeError, msg)
+        end
     end
 
     @impl true
