@@ -10,9 +10,11 @@ defmodule App.Bank.Commands.Deposite do
 
     # [optional] :sync is optional, default: false
     # [optional] :queue is optional, default: nil
+    # [optional] :name is optional, default: [module name]
     # [required] :stream
     use Signal.Command,
         sync: true,
+        name: "App.Bank.Commands.Deposite",
         queue: :account_id,
         stream: {Account, :account_id}
 
@@ -47,6 +49,7 @@ The `use Signal.Command` Keyword list options
     use Signal.Command, [...options]
 ```
 - `:sync` [optional] sync stream aggregate
+- `:name` [optional] command name, default to module name
 - `:queue` [optional] execution queue id
 - `:stream` [required] command event stream tag
 
