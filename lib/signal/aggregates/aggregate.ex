@@ -418,7 +418,7 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
-    def terminate(reason, %Aggregate{}=aggregate) do
+    def terminate(:normal, %Aggregate{}=aggregate) do
         [
             app: aggregate.app,
             stream: aggregate.stream,
@@ -427,6 +427,18 @@ defmodule Signal.Aggregates.Aggregate do
             version: aggregate.version,
         ]
         |> Signal.Logger.info(label: :aggregate)
+    end
+
+    @impl true
+    def terminate(reason, %Aggregate{}=aggregate) do
+        [
+            app: aggregate.app,
+            stream: aggregate.stream,
+            status: :terminated,
+            reason: reason,
+            version: aggregate.version,
+        ]
+        |> Signal.Logger.error(label: :aggregate)
     end
 
 end
