@@ -423,7 +423,7 @@ defmodule Signal.Aggregates.Aggregate do
             app: aggregate.app,
             stream: aggregate.stream,
             status: :terminated,
-            reason: reason,
+            reason: :normal,
             version: aggregate.version,
         ]
         |> Signal.Logger.info(label: :aggregate)
