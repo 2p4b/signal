@@ -3,6 +3,7 @@ defmodule Signal.Processor.SagaTest do
 
     alias Signal.Void.Store
 
+
     defmodule Account do
         use Signal.Aggregate
 
@@ -17,6 +18,7 @@ defmodule Signal.Processor.SagaTest do
             stream: {Account, :account}
 
         schema do
+            field :reason,  :string,   default: "deposite"
             field :account, :string,    default: "saga.123"
             field :amount,  :number,    default: 0
         end
@@ -32,7 +34,8 @@ defmodule Signal.Processor.SagaTest do
 
         schema do
             field :pid,     :any
-            field :account, :string,   default: "saga.123"
+            field :promo,   :number,  default: 0
+            field :account, :string,  default: "saga.123"
         end
 
         def apply(_event, %Account{}=act) do
@@ -45,6 +48,7 @@ defmodule Signal.Processor.SagaTest do
             stream: {Account, :account}
 
         schema do
+            field :reason,  :string,   default: "Reason bezos"
             field :account, :string,   default: "saga.123"
         end
 
@@ -74,6 +78,7 @@ defmodule Signal.Processor.SagaTest do
         schema do
             field :account,     :string,    default: "saga.123"
             field :amount,      :number,    default: 0
+            field :reason,      :string,    default: ""
         end
 
         def handle(%Deposite{}=deposite, _params, %Account{}) do
@@ -120,12 +125,14 @@ defmodule Signal.Processor.SagaTest do
 
         schema do
             field :account,   :string
+            field :count,     :number,  default: 0
+            field :promotion, :map,     default: %{target: 0, cliamed: false, amount: 1000}
             field :amount,    :number  
             field :pid,       :any
         end
 
         def init(id) do
-            struct(__MODULE__, [account: id, amount: 0])
+            struct(__MODULE__, [account: id, amount: 0, count: 0])
         end
 
         def handle(%AccountOpened{account: account}) do
@@ -140,35 +147,67 @@ defmodule Signal.Processor.SagaTest do
             {:apply, id}
         end
 
-        defp acknowledge(%ActivityNotifier{pid: pid}, event) do
-            Process.send(pid, event, [])
-        end
+        def handle_event(%AccountOpened{pid: pid}=ev, %ActivityNotifier{}=self) do
+            state = 
+                self 
+                |> increment_count()
+                |> set_account_pid(pid) 
+                |> set_promotion(ev.promo)
 
-        def handle_event(%AccountOpened{pid: pid}=ev, %ActivityNotifier{}=act) do
-            state = %ActivityNotifier{act | pid: pid}
-            acknowledge(state, ev)
+            notify_tester(state, ev)
             {:ok, state}
         end
 
-        def handle_event(%Deposited{}=ev, %ActivityNotifier{amount: amt}=act) do
-            acknowledge(act, ev)
-            amount = ev.amount + amt
-            state = %ActivityNotifier{act | amount: amount}
-            if amount == 9000 do
-                bonus = %{"account" => ev.account, "amount" => 1000}
-                {:dispatch, Deposite.new(bonus), state}
+        def handle_event(%Deposited{}=ev, %ActivityNotifier{}=self) do
+            notify_tester(self, ev)
+
+            state = 
+                self 
+                |> deposite_amount(ev.amount) 
+                |> increment_count()
+
+            if state.promotion.cliamed == false and state.promotion.target <= state.amount do
+                reason = "bonus"
+                promo_amount = state.promotion.amount
+                promo_bonus = %{"account" => ev.account, "amount" => promo_amount, "reason" => reason}
+                {:dispatch, Deposite.new(promo_bonus), claim_promo(state, promo_amount)}
             else
                 {:ok, state}
             end
         end
 
-        def handle_event(%AccountClosed{}=ev,  %ActivityNotifier{}=act) do
-            acknowledge(act, ev)
-            {:stop, act}
+        def handle_event(%AccountClosed{}=ev,  %ActivityNotifier{}=self) do
+            notify_tester(self, ev)
+            {:stop, self}
         end
 
-        def handle_error(%Deposite{}, _error,  %ActivityNotifier{}=acc) do
-            {:ok, acc}
+        def handle_error(%Deposite{}, _error,  %ActivityNotifier{}=self) do
+            {:ok, self}
+        end
+
+        defp set_promotion(%ActivityNotifier{}=self, target) do
+            %ActivityNotifier{self | promotion: %{self.promotion | target: target, cliamed: false}}
+        end
+
+        defp notify_tester(%ActivityNotifier{pid: pid}=self, event) do
+            Process.send(pid, event, [])
+            self 
+        end
+
+        defp set_account_pid(%ActivityNotifier{pid: nil}=self, pid) do
+            %ActivityNotifier{self | pid: pid}
+        end
+
+        defp increment_count(%ActivityNotifier{count: count}=self) do
+            %ActivityNotifier{self | count: count + 1}
+        end
+
+        defp deposite_amount(%ActivityNotifier{amount: amount}=self, value) do
+            %ActivityNotifier{self | amount: amount + value}
+        end
+
+        defp claim_promo(%ActivityNotifier{promotion: promo}=self, amount) do
+            %ActivityNotifier{self | amount: amount, promotion: %{promo | cliamed: true}}
         end
 
     end
@@ -184,24 +223,30 @@ defmodule Signal.Processor.SagaTest do
 
         @tag :saga
         test "process should start stop and continue" do
-
-            TestApp.dispatch(OpenAccount.new([pid: self()]))
+            bonus_tag = "bonus"
+            first_amount = 5000
+            second_amount = 4000
+            promotion_amount = 1000
+            promotion_target = first_amount + second_amount
+            
+            TestApp.dispatch(OpenAccount.new([pid: self(), promo: promotion_target]))
 
             TestApp.dispatch(Deposite.new([amount: 5000]))
 
             assert_receive(%AccountOpened{account: "saga.123"}, 3000)
 
-            assert_receive(%Deposited{amount: 5000}, 10000)
+            assert_receive(%Deposited{amount: ^first_amount}, 10000)
 
-            TestApp.dispatch(Deposite.new([amount: 4000]))
+            TestApp.dispatch(Deposite.new([amount: second_amount]))
 
-            assert_receive(%Deposited{amount: 4000}, 10000)
-            assert_receive(%Deposited{amount: 1000}, 10000)
+            assert_receive(%Deposited{amount: ^second_amount}, 10000)
+
+            # wait for promo deposite to be applied to account
+            assert_receive(%Deposited{amount: ^promotion_amount, reason: ^bonus_tag}, 10000)
 
             TestApp.dispatch(CloseAccount.new([]), await: true)
 
             assert_receive(%AccountClosed{}, 10000)
-
             Process.sleep(500)
             refute TestApp.process_alive?(ActivityNotifier, "saga.123")
         end
