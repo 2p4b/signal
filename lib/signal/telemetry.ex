@@ -36,9 +36,21 @@ defmodule Signal.Telemetry do
         Map.put(measurements, :duration, duration)
     end
 
-    defmacro telemetry_start(signal, path) do
+    defmacro telemetry_start(signal, metadata \\ %{}, measurements \\ %{}) do
         quote do
-            Signal.Telemetry.start(unquote(signal), unquote(path))
+            __MODULE__
+            |> Signal.Telemetry.path()
+            |> Enum.concat(List.wrap(unquote(signal)))
+            |> Signal.Telemetry.start(unquote(metadata), unquote(measurements))
+        end
+    end
+
+    defmacro telemetry_stop(signal, clock, metadata \\ %{}, measurements \\ %{}) do
+        quote do
+            __MODULE__
+            |> Signal.Telemetry.path()
+            |> Enum.concat(List.wrap(unquote(signal)))
+            |> Signal.Telemetry.stop(unquote(clock), unquote(metadata), unquote(measurements))
         end
     end
 
@@ -55,6 +67,7 @@ defmodule Signal.Telemetry do
     defmacro __using__(_) do
         quote location: :keep do
             require Signal.Telemetry
+            import Signal.Telemetry, only: [telemetry_start: 3, telemetry_stop: 4]
         end
     end
 
