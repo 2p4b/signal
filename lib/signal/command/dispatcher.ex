@@ -1,4 +1,5 @@
 defmodule Signal.Command.Dispatcher do
+    use Signal.Telemetry
 
     alias Signal.Result
     alias Signal.Stream.Event
@@ -9,47 +10,61 @@ defmodule Signal.Command.Dispatcher do
     alias Signal.Task, as: SigTask
 
     def dispatch(%SigTask{}=task) do
-        case execute(task) do
-            {:ok, result} ->
-                process(%SigTask{task | result: result})
-                |> finalize(task)
+        start = telemetry_start(:disptach, metadata(task), %{})
+        result =
+            case execute(task) do
+                {:ok, result} ->
+                    process(%SigTask{task | result: result})
+                    |> finalize(task)
 
-            error ->
-                error
-        end
+                error ->
+                    error
+            end
+        telemetry_stop(:disptach, start, metadata(task), %{})
+        result
     end
 
     def process(%SigTask{}=task) do
+        start = telemetry_start(:process, metadata(task), %{})
         action = Action.from(task)
-        case Producer.process(action) do
-            {:ok, result} ->
-                {:ok, result}
+        result = 
+            case Producer.process(action) do
+                {:ok, result} ->
+                    {:ok, result}
 
-            {:error, reason} ->
-                {:error, reason}
+                {:error, reason} ->
+                    {:error, reason}
 
-            crash when is_tuple(crash) ->
-                handle_crash(crash)
-        end
+                crash when is_tuple(crash) ->
+                    handle_crash(crash)
+            end
+        telemetry_stop(:process, start, %{}, %{})
+        result
     end
 
-    def execute(%SigTask{app: app, command: command, assigns: assigns}) do
-        case Queue.handle(app, command, assigns, []) do
-            {:ok, result} ->
-                {:ok, result}
+    def execute(%SigTask{} =task) do
+        %SigTask{app: app, command: command, assigns: assigns} = task
+        start = telemetry_start(:execute, metadata(task), %{})
+        result = 
+            case Queue.handle(app, command, assigns, []) do
+                {:ok, result} ->
+                    {:ok, result}
 
-            {:error, reason} ->
-                {:error, reason}
+                {:error, reason} ->
+                    {:error, reason}
 
-            crash when is_tuple(crash) ->
-                handle_crash(crash)
+                crash when is_tuple(crash) ->
+                    handle_crash(crash)
 
-            result ->
-                {:ok, result}
-        end
+                result ->
+                    {:ok, result}
+            end
+        telemetry_stop(:execute, start, metadata(task), %{})
+        result
     end
 
     defp finalize({:ok, histories}, %SigTask{}=sig_task) do
+        start = telemetry_start(:finalize, metadata(sig_task), %{})
 
         %SigTask{app: app, result: result, assigns: assigns, await: await} = sig_task
 
@@ -83,6 +98,7 @@ defmodule Signal.Command.Dispatcher do
                     end
                 end)
 
+            telemetry_stop(:finalize, start, metadata(sig_task), %{})
             struct(Result, opts ++ [states: states])
         else
             struct(Result, opts)
@@ -108,6 +124,15 @@ defmodule Signal.Command.Dispatcher do
 
     def handle_crash({:error, :threw, {thrown, _stacktrace}}) do
         throw(thrown)
+    end
+
+    defp metadata(%SigTask{}=task) do
+        %{
+            app: task.app,
+            queue: task.queue,
+            assigns: task.assigns,
+            command: task.command_type
+        }
     end
 
 end
