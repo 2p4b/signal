@@ -1,11 +1,22 @@
 defmodule Signal.Aggregates.Aggregate do
     use GenServer, restart: :transient
+    use Signal.Telemetry
     alias Signal.Codec
     alias Signal.Timer
     alias Signal.Event
     alias Signal.Snapshot
     alias Signal.Stream.Reducer
     alias Signal.Aggregates.Aggregate
+
+    defmodule Waiter do
+        defstruct [
+            :ref,
+            :vsn,
+            :from,
+            :start,
+            :timeout
+        ]
+    end
 
     defstruct [
         :id,
@@ -18,6 +29,7 @@ defmodule Signal.Aggregates.Aggregate do
         :stream, 
         :consumer,
         ack: 0, 
+        wait: 5000,
         version: 0,
         awaiting: [],
     ]
@@ -36,11 +48,14 @@ defmodule Signal.Aggregates.Aggregate do
 
     @impl true
     def init(opts) do
-        {:ok, struct(__MODULE__, opts), {:continue, :load_aggregate}}
+        aggregate = struct(__MODULE__, opts)
+        telemetry_start(:init, metadata(aggregate), measurements(aggregate))
+        {:ok, aggregate, {:continue, :load_aggregate}}
     end
 
     @impl true
     def handle_continue(:load_aggregate, %Aggregate{}=aggregate) do
+        start = telemetry_start(:load, metadata(aggregate), %{})
         %Aggregate{
             app: app,
             stream: {stream_id, _}
@@ -57,28 +72,46 @@ defmodule Signal.Aggregates.Aggregate do
                 load_state(aggregate, record)
             end
 
+        telemetry_stop(:load, start, metadata(aggregate), measurements(aggregate))
         {:noreply, listen(aggregate), Timer.seconds(30)}
     end
-
 
     @impl true
     def handle_call({:state, opts}, from, %Aggregate{}=aggregate) do
         %Aggregate{
             state: state,
-            version: ver, 
             timeout: timeout,
             awaiting: waiting, 
         } = aggregate
 
         red = Keyword.get(opts, :version, aggregate.version)
-        if ver >= red do
+
+        waiter = %Waiter{
+            ref: nil, 
+            vsn: red, 
+            from: from, 
+            timeout: Keyword.get(opts, :timeout, aggregate.wait)
+        }
+
+        meta = aggregate |> metadata() |> Map.put(:caller, metadata(waiter)) 
+
+        start = telemetry_start(:state, meta, measurements(aggregate))
+
+        if aggregate.version >= waiter.vsn do
+
+            telemetry_stop(:state, start, meta, measurements(aggregate))
             {:reply, state, aggregate, timeout} 
         else
-            ref = Process.monitor(elem(from, 0))
+            ref = 
+                from
+                |> elem(0)
+                |> Process.monitor()
+
             aggregate = %Aggregate{aggregate | 
-                awaiting: waiting ++ [{from, ref, red}]
+                awaiting: waiting ++ List.wrap(%Waiter{waiter | ref: ref, start: start})
             }
-            {:noreply, aggregate, timeout}
+
+            {:noreply, aggregate, waiter.timeout}
         end
     end
 
@@ -101,24 +134,6 @@ defmodule Signal.Aggregates.Aggregate do
     end
 
     @impl true
-    def handle_call({:await, version}, from, %Aggregate{}=aggregate) do
-        %Aggregate{
-            state: state,
-            version: vsn, 
-            timeout: timeout,
-            awaiting: waiting, 
-        } = aggregate
-
-        if vsn >= version do
-            {:reply, state, aggregate, timeout} 
-        else
-            ref = Process.monitor(elem(from, 0))
-            waiter = {from, ref, version}
-            {:noreply, %Aggregate{aggregate | awaiting: waiting ++ [waiter]}, timeout}
-        end
-    end
-
-    @impl true
     def handle_info(%Event{number: number}, %Aggregate{ack: ack}=aggregate) 
     when number <= ack do
         {:noreply, aggregate, aggregate.timeout}
@@ -126,12 +141,14 @@ defmodule Signal.Aggregates.Aggregate do
 
     @impl true
     def handle_info(%Event{}=event, %Aggregate{}=aggregate) do
+        start = telemetry_start(:reduce, metadata(aggregate), measurements(aggregate))
         case apply_event(aggregate, event) do
             {:ok, %Aggregate{}=aggregate} ->
                 aggregate =
                     aggregate
                     |> acknowledge(event)
                     |> reply_waiters()
+                telemetry_stop(:reduce, start, metadata(aggregate), measurements(aggregate))
                 {:noreply, aggregate, aggregate.timeout} 
 
             {:hibernate, %Aggregate{}=aggregate} ->
@@ -139,6 +156,7 @@ defmodule Signal.Aggregates.Aggregate do
                     aggregate
                     |> acknowledge(event)
                     |> reply_waiters()
+                telemetry_stop(:reduce, start, metadata(aggregate), measurements(aggregate))
                 {:noreply, aggregate, :hibernate} 
 
             {:stop, reason, %Aggregate{}=aggregate} ->
@@ -146,9 +164,11 @@ defmodule Signal.Aggregates.Aggregate do
                     aggregate
                     |> acknowledge(event)
                     |> reply_waiters()
+                telemetry_stop(:reduce, start, metadata(aggregate), measurements(aggregate))
                 {:stop, reason, aggregate} 
 
             error ->
+                telemetry_stop(:reduce, start, metadata(aggregate), measurements(aggregate))
                 {:stop, error, aggregate}
         end
     end
@@ -171,7 +191,7 @@ defmodule Signal.Aggregates.Aggregate do
     def handle_info({:DOWN, ref, :process, _obj, _reason}, %Aggregate{}=aggregate) do
         awaiting =
             aggregate.awaiting
-            |> Enum.filter(fn {_pid, wref, _stage} -> 
+            |> Enum.filter(fn %Waiter{ref: wref} -> 
                 if ref == wref do
                     Process.demonitor(wref)
                     false
@@ -184,14 +204,22 @@ defmodule Signal.Aggregates.Aggregate do
 
     defp reply_waiters(%Aggregate{}=aggregate) do
         %Aggregate{
-            version: vsn, 
             state: state, 
+            version: vsn, 
             awaiting: waiters
         } = aggregate
 
         awaiting =
-            Enum.filter(waiters, fn {from, ref, stage} -> 
-                if vsn >= stage do
+            Enum.filter(waiters, fn %Waiter{}=waiter -> 
+                %Waiter{from: from, ref: ref, start: start, vsn: wvsn} = waiter
+                if vsn >= wvsn do
+                    meta = 
+                        aggregate
+                        |> metadata() 
+                        |> Map.put(:caller, metadata(waiter))
+                        |> Map.update!(:load, fn x -> x - 1 end) 
+
+                    telemetry_stop(:state, start, meta, %{})
                     Process.demonitor(ref)
                     GenServer.reply(from, state)
                     false
@@ -206,6 +234,11 @@ defmodule Signal.Aggregates.Aggregate do
     def state(aggregate,  opts \\ []) do
         timeout = Keyword.get(opts, :timeout, 10000)
         GenServer.call(aggregate, {:state, opts}, timeout)
+    end
+
+    def await(aggregate, stage, timeout \\ 5000) do
+        opts = [version: stage, timeout: timeout] 
+        state(aggregate, opts)
     end
 
     def revise(aggregate, {version, state},  opts \\ []) do
@@ -339,10 +372,6 @@ defmodule Signal.Aggregates.Aggregate do
         GenServer.whereis(aggregate) |> Aggregate.apply(event)
     end
 
-    def await(aggregate, stage, timeout \\ 5000) do
-        GenServer.call(aggregate, {:await, stage}, timeout)
-    end
-
     defp acknowledge(%Aggregate{}=aggregate, %Event{number: number}) do
         %Aggregate{
             app: app, 
@@ -363,6 +392,7 @@ defmodule Signal.Aggregates.Aggregate do
             version: version
         } = aggregate
 
+        start = telemetry_start(:snapshot, metadata(aggregate), measurements(aggregate))
         {stream_id, _type} = stream
 
         {:ok, payload} = Codec.encode(state)
@@ -381,9 +411,9 @@ defmodule Signal.Aggregates.Aggregate do
             [id: stream_id, version: version, data: data]
             |> Snapshot.new()
 
-        app
-        |> Signal.Store.Adapter.record_snapshot(snapshot)
+        Signal.Store.Adapter.record_snapshot(app, snapshot)
 
+        telemetry_stop(:snapshot, start, metadata(aggregate), measurements(aggregate))
         aggregate
     end
 
@@ -421,6 +451,7 @@ defmodule Signal.Aggregates.Aggregate do
     def terminate(:normal, %Aggregate{}=aggregate) do
         [
             app: aggregate.app,
+            uuid: aggregate.uuid,
             stream: aggregate.stream,
             status: :terminated,
             reason: :normal,
@@ -433,12 +464,37 @@ defmodule Signal.Aggregates.Aggregate do
     def terminate(reason, %Aggregate{}=aggregate) do
         [
             app: aggregate.app,
+            uuid: aggregate.uuid,
             stream: aggregate.stream,
             status: :terminated,
             reason: reason,
             version: aggregate.version,
         ]
         |> Signal.Logger.error(label: :aggregate)
+    end
+
+    def metadata(%Waiter{}=waiter) do
+        %{
+            caller: waiter.from,
+            version: waiter.vsn,
+            timeout: waiter.timeout,
+        }
+    end
+
+    def metadata(%Aggregate{}=aggregate) do
+        %{
+            app: aggregate.app,
+            uuid: aggregate.uuid,
+            stream: aggregate.stream,
+        }
+    end
+
+    def measurements(%Aggregate{}=aggregate) do
+        %{
+            ack: aggregate.ack,
+            version: aggregate.version,
+            awaiting: length(aggregate.awaiting),
+        }
     end
 
 end
