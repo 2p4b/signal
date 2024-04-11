@@ -1,6 +1,7 @@
 defmodule Signal.Telemetry do
     @start :start
     @stop :stop
+    @exception :exception
 
     def start(signal, metadata \\ %{}, measurements \\ %{}) when is_list(signal) do
         measurements = add_telemetry_measurements(measurements)
@@ -8,6 +9,24 @@ defmodule Signal.Telemetry do
         |> prepend_action(@start)
         |> :telemetry.execute(measurements, metadata)
         measurements.systime
+    end
+
+    def exception(signal, clock, value, stackrace, metadata \\ %{},  measurements \\ %{}) when is_list(signal) do
+
+        metadata = 
+            metadata
+            |> Map.put(:thrown, value)
+            |> Map.put(:stacktrace, stackrace)
+
+        measurements = 
+            measurements
+            |> add_telemetry_measurements() 
+            |> compute_duration(clock)
+
+        signal
+        |> prepend_action(@exception)
+        |> :telemetry.execute(measurements, metadata)
+        measurements.duration
     end
 
     def stop(signal, clock, metadata \\ %{},  measurements \\ %{}) when is_list(signal) do
