@@ -1,7 +1,7 @@
 defmodule Signal.Execution.Queue do
     use GenServer, restart: :transient
+    use Signal.Telemetry
 
-    alias Signal.Timer
     alias Signal.Command.Handler
     alias Signal.Execution.Queue
 
@@ -35,9 +35,7 @@ defmodule Signal.Execution.Queue do
     end
 
     def handle(app, command, assigns, opts \\ []) do
-
         qid = Signal.Queue.queue(command)
-
         opts = opts ++ [app: app]
         case qid  do
             id when is_binary(id) ->
@@ -58,20 +56,28 @@ defmodule Signal.Execution.Queue do
     end
 
     def execute(command, assigns, opts \\ []) do
+        meta = [
+            app: Keyword.fetch!(opts, :app),
+            command: command.__struct__, 
+            queue: Signal.Queue.queue(command), 
+        ]
+
+        metadata = Enum.into(meta, %{})
+        start = telemetry_start(:execute, %{}, %{})
+
         try do
-            {elapsed, results} = Timer.apply(Handler, :execute, [command, assigns])
-            [
-                app: Keyword.fetch!(opts, :app),
-                command: command.__struct__, 
-                queue: Signal.Queue.queue(command), 
-                time: elapsed
-            ]
-            |> Signal.Logger.info(label: :queue)
+            results = Handler.execute(command, assigns)
+            telemetry_stop(:execute, start, metadata, %{})
+            Signal.Logger.info(meta, label: :queue)
             results
+
         rescue
             raised -> {:error, {:reraise, raised}}
+
         catch
-            thrown -> {:error, {:rethrow, thrown}}
+            thrown -> 
+                telemetry_exception(:execute, start, thrown, __STACKTRACE__, metadata, %{})
+                {:error, {:rethrow, thrown}}
         end
     end
 
