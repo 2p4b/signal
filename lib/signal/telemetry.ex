@@ -73,6 +73,15 @@ defmodule Signal.Telemetry do
         end
     end
 
+    defmacro telemetry_exception(signal, clock, value, stacktrace, metadata \\ %{}, measurements \\ %{}) do
+        quote do
+            __MODULE__
+            |> Signal.Telemetry.path()
+            |> Enum.concat(List.wrap(unquote(signal)))
+            |> Signal.Telemetry.exception(unquote(clock), unquote(value), unquote(stacktrace), unquote(metadata), unquote(measurements))
+        end
+    end
+
     # Add common telemetry metadata
     defp add_telemetry_measurements(measurements) do
         clock = System.monotonic_time()
@@ -86,7 +95,7 @@ defmodule Signal.Telemetry do
     defmacro __using__(_) do
         quote location: :keep do
             require Signal.Telemetry
-            import Signal.Telemetry, only: [telemetry_start: 3, telemetry_stop: 4]
+            import Signal.Telemetry, only: [telemetry_start: 3, telemetry_stop: 4, telemetry_exception: 6]
         end
     end
 
