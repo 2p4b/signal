@@ -100,7 +100,7 @@ defmodule Signal.Aggregates.Aggregate do
         if aggregate.version >= waiter.vsn do
 
             telemetry_stop(:state, start, meta, measurements(aggregate))
-            {:reply, state, aggregate, timeout} 
+            {:reply, {:ok, state}, aggregate, timeout} 
         else
             ref = 
                 from
@@ -221,7 +221,7 @@ defmodule Signal.Aggregates.Aggregate do
 
                     telemetry_stop(:state, start, meta, %{})
                     Process.demonitor(ref)
-                    GenServer.reply(from, state)
+                    GenServer.reply(from, {:ok, state})
                     false
                 else
                     true

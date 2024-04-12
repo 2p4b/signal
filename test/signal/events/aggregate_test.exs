@@ -73,7 +73,7 @@ defmodule Signal.Events.AggregateTest do
                 TestApp
                 |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
 
-            state = Signal.Aggregates.Aggregate.state(aggregate)
+            {:ok, state} = Signal.Aggregates.Aggregate.state(aggregate)
 
             assert match?(%Account{number: "123"}, state)
 
@@ -96,7 +96,7 @@ defmodule Signal.Events.AggregateTest do
 
             Signal.Aggregates.Aggregate.apply(aggregate, event2)
 
-            account = Signal.Aggregates.Aggregate.state(aggregate)
+            {:ok, account} = Signal.Aggregates.Aggregate.state(aggregate)
 
             assert match?(%Account{number: "123", balance: 2}, account)
 
@@ -116,7 +116,7 @@ defmodule Signal.Events.AggregateTest do
 
             Signal.Aggregates.Aggregate.apply(aggregate, event3)
 
-            account = Task.await(task, :infinity)
+            {:ok, account} = Task.await(task, :infinity)
 
             assert match?(%Account{number: "123", balance: 5}, account)
         end
