@@ -43,6 +43,9 @@ defmodule Signal.Logger do
         |> Map.to_list()
         |> print(level, opts)
     end
+    def print(data, level, opts) when is_binary(data) do
+        print([data], level, opts)
+    end
     def print(data, level, opts)
     when is_list(data) and is_list(opts) and is_atom(level) do
         app = Keyword.get(data, :app)
@@ -53,13 +56,19 @@ defmodule Signal.Logger do
 
     def dump_data(data) do
         data
-        |> Enum.reduce([], fn {key, value}, acc -> 
-            fname = String.Chars.to_string(key) 
-            key_value =
-                [fname, ": ", inspect(value)]
-                |> Enum.join()
-                |> List.wrap()
-            Enum.concat(acc, key_value)
+        |> Enum.reduce([], fn 
+
+            value, acc when is_binary(value) -> 
+                Enum.concat(acc, [value])
+
+            {key, value}, acc -> 
+                fname = String.Chars.to_string(key) 
+                key_value =
+                    [fname, ": ", inspect(value)]
+                    |> Enum.join()
+                    |> List.wrap()
+                Enum.concat(acc, key_value)
+
         end)
         |> Enum.concat([""])
         |> Enum.join("\n")

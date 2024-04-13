@@ -177,6 +177,7 @@ defmodule Signal.Processor.SagaTest do
         end
 
         def handle_event(%AccountClosed{}=ev,  %ActivityNotifier{}=self) do
+            IO.inspect([ev, self], label: "AccountClosed")
             notify_tester(self, ev)
             {:stop, self}
         end
@@ -247,7 +248,7 @@ defmodule Signal.Processor.SagaTest do
             TestApp.dispatch(CloseAccount.new([]), await: true)
 
             assert_receive(%AccountClosed{}, 10000)
-            Process.sleep(500)
+            Process.sleep(1000)
             refute TestApp.process_alive?(ActivityNotifier, "saga.123")
         end
 

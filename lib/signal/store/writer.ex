@@ -6,6 +6,7 @@ defmodule Signal.Store.Writer do
     alias Signal.Store.Adapter
 
     use GenServer
+    use Signal.Telemetry
 
     require Logger
 
@@ -37,16 +38,22 @@ defmodule Signal.Store.Writer do
 
     @impl true
     def handle_call({:commit, %Transaction{}=transaction, opts}, _from, writer) do
+        meta = metadata(writer) |> Map.put(:transaction, metadata(transaction))
         # { streams, events }
+        start = telemetry_start(:commit, meta, measurements(writer))
         transaction = prepare_transaction(writer, transaction)
 
         case Adapter.commit_transaction(writer.app, transaction, opts) do
             {:error, error} ->
+                meta = Map.put(meta, :error, error)
+                telemetry_stop(:commit, start, meta, measurements(writer))
                 {:reply, {:error, error}, writer}
 
             :ok ->
                 push_broker_events(writer, transaction)
-                {:reply, :ok, %Writer{writer | index: transaction.cursor}}
+                writer = %Writer{writer | index: transaction.cursor}
+                telemetry_stop(:commit, start, meta, measurements(writer))
+                {:reply, :ok, writer}
         end
     end
 
@@ -96,6 +103,18 @@ defmodule Signal.Store.Writer do
     def commit(app, transaction, opts \\ []) do
         writer_name(app)
         |> GenServer.call({:commit, transaction, opts})
+    end
+
+    def measurements(%Writer{}=writer) do
+        %{index: writer.index}
+    end
+
+    def metadata(%Writer{}=writer) do
+        %{app: writer.app, streams: writer.streams}
+    end
+
+    def metadata(%Transaction{}=trnx) do
+        %{uuid: trnx.uuid, cursor: trnx.cursor}
     end
 
 end
