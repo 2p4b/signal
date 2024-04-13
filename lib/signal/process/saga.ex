@@ -1,13 +1,14 @@
 defmodule Signal.Process.Saga do
     use GenServer, restart: :transient
+    use Signal.Telemetry
 
     alias Signal.Event
     alias Signal.Codec
     alias Signal.Effect
     alias Signal.Result
-    alias Signal.Logger
     alias Signal.Process.Saga
     alias Signal.Process.Supervisor
+
 
     defstruct [
         :id, 
@@ -26,6 +27,31 @@ defmodule Signal.Process.Saga do
         stopped: false
     ]
 
+    defmodule Action do
+        defstruct [:name, :uuid, :payload, :tries, :causation_id, :timestamp]
+
+        def module(%Action{name: name}) do
+            Signal.Helper.string_to_module(name)
+        end
+
+        def metadata(%Action{}=action) do
+            %{
+                name: action.name,
+                uuid: action.uuid,
+                timestamp: action.timestamp,
+                causation_id: action.causation_id,
+            }
+        end
+
+        def from_struct(value) when is_struct(value) do
+            struct(__MODULE__, Map.from_struct(value))
+        end
+
+        def new(opts \\ []) when is_list(opts) or is_map(opts) do
+            struct(__MODULE__, opts)
+        end
+    end
+
     def start(app, {id, module}, opts \\ []) do
         Supervisor.prepare_saga(app, {id, module}, opts)    
     end
@@ -43,8 +69,35 @@ defmodule Signal.Process.Saga do
         {:ok, struct(__MODULE__, opts), {:continue, :load_effect}}
     end
 
+    def metadata(%Saga{}=saga) do
+        %{
+            app: saga.app,
+            sid: saga.id,
+            spid: saga.uuid,
+            namespace: saga.namespace,
+            state: saga.state,
+            ack: saga.ack,
+            processed: saga.processed,
+            buffer: saga.buffer,
+            actions: saga.actions,
+            timeout: saga.timeout,
+            stopped: saga.stopped,
+        }
+    end 
+
+    def measurements(%Saga{}=saga) do
+        %{
+            ack: saga.ack,
+            processed: saga.processed,
+            buffer: Enum.count(saga.buffer),
+            actions: Enum.count(saga.actions),
+        }
+    end
+
     @impl true
     def handle_continue(:load_effect, %Saga{}=saga) do
+        meta = metadata(saga)
+        start = telemetry_start(:load, meta, measurements(saga))
         saga =
             case Signal.Store.Adapter.get_effect(saga.app, saga.uuid) do
                 %Effect{}=effect ->
@@ -61,6 +114,9 @@ defmodule Signal.Process.Saga do
 
         Signal.PubSub.subscribe(saga.app, saga.uuid)
         router_push(saga, {:start, saga.id, saga.ack})
+
+        telemetry_stop(:load, start, meta, measurements(saga))
+
         [
             app: saga.app,
             sid: saga.id,
@@ -122,11 +178,20 @@ defmodule Signal.Process.Saga do
         ]
         |> Signal.Logger.info(label: :saga)
 
+        meta = 
+            saga
+            |> metadata() 
+            |> Map.put(:event, Event.metadata(event)) 
+
+        start = telemetry_start(:process_event, meta, measurements(saga))
+
         saga = 
             saga
             |> process_event(event)
             |> struct(%{buffer: buffer})
             |> save_saga_state()
+
+        telemetry_stop(:process_event, start, meta, measurements(saga))
 
         {:noreply, saga, {:continue, :process_event}}
     end
@@ -143,33 +208,36 @@ defmodule Signal.Process.Saga do
 
     @impl true
     def handle_continue({:dispatch, command, action}, %Saga{}=saga) do
-        action_uuid = Map.get(action, "uuid")
-        causation_id = Map.get(action, "causation_id")
+        meta = 
+            metadata(saga) 
+            |> Map.put(:action, Action.metadata(action))
+            |> Map.put(:command, command.__struct__)
 
-        opts = [
-            causation_id: causation_id,
-            correlation_id: action_uuid
-        ]
+        start = telemetry_start(:dipatch, meta, measurements(saga))
 
         [
             app: saga.app,
             sid: saga.id,
             type: saga.module,
             dispatch: command.__struct__,
-            causation_id: causation_id,
+            causation_id: action.causation_id,
         ]
         |> Signal.Logger.info(label: :saga)
 
-        case execute(command, saga, opts) do
+        case execute(command, action, saga) do
             {:ok, %Result{}} ->
                 saga = 
                     saga
-                    |> drop_action(action_uuid)
+                    |> drop_action(action.uuid)
                     |> save_saga_state()
                     |> sched_next_action()
+
+                telemetry_stop(:dispatch, start, meta, measurements(saga))
                 {:noreply, saga, saga.timeout}
 
             {:error, error} ->
+                meta = Map.put(meta, :error, error)
+                telemetry_stop(:dispatch, start, meta, measurements(saga))
                 continue = {:action_error, action, command, error}
                 {:noreply, saga, {:continue, continue}}
         end
@@ -178,45 +246,54 @@ defmodule Signal.Process.Saga do
     @impl true
     def handle_continue({:action_error, action, command, error}, %Saga{}=saga) do
 
-          action_uuid = Map.get(action, "uuid")
-          args = [command, error, saga.state]
+        args = [command, error, saga.state]
 
-          case Kernel.apply(saga.module, :handle_error, args)  do
-              {:ok, state} ->
-                  saga = 
-                      %Saga{saga | state: state}
-                      |> drop_action(action_uuid)
-                      |> save_saga_state()
-                      |> sched_next_action()
-                  {:noreply, saga, saga.timeout}
+        meta = 
+            metadata(saga) 
+            |> Map.put(:action, Action.metadata(action) )
+            |> Map.put(:command, command.__struct__)
 
-              {:dispatch, command, state} ->
-                  new_action = recreate_command_action(action, command)
-                  saga = 
-                      %Saga{saga | state: state}
-                      |> requeue_action(new_action)
-                      |> save_saga_state()
-                      |> sched_next_action()
-                  {:noreply, saga}
+        start = telemetry_start(:handle_error, meta, measurements(saga))
 
-              {:stop, state} ->
-                  saga = 
-                      %Saga{saga | state: state, stopped: true}
-                      |> drop_action(action_uuid)
-                      |> save_saga_state()
-                      |> sched_next_action()
-                  {:noreply, saga}
+        case Kernel.apply(saga.module, :handle_error, args)  do
+            {:ok, state} ->
+                saga = 
+                    %Saga{saga | state: state}
+                    |> drop_action(action.uuid)
+                    |> save_saga_state()
+                    |> sched_next_action()
+                telemetry_stop(:handle_error, start, meta, measurements(saga))
+                {:noreply, saga, saga.timeout}
 
-                invalid_value ->
-                    raise """
-                        Invalid saga return value
-                        namespace: #{saga.namespace}
-                        id: #{saga.id}
-                        callback: #{inspect(saga.module)}.handle_error/2
-                        expected: {:ok, state} | {:dispatch, command, state}
-                        got: #{inspect(invalid_value)}
-                    """
-          end
+            {:dispatch, command, state} ->
+                new_action = recreate_command_action(action, command)
+                saga = 
+                    %Saga{saga | state: state}
+                    |> requeue_action(new_action)
+                    |> save_saga_state()
+                    |> sched_next_action()
+                telemetry_stop(:handle_error, start, meta, measurements(saga))
+                {:noreply, saga}
+
+            {:stop, state} ->
+                saga = 
+                    %Saga{saga | state: state, stopped: true}
+                    |> drop_action(action.uuid)
+                    |> save_saga_state()
+                    |> sched_next_action()
+                telemetry_stop(:handle_error, start, meta, measurements(saga))
+                {:noreply, saga}
+
+            invalid_value ->
+                raise """
+                    Invalid saga return value
+                    namespace: #{saga.namespace}
+                    id: #{saga.id}
+                    callback: #{inspect(saga.module)}.handle_error/2
+                    expected: {:ok, state} | {:dispatch, command, state}
+                    got: #{inspect(invalid_value)}
+                """
+        end
     end
 
     @impl true
@@ -296,7 +373,8 @@ defmodule Signal.Process.Saga do
         {:noreply, saga, {:continue, :process_event}}
     end
 
-    defp execute(command, %Saga{app: app}, opts) do
+    defp execute(command, %Action{}=action, %Saga{app: app}) do
+        opts = [causation_id: action.causation_id, correlation_id: action.uuid]
         Kernel.apply(app, :dispatch, [command, opts])
     end
 
@@ -439,46 +517,48 @@ defmodule Signal.Process.Saga do
     defp create_command_action(%Event{}=event, command) do
         name = Signal.Name.name(command)
         uuid = UUID.uuid5(event.uuid, name)
-        {:ok, data} = Codec.encode(command)
-        %{
-            "tries" => 0,
-            "name" => name,
-            "uuid" => uuid,
-            "data" => data,
-            "causation_id" => event.uuid,
-            "timestamp" => DateTime.utc_now()
-        }
+        {:ok, payload} = Codec.encode(command)
+        Action.new([
+            tries: 0,
+            name: name,
+            uuid: uuid,
+            payload: payload,
+            causation_id: event.uuid,
+            timestamp: DateTime.utc_now()
+        ])
     end
 
     defp recreate_command_action(action, command) do
         name = Signal.Name.name(command)
         uuid = 
             action
-            |> Map.get("causation_id")
+            |> Map.get(:causation_id)
             |> UUID.uuid5(name)
-        {:ok, data} = Codec.encode(command)
-        action
-        |> Map.put("uuid", uuid)
-        |> Map.put("name", name)
-        |> Map.put("data", data)
-        |> Map.put("timestamp", DateTime.utc_now())
+
+        {:ok, payload} = Codec.encode(command)
+
+        %Action{action |
+            uuid: uuid,
+            name: name,
+            payload: payload,
+            timestamp: DateTime.utc_now()
+        }
     end
 
     defp enqueue_action(%Saga{}=saga, action) do
-        send(self(), {:action, Map.get(action, "uuid")})
+        send(self(), {:action, action.uuid})
         %Saga{saga | actions: saga.actions ++ List.wrap(action)}
     end
 
     defp requeue_action(%Saga{}=saga, action) do
-        action_uuid = Map.get(action, "uuid")
         index = 
             saga.actions
-            |> Enum.find_index(&(Map.get(&1, "uuid") == action_uuid))
+            |> Enum.find_index(&(Map.get(&1, :uuid) == action.uuid))
 
-        updated_action = Map.update!(action, "tries", &(&1+1))
+        updated_action = %Action{action| tries: action.tries + 1}
 
         actions = List.replace_at(saga.actions, index, updated_action)
-        send(self(), {:action, Map.get(action, action_uuid)})
+        send(self(), {:action, action.uuid})
         %Saga{saga | actions: actions}
     end
 
@@ -492,7 +572,7 @@ defmodule Signal.Process.Saga do
     end
 
     defp sched_next_action(%Saga{actions: [action|_]}=saga) do
-        send(self(), {:action, Map.get(action, "uuid")})
+        send(self(), {:action, action.uuid})
         saga
     end
 
@@ -509,23 +589,20 @@ defmodule Signal.Process.Saga do
     end
 
     defp create_action_command(action) do
-        name = Map.get(action, "name")
-        module = Signal.Helper.string_to_module(name)
-        payload = Map.get(action, "data")
-
         try do
             {:ok, data} =
-                module
+                action
+                |> Action.module()
                 |> struct([])
-                |> Codec.load(payload)
+                |> Codec.load(action.payload)
             data
         rescue
-            _ ->
+            _error ->
                 msg = """
-                Could not construct command: #{name}
+                Could not construct command: #{action.name}
                 Ensure command is defined
                 Example:
-                    defmodule #{name} do
+                    defmodule #{action.name} do
                         use Signal.Command
 
                         schema do
@@ -533,7 +610,6 @@ defmodule Signal.Process.Saga do
                         end
                     end
                 """
-                Logger.error(msg)
                 raise(RuntimeError, msg)
         end
     end
