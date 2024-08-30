@@ -16,7 +16,7 @@ for struct definition, validation, encoding and decoding
 ```elixir
 def deps do
     [
-        {:signal, git: "https://github.com/mfoncho/signal.git"}
+        {:signal, git: "https://github.com/2p4b/signal.git"}
     ]
 end
 ```
