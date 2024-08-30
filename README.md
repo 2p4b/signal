@@ -8,7 +8,7 @@ Supports:
 - Event Handlers with atleast once event delivery
 - Saga Process
 
-Signal makes heavy use of the [Blueprint](https://github.com/mfoncho/blueprint.git)
+Signal makes heavy use of the [Blueprint](https://github.com/2p4b/blueprint.git)
 for struct definition, validation, encoding and decoding
 
 ## Installation
