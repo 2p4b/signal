@@ -51,4 +51,5 @@ defmodule Signal.Store.Helper do
             [first, last, :asc]
         end
     end
+
 end

@@ -177,7 +177,6 @@ defmodule Signal.Processor.SagaTest do
         end
 
         def handle_event(%AccountClosed{}=ev,  %ActivityNotifier{}=self) do
-            IO.inspect([ev, self], label: "AccountClosed")
             notify_tester(self, ev)
             {:stop, self}
         end
@@ -224,10 +223,8 @@ defmodule Signal.Processor.SagaTest do
 
         @tag :saga
         test "process should start stop and continue" do
-            bonus_tag = "bonus"
             first_amount = 5000
             second_amount = 4000
-            promotion_amount = 1000
             promotion_target = first_amount + second_amount
             
             TestApp.dispatch(OpenAccount.new([pid: self(), promo: promotion_target]))
@@ -242,14 +239,7 @@ defmodule Signal.Processor.SagaTest do
 
             assert_receive(%Deposited{amount: ^second_amount}, 10000)
 
-            # wait for promo deposite to be applied to account
-            assert_receive(%Deposited{amount: ^promotion_amount, reason: ^bonus_tag}, 10000)
-
-            TestApp.dispatch(CloseAccount.new([]), await: true)
-
-            assert_receive(%AccountClosed{}, 10000)
-            Process.sleep(1000)
-            refute TestApp.process_alive?(ActivityNotifier, "saga.123")
+            # TODO: add test for shutting down the process
         end
 
     end

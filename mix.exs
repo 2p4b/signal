@@ -34,7 +34,7 @@ defmodule Signal.MixProject do
             {:ex_machina, "2.6.0"},
             {:phoenix_pubsub, "~> 2.1.1"},
             {:mix_test_watch, "~> 1.0", only: [:dev, :text], runtime: false},
-            {:blueprint, git: "https://github.com/mfoncho/blueprint.git"}
+            {:blueprint, git: "https://github.com/2p4b/blueprint.git"}
         ]
     end
 end
