@@ -82,9 +82,11 @@ defmodule Signal.Command.Dispatcher do
                     Task
                     |> Signal.Application.supervisor(app)
                     |> Task.Supervisor.async_nolink(fn -> 
-                        app
-                        |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
-                        |> Signal.Aggregates.Aggregate.state(state_opts)
+                        {:ok, state} =
+                            app
+                            |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
+                            |> Signal.Aggregates.Aggregate.state(state_opts)
+                        state
                     end, [shutdown: :brutal_kill])
                 end)
                 |> Task.yield_many(timeout(await))
