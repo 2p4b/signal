@@ -28,7 +28,20 @@ defmodule Signal.Process.Saga do
     ]
 
     defmodule Action do
-        defstruct [:name, :uuid, :payload, :tries, :causation_id, :timestamp]
+        use Blueprint.Schema
+
+        schema do
+            field :uuid,          :uuid
+            field :name,          :string
+            field :tries,         :integer
+            field :payload,       :map
+            field :timestamp,     :string
+            field :causation_id,  :uuid
+        end
+
+        def id(%Action{uuid: uuid}) do
+            uuid
+        end
 
         def module(%Action{name: name}) do
             Signal.Helper.string_to_module(name)
@@ -43,13 +56,6 @@ defmodule Signal.Process.Saga do
             }
         end
 
-        def from_struct(value) when is_struct(value) do
-            struct(__MODULE__, Map.from_struct(value))
-        end
-
-        def new(opts \\ []) when is_list(opts) or is_map(opts) do
-            struct(__MODULE__, opts)
-        end
     end
 
     def start(app, {id, module}, opts \\ []) do
@@ -228,7 +234,7 @@ defmodule Signal.Process.Saga do
             {:ok, %Result{}} ->
                 saga = 
                     saga
-                    |> drop_action(action.uuid)
+                    |> drop_action(Action.id(action))
                     |> save_saga_state()
                     |> sched_next_action()
 
@@ -259,7 +265,7 @@ defmodule Signal.Process.Saga do
             {:ok, state} ->
                 saga = 
                     %Saga{saga | state: state}
-                    |> drop_action(action.uuid)
+                    |> drop_action(Action.id(action))
                     |> save_saga_state()
                     |> sched_next_action()
                 telemetry_stop(:handle_error, start, meta, measurements(saga))
@@ -278,7 +284,7 @@ defmodule Signal.Process.Saga do
             {:stop, state} ->
                 saga = 
                     %Saga{saga | state: state, stopped: true}
-                    |> drop_action(action.uuid)
+                    |> drop_action(Action.id(action))
                     |> save_saga_state()
                     |> sched_next_action()
                 telemetry_stop(:handle_error, start, meta, measurements(saga))
@@ -473,7 +479,9 @@ defmodule Signal.Process.Saga do
             state: state, 
             buffer: buffer, 
             stopped: stopped,
-            actions: actions,
+            actions: Enum.map(actions, fn action -> 
+                Action.new(action)
+            end),
             processed: processed,
         }
     end
@@ -503,7 +511,10 @@ defmodule Signal.Process.Saga do
             "ack" => ack, 
             "state" => payload, 
             "stopped" => stopped,
-            "actions" => actions,
+            "actions" => Enum.map(actions, fn action ->  
+                {:ok, data} = Action.dump(action)
+                data
+            end),
             "processed" => processed,
             "buffer" => event_buffer,
         } 
@@ -546,19 +557,18 @@ defmodule Signal.Process.Saga do
     end
 
     defp enqueue_action(%Saga{}=saga, action) do
-        send(self(), {:action, action.uuid})
+        send(self(), {:action, Action.id(action)})
         %Saga{saga | actions: saga.actions ++ List.wrap(action)}
     end
 
-    defp requeue_action(%Saga{}=saga, action) do
-        index = 
-            saga.actions
-            |> Enum.find_index(&(Map.get(&1, :uuid) == action.uuid))
+    defp requeue_action(%Saga{actions: actions}=saga, action) do
+        action_id = Action.id(action)
+        index = Enum.find_index(actions, &(Action.id(&1) == action_id))
 
         updated_action = %Action{action| tries: action.tries + 1}
 
-        actions = List.replace_at(saga.actions, index, updated_action)
-        send(self(), {:action, action.uuid})
+        actions = List.replace_at(actions, index, updated_action)
+        send(self(), {:action, Action.id(action)})
         %Saga{saga | actions: actions}
     end
 
@@ -572,15 +582,14 @@ defmodule Signal.Process.Saga do
     end
 
     defp sched_next_action(%Saga{actions: [action|_]}=saga) do
-        send(self(), {:action, action.uuid})
+        send(self(), {:action, Action.id(action)})
         saga
     end
 
-    defp drop_action(%Saga{}=saga, id) do
-        actions = 
-            saga.actions
-            |> Enum.filter(&(Map.get(&1, "uuid") !== id))
-        %Saga{saga | actions: actions}
+    defp drop_action(%Saga{actions: actions}=saga, id) do
+        %Saga{saga | 
+            actions: Enum.filter(actions, &(Action.id(&1) !== id))
+        }
     end
 
     def router_push(%Saga{}=saga, payload) do

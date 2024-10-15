@@ -217,7 +217,6 @@ defmodule Signal.Aggregates.Aggregate do
                         aggregate
                         |> metadata() 
                         |> Map.put(:caller, metadata(waiter))
-                        |> Map.update!(:load, fn x -> x - 1 end) 
 
                     telemetry_stop(:state, start, meta, %{})
                     Process.demonitor(ref)
