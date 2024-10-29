@@ -161,6 +161,9 @@ defmodule Signal.Stream.Producer do
                 {:error, error}
         end
     end
+    def commit_staged_transaction(error, %Action{}, %Producer{}) do
+        error
+    end
 
     def stage_event_streams(stream_events, action, %Producer{}=producer)
     when is_map(stream_events) do
