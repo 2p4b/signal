@@ -404,7 +404,7 @@ defmodule Signal.Aggregates.Aggregate do
         ]
         |> Signal.Logger.info(label: :aggregate)
 
-        data = %{"state" => payload, "ack" => aggregate.consumer.ack}
+        data = %{"state" => payload, "ack" => aggregate.ack}
 
         snapshot = 
             [id: stream_id, version: version, data: data]
