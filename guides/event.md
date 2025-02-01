@@ -10,7 +10,7 @@ defmodule App.Bank.Events.Deposited do
     # [required] :stream
     use Signal.Command,
         topic: "App.Bank.Events.Deposited",
-        stream: {Account, :account_id}
+        stream: {:account_id, Account}
 
     schema do
         field :account_id, :uuid

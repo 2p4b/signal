@@ -16,7 +16,7 @@ defmodule App.Bank.Commands.Deposite do
         sync: true,
         name: "App.Bank.Commands.Deposite",
         queue: :account_id,
-        stream: {Account, :account_id}
+        stream: {:account_id, Account}
 
     schema [required: true] do
         field: :account_id, :uuid
