@@ -25,7 +25,7 @@ defmodule Signal.Events.ProducerTest do
 
     defmodule EventOne do
         use Signal.Event,
-            stream: {Aggregate, :uuid}
+            stream: {:uuid, Aggregate}
 
         schema do
             field :id,      :string,   default: "event.id"
@@ -35,7 +35,7 @@ defmodule Signal.Events.ProducerTest do
 
     defmodule EventTwo do
         use Signal.Event,
-            stream: {Aggregate, :uuid}
+            stream: {:uuid, Aggregate}
 
         schema do
             field :id,      :string,   default: "event.id"
@@ -45,7 +45,7 @@ defmodule Signal.Events.ProducerTest do
 
     defmodule EventThree do
         use Signal.Event,
-            stream: {Aggregate, :uuid}
+            stream: {:uuid, Aggregate}
 
         schema do
             field :id,      :string,   default: "event.id"
@@ -56,7 +56,7 @@ defmodule Signal.Events.ProducerTest do
     defmodule Command do
 
         use Signal.Command,
-            stream: {Aggregate, :uuid}
+            stream: {:uuid, Aggregate}
 
         schema do
             field :id,      :string,   default: "command.id"

@@ -15,7 +15,7 @@ defmodule Signal.Processor.SagaTest do
 
     defmodule Deposited do
         use Signal.Event,
-            stream: {Account, :account}
+            stream: {:account, Account}
 
         schema do
             field :reason,  :string,   default: "deposite"
@@ -30,7 +30,7 @@ defmodule Signal.Processor.SagaTest do
 
     defmodule AccountOpened do
         use Signal.Event,
-            stream: {Account, :account}
+            stream: {:account, Account}
 
         schema do
             field :pid,     :any
@@ -45,7 +45,7 @@ defmodule Signal.Processor.SagaTest do
 
     defmodule AccountClosed do
         use Signal.Event,
-            stream: {Account, :account}
+            stream: {:account, Account}
 
         schema do
             field :reason,  :string,   default: "Reason bezos"
@@ -59,7 +59,7 @@ defmodule Signal.Processor.SagaTest do
 
     defmodule OpenAccount do
         use Signal.Command,
-            stream: {Account, :account}
+            stream: {:account, Account}
 
         schema do
             field :pid,     :any
@@ -73,7 +73,7 @@ defmodule Signal.Processor.SagaTest do
 
     defmodule Deposite do
         use Signal.Command,
-            stream: {Account, :account}
+            stream: {:account, Account}
 
         schema do
             field :account,     :string,    default: "saga.123"
@@ -88,7 +88,7 @@ defmodule Signal.Processor.SagaTest do
 
     defmodule CloseAccount do
         use Signal.Command,
-            stream: {Account, :account}
+            stream: {:account, Account}
 
         schema do
             field :account,     :string,   default: "saga.123"

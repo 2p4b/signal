@@ -6,7 +6,7 @@ defmodule Signal.Events.EventTest do
     defmodule Event do
         use Signal.Event,
             version: "v1",
-            stream: {Signal.Sample.Aggregate, :uuid}
+            stream: {:uuid, Signal.Sample.Aggregate}
 
         schema do
             field :id,      :string,   default: "event.id"

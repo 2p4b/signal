@@ -243,8 +243,9 @@ defmodule Signal.Stream.Producer do
         %Stage{events: events, version: version, stream: stream, stage: stage}
     end
 
-    def process(%Action{stream: stream, app: app}=action) do
-        Signal.Stream.Supervisor.prepare_producer(app, stream)
+    def process(%Action{app: app, stream: stream}=action) do
+        app
+        |> Signal.Stream.Supervisor.prepare_producer(stream)
         |> GenServer.call({:process, action}, :infinity)
     end
 

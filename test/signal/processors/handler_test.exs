@@ -10,7 +10,7 @@ defmodule Signal.Processor.HandlerTest do
             store: Store
     end
 
-    defmodule Accounts do
+    defmodule Account do
         use Blueprint.Schema
 
         schema do
@@ -21,7 +21,7 @@ defmodule Signal.Processor.HandlerTest do
 
     defmodule Deposited do
         use Signal.Event,
-            stream: {Accounts, :account}
+            stream: {:account, Account}
 
         schema do
             field :account, :string,    default: "123"
@@ -32,14 +32,14 @@ defmodule Signal.Processor.HandlerTest do
 
     defmodule Deposite do
         use Signal.Command,
-            stream: {Accounts, :account}
+            stream: {:account, Account}
 
         schema do
             field :account, :string,    default: "123"
             field :amount,  :number,    default: 0
         end
 
-        def handle(%Deposite{}=deposite, _params, %Accounts{number: "123", balance: 0}) do
+        def handle(%Deposite{}=deposite, _params, %Account{number: "123", balance: 0}) do
             Deposited.from_struct(deposite)
         end
     end

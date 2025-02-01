@@ -1,43 +1,30 @@
 defmodule Signal.Helper do
 
-    def stream_id(id, opts \\ [])
-    def stream_id(id, []) when is_binary(id) do
+    def stream_id(tuple, opts \\ [])
+    def stream_id({nil, id}, _opts) when is_binary(id) do
         id
     end
-    def stream_id(id, [context: _]) when is_binary(id) do
-        stream_id(id)
-    end
-    def stream_id(id, opts) when is_binary(id) do
-        name = Keyword.fetch!(opts, :name)
-
-        hash_func = Keyword.get(opts, :hash, :md5)
-
-        namespace = 
-            case Keyword.get(opts, :type, :uuid) do
-                :uuid ->
-                    id
-
-                ns when ns in [:dns, :url, :oid, :x500, nil] ->
-                    namespaced_uuid(ns, id, hash_func)
-            end
-
-        namespaced_uuid(namespace, name, hash_func)
+    def stream_id({tag, id}, opts) when is_atom(tag) and is_binary(id) do
+        domain = atom_to_string(tag)
+        namespace = UUID.uuid3(:oid, domain)
+        hash_func = Keyword.get(opts, :hash, :sha)
+        namespaced_uuid(namespace, id, hash_func)
     end
 
-    def namespaced_uuid(namespace, name, :md5) do
-        UUID.uuid3(namespace, name)
+    def namespaced_uuid(namespace, id, :sha) do
+        UUID.uuid5(namespace, id)
     end
 
-    def namespaced_uuid(namespace, name, :sha) do
-        UUID.uuid5(namespace, name)
+    def namespaced_uuid(namespace, id, :md5) do
+        UUID.uuid3(namespace, id)
     end
 
-    def module_to_string(module) when is_atom(module) do
-        atom_to_string(module)
+    def module_to_string(atom) when is_atom(atom) do
+        atom_to_string(atom)
     end
 
-    def atom_to_string(value) when is_atom(value) do
-        case Atom.to_string(value) do
+    def atom_to_string(atom) when is_atom(atom) do
+        case Atom.to_string(atom) do
             "Elixir."<> name -> name
             name -> name
         end

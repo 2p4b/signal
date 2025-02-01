@@ -98,7 +98,7 @@ defmodule Signal.Probe do
             defp handle_command(command, aggregate, params \\ %{})
             when is_struct(command) and (is_struct(aggregate) or is_nil(aggregate)) do
 
-                {_sid, aggregate_module} = Signal.Stream.stream(command)
+                aggregate_module = Signal.Stream.type(command)
 
                 case execute(command, params) do
                     {:error, reason} = error ->
@@ -148,7 +148,7 @@ defmodule Signal.Probe do
                 Enum.reduce(events, aggregate, fn event, aggregate -> 
 
                     unless reduces?(aggregate, event) do
-                        {_sid, aggregate_module} = Signal.Stream.stream(event)
+                        aggregate_module = Signal.Stream.type(event)
                         raise ArgumentError, message: """
                             Event requires aggregate of type 
                             #{inspect(aggregate_module)}
@@ -195,7 +195,7 @@ defmodule Signal.Probe do
             # check if aggerate reduces an event or command
             defp reduces?(aggregate, payload) 
             when is_atom(aggregate) and is_struct(payload) do
-                {_sid, aggregate_module} = Signal.Stream.stream(payload)
+                aggregate_module = Signal.Stream.type(payload)
                 if aggregate_module != aggregate do
                     false
                 else
@@ -205,7 +205,7 @@ defmodule Signal.Probe do
 
             defp reduces?(aggregate, payload) 
             when is_struct(aggregate) and is_struct(payload) do
-                {_sid, aggregate_module} = Signal.Stream.stream(payload)
+                aggregate_module = Signal.Stream.type(payload)
                 if aggregate_module != aggregate.__struct__ do
                     false
                 else

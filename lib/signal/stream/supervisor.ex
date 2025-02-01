@@ -19,10 +19,10 @@ defmodule Signal.Stream.Supervisor do
     when is_atom(type) and is_binary(id) do
         case Registry.lookup(registry(app), id) do
             [{_pid, _id}] ->
-                via_tuple(app, {id, stream})            
+                via_tuple(app, stream)            
 
             [] ->
-                via_name = via_tuple(app, {id, stream})
+                via_name = via_tuple(app, stream)
 
                 app
                 |> producer_args(stream, via_name)

@@ -10,7 +10,7 @@ defmodule Signal.Command.CommandTest do
 
     defmodule Event do
         use Signal.Event,
-            stream: {TestAggregate, :uuid}
+            stream: {:uuid, TestAggregate}
 
         schema do
             field :id,      :string,   default: "event.id"
@@ -20,7 +20,7 @@ defmodule Signal.Command.CommandTest do
 
     defmodule Command do
         use Signal.Command, 
-            stream: {TestAggregate, :uuid}
+            stream: {:uuid, TestAggregate}
 
         schema do
             field :id,      :string,   default: "command.id"

@@ -19,7 +19,7 @@ defmodule Signal.Events.AggregateTest do
 
     defmodule Deposite do
         use Signal.Command,
-            stream: {Account, :account}
+            stream: {:account, Account}
 
         schema do
             field :account,     :string,   default: "123"
@@ -29,7 +29,7 @@ defmodule Signal.Events.AggregateTest do
 
     defmodule Deposited do
         use Signal.Event,
-            stream: {Account, :account}
+            stream: {:account, Account}
 
         schema do
             field :account, :string,    default: "123"
