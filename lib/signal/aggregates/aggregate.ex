@@ -327,6 +327,17 @@ defmodule Signal.Aggregates.Aggregate do
 
                         {:ok, aggregate}
 
+                    {:stop, reason, state} ->
+                        aggregate = 
+                            %Aggregate{aggregate | 
+                                ack: number,
+                                state: state,
+                                version: position
+                            }
+                            |> snapshot()
+
+                        {:stop, reason, aggregate}
+
                     {:sleep, state} ->
                         aggregate = 
                             %Aggregate{aggregate | 

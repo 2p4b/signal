@@ -29,7 +29,7 @@ defmodule Signal.Type do
             # Create a scope to avoid leaks.
             (fn ->
                 import Signal.Type
-                Module.eval_quoted(__ENV__, unquote(block))
+                Code.eval_quoted(unquote(block), [], __ENV__)
             end).()
 
             @enforce_keys @ts_enforce_keys
