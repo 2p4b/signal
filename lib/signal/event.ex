@@ -3,7 +3,7 @@ defmodule Signal.Event do
 
     defmacro __using__(opts) do
         quote do
-            use Blueprint.Schema
+            use Draft.Schema
             @module __MODULE__
             @before_compile unquote(__MODULE__)
             @stream_opts Keyword.get(unquote(opts), :stream)

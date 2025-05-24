@@ -2,7 +2,7 @@ defmodule Signal.Command  do
 
     defmacro __using__(opts) do
         quote do
-            use Blueprint.Schema
+            use Draft.Schema
             import Signal.Command
             @module __MODULE__
             @before_compile unquote(__MODULE__)

@@ -28,7 +28,7 @@ defmodule Signal.Process.Saga do
     ]
 
     defmodule Action do
-        use Blueprint.Schema
+        use Draft.Schema
 
         schema do
             field :uuid,          :uuid

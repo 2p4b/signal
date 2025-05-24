@@ -29,12 +29,12 @@ defmodule Signal.MixProject do
         [
             {:uuid, "~> 1.1" },
             {:jason, "~> 1.0"},
+            {:draft, "~> 1.0" },
             {:timex, "~> 3.7.6"},
             {:telemetry, "~> 0.4"},
             {:ex_machina, "2.6.0"},
             {:phoenix_pubsub, "~> 2.1.1"},
             {:mix_test_watch, "~> 1.0", only: [:dev, :text], runtime: false},
-            {:blueprint, git: "https://github.com/2p4b/blueprint.git"}
         ]
     end
 end
