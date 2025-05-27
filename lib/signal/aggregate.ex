@@ -58,7 +58,7 @@ defmodule Signal.Aggregate do
 
                                 defmodule #{etype} do
                                     use Signal.Event,
-                                        stream: {#{atype}, ...}
+                                        stream: {..., #{atype}}
                                     
                                     def apply(%#{etype}{}, %#{atype}{}) do
                                         ....
