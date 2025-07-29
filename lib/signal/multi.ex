@@ -16,10 +16,16 @@ defmodule Signal.Multi do
                 event when is_list(event) ->
                     events ++ event
 
+                {:ok, event} when is_list(event) -> 
+                    events ++ event
+
                 %Multi{}=multi ->
                     events ++ Multi.emit(multi)
 
                 event when is_struct(event) ->
+                    events ++ List.wrap(event)
+
+                {:ok, event} when is_stuct(event) -> 
                     events ++ List.wrap(event)
 
                 nil ->
