@@ -25,7 +25,7 @@ defmodule Signal.Multi do
                 event when is_struct(event) ->
                     events ++ List.wrap(event)
 
-                {:ok, event} when is_stuct(event) -> 
+                {:ok, event} when is_struct(event) -> 
                     events ++ List.wrap(event)
 
                 nil ->

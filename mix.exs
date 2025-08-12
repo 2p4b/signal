@@ -31,7 +31,7 @@ defmodule Signal.MixProject do
             {:jason, "~> 1.0"},
             {:draft, "~> 1.0" },
             {:timex, "~> 3.7.6"},
-            {:telemetry, "~> 0.4"},
+            {:telemetry, "~> 1.0"},
             {:ex_machina, "2.6.0"},
             {:phoenix_pubsub, "~> 2.1.1"},
             {:mix_test_watch, "~> 1.0", only: [:dev, :text], runtime: false},
