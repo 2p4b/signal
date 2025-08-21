@@ -38,8 +38,8 @@ defmodule Signal.Aggregates.Supervisor do
 
     defp child_args(app, via_name) do
         {:via, _reg, {_mreg, _pname, stream}} = via_name
-        {id, aggregate} = stream
-        state = struct!(aggregate, [])
+        {id, module} = stream
+        state = struct!(module, [])
         config = Signal.Aggregate.Config.config(state) 
         [
             id: id,
