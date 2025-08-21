@@ -22,12 +22,12 @@ defmodule Signal.Aggregates.Aggregate do
         :id,
         :app, 
         :ref,
-        :uuid,
         :store,
         :state, 
         :timeout,
         :stream, 
         :consumer,
+        :module,
         ack: 0, 
         wait: 5000,
         version: 0,
@@ -42,7 +42,6 @@ defmodule Signal.Aggregates.Aggregate do
             name: Keyword.get(opts, :name), 
             hibernate_after: Timer.min(60)
         ]
-        opts = Keyword.merge(opts, uuid: UUID.uuid4())
         GenServer.start_link(__MODULE__, opts, aggregate_opts)
     end
 
@@ -461,7 +460,6 @@ defmodule Signal.Aggregates.Aggregate do
     def terminate(:normal, %Aggregate{}=aggregate) do
         [
             app: aggregate.app,
-            uuid: aggregate.uuid,
             stream: aggregate.stream,
             status: :terminated,
             reason: :normal,
@@ -473,8 +471,8 @@ defmodule Signal.Aggregates.Aggregate do
     @impl true
     def terminate(reason, %Aggregate{}=aggregate) do
         [
+            id: aggregate.id,
             app: aggregate.app,
-            uuid: aggregate.uuid,
             stream: aggregate.stream,
             status: :terminated,
             reason: reason,
@@ -493,9 +491,10 @@ defmodule Signal.Aggregates.Aggregate do
 
     def metadata(%Aggregate{}=aggregate) do
         %{
+            id: aggregate.id,
             app: aggregate.app,
-            uuid: aggregate.uuid,
             stream: aggregate.stream,
+            module: aggregate.module,
         }
     end
 

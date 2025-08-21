@@ -46,6 +46,7 @@ defmodule Signal.Aggregates.Supervisor do
             name: via_name,
             state: state,
             stream: stream,
+            module: module,
             store: Kernel.apply(app, :store, []),
             app: app,
         ] 
