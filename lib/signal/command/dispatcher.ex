@@ -10,7 +10,7 @@ defmodule Signal.Command.Dispatcher do
     alias Signal.Task, as: SigTask
 
     def dispatch(%SigTask{}=task) do
-        start = telemetry_start(:disptach, metadata(task), %{})
+        start = telemetry_start(:dispatch, metadata(task), %{})
         result =
             case execute(task) do
                 {:ok, result} ->
@@ -20,7 +20,7 @@ defmodule Signal.Command.Dispatcher do
                 error ->
                     error
             end
-        telemetry_stop(:disptach, start, metadata(task), %{})
+        telemetry_stop(:dispatch, start, metadata(task), %{})
         result
     end
 
