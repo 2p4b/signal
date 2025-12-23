@@ -74,38 +74,40 @@ defmodule Signal.Command.Dispatcher do
 
         opts = [result: result, assigns: assigns, events: events]
 
-        if await do
-            states = 
-                histories
-                |> Enum.map(fn %History{stream: stream, version: version} -> 
-                    state_opts = [version: version, timeout: :infinity]
-                    Task
-                    |> Signal.Application.supervisor(app)
-                    |> Task.Supervisor.async_nolink(fn -> 
-                        {:ok, state} =
-                            app
-                            |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
-                            |> Signal.Aggregates.Aggregate.state(state_opts)
-                        state
-                    end, [shutdown: :brutal_kill])
-                end)
-                |> Task.yield_many(timeout(await))
-                |> Enum.map(fn {task, res} -> 
-                    case res do
-                        {:ok, agg} ->
-                            agg
-                        _ ->
-                            Task.shutdown(task, :brutal_kill)
-                            {:error, :task_timout}
-                    end
-                end)
+        result = 
+            if await do
+                states = 
+                    histories
+                    |> Enum.map(fn %History{stream: stream, version: version} -> 
+                        state_opts = [version: version, timeout: :infinity]
+                        Task
+                        |> Signal.Application.supervisor(app)
+                        |> Task.Supervisor.async_nolink(fn -> 
+                            {:ok, state} =
+                                app
+                                |> Signal.Aggregates.Supervisor.prepare_aggregate(stream)
+                                |> Signal.Aggregates.Aggregate.state(state_opts)
+                            state
+                        end, [shutdown: :brutal_kill])
+                    end)
+                    |> Task.yield_many(timeout(await))
+                    |> Enum.map(fn {task, res} -> 
+                        case res do
+                            {:ok, agg} ->
+                                agg
+                            _ ->
+                                Task.shutdown(task, :brutal_kill)
+                                {:error, :task_timout}
+                        end
+                    end)
 
-            telemetry_stop(:finalize, start, metadata(sig_task), %{})
-            struct(Result, opts ++ [states: states])
-        else
-            struct(Result, opts)
-        end
-        |> Result.ok()
+                struct(Result, opts ++ [states: states])
+            else
+                struct(Result, opts)
+            end
+            |> Result.ok()
+        telemetry_stop(:finalize, start, metadata(sig_task), %{})
+        result
     end
 
     defp finalize({:error, reason}, %SigTask{}) do
