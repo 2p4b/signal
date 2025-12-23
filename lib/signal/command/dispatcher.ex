@@ -10,7 +10,8 @@ defmodule Signal.Command.Dispatcher do
     alias Signal.Task, as: SigTask
 
     def dispatch(%SigTask{}=task) do
-        start = telemetry_start(:dispatch, metadata(task), %{})
+        tdata = metadata(task)
+        start = telemetry_start(:dispatch, tdata, %{})
         result =
             case execute(task) do
                 {:ok, result} ->
@@ -20,12 +21,13 @@ defmodule Signal.Command.Dispatcher do
                 error ->
                     error
             end
-        telemetry_stop(:dispatch, start, metadata(task), %{})
+        telemetry_stop(:dispatch, start, tdata, %{})
         result
     end
 
     def process(%SigTask{}=task) do
-        start = telemetry_start(:process, metadata(task), %{})
+        tdata = metadata(task)
+        start = telemetry_start(:process, tdata, %{})
         action = Action.from(task)
         result = 
             case Producer.process(action) do
@@ -38,13 +40,14 @@ defmodule Signal.Command.Dispatcher do
                 crash when is_tuple(crash) ->
                     handle_crash(crash)
             end
-        telemetry_stop(:process, start, %{}, %{})
+        telemetry_stop(:process, start, tdata, %{})
         result
     end
 
     def execute(%SigTask{} =task) do
         %SigTask{app: app, command: command, assigns: assigns} = task
-        start = telemetry_start(:execute, metadata(task), %{})
+        tdata = metadata(task)
+        start = telemetry_start(:execute, tdata, %{})
         result = 
             case Queue.handle(app, command, assigns, []) do
                 {:ok, result} ->
@@ -59,12 +62,13 @@ defmodule Signal.Command.Dispatcher do
                 result ->
                     {:ok, result}
             end
-        telemetry_stop(:execute, start, metadata(task), %{})
+        telemetry_stop(:execute, start, tdata, %{})
         result
     end
 
     defp finalize({:ok, histories}, %SigTask{}=sig_task) do
-        start = telemetry_start(:finalize, metadata(sig_task), %{})
+        tdata = metadata(sig_task)
+        start = telemetry_start(:finalize, tdata, %{})
 
         %SigTask{app: app, result: result, assigns: assigns, await: await} = sig_task
 
@@ -106,7 +110,7 @@ defmodule Signal.Command.Dispatcher do
                 struct(Result, opts)
             end
             |> Result.ok()
-        telemetry_stop(:finalize, start, metadata(sig_task), %{})
+        telemetry_stop(:finalize, start, tdata, %{})
         result
     end
 
