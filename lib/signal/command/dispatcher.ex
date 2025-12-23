@@ -134,8 +134,13 @@ defmodule Signal.Command.Dispatcher do
         %{
             app: task.app,
             queue: task.queue,
+            await: task.await,
             assigns: task.assigns,
-            command: task.command_type
+            timestamp: task.timestamp,
+            command: task.command_type,
+            consistent: task.consistent,
+            causation_id: task.causation_id,
+            correlation_id: task.correlation_id
         }
     end
 
