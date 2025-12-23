@@ -37,6 +37,7 @@ defmodule Signal.Process.Saga do
             field :payload,       :map
             field :timestamp,     :string
             field :causation_id,  :uuid
+            field :correlation_id,:uuid
         end
 
         def id(%Action{uuid: uuid}) do
@@ -53,6 +54,7 @@ defmodule Signal.Process.Saga do
                 uuid: action.uuid,
                 timestamp: action.timestamp,
                 causation_id: action.causation_id,
+                correlation_id: action.correlation_id,
             }
         end
 
@@ -380,7 +382,7 @@ defmodule Signal.Process.Saga do
     end
 
     defp execute(command, %Action{}=action, %Saga{app: app}) do
-        opts = [causation_id: action.causation_id, correlation_id: action.uuid]
+        opts = [causation_id: action.causation_id, correlation_id: action.correlation_id]
         Kernel.apply(app, :dispatch, [command, opts])
     end
 
@@ -535,6 +537,7 @@ defmodule Signal.Process.Saga do
             uuid: uuid,
             payload: payload,
             causation_id: event.uuid,
+            correlation_id: event.correlation_id,
             timestamp: DateTime.utc_now()
         ])
     end
@@ -543,7 +546,7 @@ defmodule Signal.Process.Saga do
         name = Signal.Name.name(command)
         uuid = 
             action
-            |> Map.get(:causation_id)
+            |> Map.get(:uuid)
             |> UUID.uuid5(name)
 
         {:ok, payload} = Codec.encode(command)
