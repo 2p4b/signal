@@ -29,7 +29,7 @@ defmodule Signal.MixProject do
         [
             {:uuid, "~> 1.1" },
             {:jason, "~> 1.0"},
-            {:draft, "~> 1.0" },
+            {:draft, "~> 1.1" },
             {:timex, "~> 3.7.6"},
             {:telemetry, "~> 1.0"},
             {:ex_machina, "2.6.0"},
