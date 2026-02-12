@@ -7,7 +7,6 @@ defmodule Signal.PubSub do
     end
 
     def dispatch(subscriptions, _writer, message) do
-        #IO.inspect([subscriptions, message], label: __MODULE__)
         Enum.each(subscriptions, &(send(elem(&1, 0), message)))
     end
 

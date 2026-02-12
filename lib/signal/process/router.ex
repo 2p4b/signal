@@ -116,7 +116,7 @@ defmodule Signal.Process.Router do
 
                     instance.app
                     |> Signal.PubSub.broadcast(instance.uuid, {naction, event})
-                    %Instance{instance | syn: number, queue: queue}
+                    {:ok, %Instance{instance | syn: number, queue: queue}}
 
                 number > syn  ->
                     [
@@ -127,10 +127,10 @@ defmodule Signal.Process.Router do
                         queued: number
                     ]
                     |> Signal.Logger.info(label: :router)
-                    %Instance{instance | queue: queue}
+                    {:ok, %Instance{instance | queue: queue}}
 
                 true ->
-                    instance
+                    {:pass, instance}
             end
         end
 
@@ -552,24 +552,31 @@ defmodule Signal.Process.Router do
 
         if target do
 
-            instance = 
+            {status, instance} = 
                 router
                 |> wake_process(target)
                 |> Instance.push_event({action, event})
 
+
             instances = Map.put(instances, instance.id, instance)
 
+            router = struct(router, %{instances: instances})
+
             router = 
-                router
-                |> mark_event_as_processing(event.number, false)
-                |> struct(%{instances: instances})
+                if status == :ok do
+                    mark_event_as_processing(router, event.number, false)
+                else
+                    router
+                    |> mark_event_as_processing(event.number, true)
+                    |> acknowledge_processed_events()
+                end
 
             {:noreply, router, router.timeout}
         else
             router = 
                 router
-                |> mark_event_as_processing(event.number, true)
                 |> struct(%{instances: instances})
+                |> mark_event_as_processing(event.number, true)
                 |> acknowledge_processed_events()
 
             {:noreply, router, router.timeout}
