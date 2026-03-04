@@ -544,15 +544,10 @@ defmodule Signal.Process.Saga do
 
     defp recreate_command_action(action, command) do
         name = Signal.Name.name(command)
-        uuid = 
-            action
-            |> Map.get(:uuid)
-            |> UUID.uuid5(name)
 
         {:ok, payload} = Codec.encode(command)
 
         %Action{action |
-            uuid: uuid,
             name: name,
             payload: payload,
             timestamp: DateTime.utc_now()
